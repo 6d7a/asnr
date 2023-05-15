@@ -1,47 +1,49 @@
 use nom::{
     branch::alt,
-    bytes::complete::{is_not, tag, take_until},
-    character::complete::{alpha1, alphanumeric1, char, i128, multispace0, multispace1, u64},
-    combinator::{map, opt, recognize},
-    multi::{fold_many1, many0},
-    sequence::{delimited, pair, preceded, terminated, tuple},
+    bytes::complete::{is_not, tag, take_till, take_until},
+    character::complete::{
+        alpha1, alphanumeric1, char, i128, multispace0, multispace1, not_line_ending,
+    },
+    combinator::recognize,
+    multi::many0,
+    sequence::{delimited, pair, preceded, tuple},
     IResult,
 };
 
-use crate::{
-    grammar::token::{
-        ASN1Type, Constraint, Enumeral, ExtensionMarker, RangeMarker, ToplevelDeclaration,
-        ASN1_COMMENT, ASSIGN, COMMA, C_STYLE_BLOCK_COMMENT_BEGIN, C_STYLE_BLOCK_COMMENT_END,
-        C_STYLE_LINE_COMMENT, ENUMERATED, EXTENSION, LEFT_BRACE, LEFT_PARENTHESIS, RANGE,
-        RIGHT_BRACE, RIGHT_PARENTHESIS,
-    },
-    parser::integer::integer,
+use crate::grammar::token::{
+    Constraint, ExtensionMarker, RangeMarker, ASN1_COMMENT, ASSIGN, COMMA,
+    C_STYLE_BLOCK_COMMENT_BEGIN, C_STYLE_BLOCK_COMMENT_END, C_STYLE_LINE_COMMENT, EXTENSION,
+    LEFT_PARENTHESIS, RANGE, RIGHT_PARENTHESIS,
 };
 
-use super::util::map_into;
+use super::util::{map_into, take_until_or};
 
 /// This matches both spec-conform ASN1 comments ("--")
 /// as well as C-style comments commonly seen ("//", "/* */")
 pub fn comment<'a>(input: &'a str) -> IResult<&'a str, &'a str> {
-    alt((block_comment, line_comment))(input)
+    skip_ws(alt((block_comment, line_comment)))(input)
 }
 
 pub fn line_comment<'a>(input: &'a str) -> IResult<&'a str, &'a str> {
     preceded(
         alt((tag(C_STYLE_LINE_COMMENT), tag(ASN1_COMMENT))),
-        is_not("\n"),
+        not_line_ending,
     )(input)
 }
 
 pub fn block_comment<'a>(input: &'a str) -> IResult<&'a str, &'a str> {
-    delimited(
-        alt((tag(C_STYLE_BLOCK_COMMENT_BEGIN), tag(ASN1_COMMENT))),
-        alt((
+    alt((
+        delimited(
+            tag(C_STYLE_BLOCK_COMMENT_BEGIN),
             take_until(C_STYLE_BLOCK_COMMENT_END),
-            take_until(ASN1_COMMENT),
-        )),
-        alt((tag(C_STYLE_BLOCK_COMMENT_END), tag(ASN1_COMMENT))),
-    )(input)
+            tag(C_STYLE_BLOCK_COMMENT_END),
+        ),
+        delimited(
+            tag(ASN1_COMMENT),
+            take_until_or("\n", ASN1_COMMENT),
+            tag(ASN1_COMMENT),
+        ),
+    ))(input)
 }
 
 pub fn identifier<'a>(input: &'a str) -> IResult<&'a str, &'a str> {
@@ -62,7 +64,7 @@ pub fn skip_ws_and_comments<'a, F, O>(inner: F) -> impl FnMut(&'a str) -> IResul
 where
     F: FnMut(&'a str) -> IResult<&'a str, O>,
 {
-    preceded(many0(alt((skip_ws(comment), multispace1))), inner)
+    preceded(many0(alt((comment, multispace1))), inner)
 }
 
 pub fn int_in_parentheses<'a, F, O>(inner: F) -> impl FnMut(&'a str) -> IResult<&'a str, O>
@@ -93,7 +95,7 @@ pub fn range_particle<'a>(input: &'a str) -> IResult<&'a str, RangeMarker> {
     skip_ws_and_comments(tag(RANGE))(input).map(|(remaining, _)| (remaining, RangeMarker()))
 }
 
-pub fn extension_particle<'a>(input: &'a str) -> IResult<&'a str, ExtensionMarker> {
+pub fn extension_marker<'a>(input: &'a str) -> IResult<&'a str, ExtensionMarker> {
     skip_ws_and_comments(tag(EXTENSION))(input).map(|(remaining, _)| (remaining, ExtensionMarker()))
 }
 
@@ -102,7 +104,7 @@ pub fn strict_constraint<'a>(input: &'a str) -> IResult<&'a str, Constraint> {
 }
 
 pub fn strict_extensible_constraint<'a>(input: &'a str) -> IResult<&'a str, Constraint> {
-    map_into(pair(i128, preceded(char(','), extension_particle)))(input)
+    map_into(pair(i128, preceded(char(','), extension_marker)))(input)
 }
 
 pub fn range_constraint<'a>(input: &'a str) -> IResult<&'a str, Constraint> {
@@ -114,7 +116,7 @@ pub fn extensible_range_constraint<'a>(input: &'a str) -> IResult<&'a str, Const
         i128,
         range_particle,
         skip_ws_and_comments(i128),
-        preceded(skip_ws_and_comments(char(COMMA)), extension_particle),
+        preceded(skip_ws_and_comments(char(COMMA)), extension_marker),
     )))(input)
 }
 
@@ -122,42 +124,13 @@ pub fn assignment<'a>(input: &'a str) -> IResult<&'a str, &'a str> {
     skip_ws_and_comments(tag(ASSIGN))(input)
 }
 
-pub fn enumerals<'a>(input: &'a str) -> IResult<&'a str, Vec<Enumeral>> {
-    delimited(
-        skip_ws_and_comments(char(LEFT_BRACE)),
-        fold_many1(
-            terminated(
-                skip_ws_and_comments(pair(
-                    identifier,
-                    skip_ws_and_comments(opt(int_in_parentheses(u64))),
-                )),
-                opt(skip_ws_and_comments(char(COMMA))),
-            ),
-            Vec::<Enumeral>::new,
-            |mut acc, (name, index)| {
-                acc.push(Enumeral {
-                    name: name.into(),
-                    index: index.unwrap_or(acc.len() as u64),
-                });
-                acc
-            },
-        ),
-        skip_ws_and_comments(char(RIGHT_BRACE)),
-    )(input)
-}
-
-pub fn enumated<'a>(input: &'a str) -> IResult<&'a str, ASN1Type> {
-    map(
-        preceded(skip_ws_and_comments(tag(ENUMERATED)), enumerals),
-        |m| ASN1Type::Enumerated(m.into()),
-    )(input)
-}
-
 #[cfg(test)]
 mod tests {
-    use core::panic;
 
-    use crate::grammar::token::{ASN1Type, Constraint, DistinguishedValue};
+    use crate::{
+        grammar::token::Constraint,
+        parser::common::{block_comment, line_comment},
+    };
 
     use super::{comment, constraint, identifier, skip_ws, skip_ws_and_comments};
 
@@ -195,6 +168,27 @@ and one */"#
         assert_eq!(
             " Very annoying! ",
             comment("-- Very annoying! --").unwrap().1
+        )
+    }
+
+    #[test]
+    fn parses_ambiguous_asn1_comment() {
+        assert_eq!(
+            comment(
+                r#" -- This means backward
+      unavailable"#
+            ),
+            Ok(("\n      unavailable", " This means backward",),)
+        );
+        assert_eq!(
+            comment(
+                r#"-- This means forward
+        backward    (2), -- This means backward"#
+            ),
+            Ok((
+                "\n        backward    (2), -- This means backward",
+                " This means forward",
+            ),)
         )
     }
 

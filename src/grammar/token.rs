@@ -126,18 +126,20 @@ pub struct AsnVisibleString {}
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct AsnEnumerated {
-  pub members: Vec<Enumeral>
+  pub members: Vec<Enumeral>,
+  pub extensible: bool
 }
 
-impl From<Vec<Enumeral>> for AsnEnumerated {
-    fn from(value: Vec<Enumeral>) -> Self {
-        AsnEnumerated { members: value }
+impl From<(Vec<Enumeral>, Option<ExtensionMarker>)> for AsnEnumerated {
+    fn from(value: (Vec<Enumeral>, Option<ExtensionMarker>)) -> Self {
+        AsnEnumerated { members: value.0, extensible: value.1.is_some() }
     }
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Enumeral {
   pub name: String,
+  pub description: Option<String>,
   pub index: u64,
 }
 
