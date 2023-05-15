@@ -1,8 +1,9 @@
 /// Comment tokens
-pub const BLOCK_COMMENT_BEGIN: &'static [u8] = b"/*";
-pub const BLOCK_COMMENT_CONTINUED_LINE: &'static [u8] = b"*";
-pub const BLOCK_COMMENT_END: &'static [u8] = b"*/";
-pub const LINE_COMMENT: &'static [u8] = b"//";
+pub const C_STYLE_BLOCK_COMMENT_BEGIN: &'static str = "/*";
+pub const C_STYLE_BLOCK_COMMENT_CONTINUED_LINE: char = '*';
+pub const C_STYLE_BLOCK_COMMENT_END: &'static str = "*/";
+pub const C_STYLE_LINE_COMMENT: &'static str = "//";
+pub const ASN1_COMMENT: &'static str = "--";
 
 /// Bracket tokens
 pub const LEFT_PARENTHESIS: char = '(';
@@ -15,27 +16,28 @@ pub const LEFT_CHEVRON: char = '<';
 pub const RIGHT_CHEVRON: char = '>';
 
 /// Type tokens
-pub const NULL: &'static [u8] = b"NULL";
-pub const BOOLEAN: &'static [u8] = b"BOOLEAN";
-pub const INTEGER: &'static [u8] = b"INTEGER";
-pub const REAL: &'static [u8] = b"REAL";
-pub const BIT_STRING: &'static [u8] = b"BIT STRING";
-pub const OCTET_STRING: &'static [u8] = b"OCTET STRING";
-pub const IA5_STRING: &'static [u8] = b"IA5String";
-pub const UTF8_STRING: &'static [u8] = b"UTF8String";
-pub const NUMERIC_STRING: &'static [u8] = b"NumericString";
-pub const VISIBLE_STRING: &'static [u8] = b"VisibleString";
-pub const ENUMERATED: &'static [u8] = b"ENUMERATED";
-pub const CHOICE: &'static [u8] = b"CHOICE";
-pub const SEQUENCE: &'static [u8] = b"SEQUENCE";
-pub const SEQUENCE_OF: &'static [u8] = b"SEQUENCE OF";
-pub const SET: &'static [u8] = b"SET";
-pub const SET_OF: &'static [u8] = b"SET OF";
+pub const NULL: &'static str = "NULL";
+pub const BOOLEAN: &'static str = "BOOLEAN";
+pub const INTEGER: &'static str = "INTEGER";
+pub const REAL: &'static str = "REAL";
+pub const BIT_STRING: &'static str = "BIT STRING";
+pub const OCTET_STRING: &'static str = "OCTET STRING";
+pub const IA5_STRING: &'static str = "IA5String";
+pub const UTF8_STRING: &'static str = "UTF8String";
+pub const NUMERIC_STRING: &'static str = "NumericString";
+pub const VISIBLE_STRING: &'static str = "VisibleString";
+pub const ENUMERATED: &'static str = "ENUMERATED";
+pub const CHOICE: &'static str = "CHOICE";
+pub const SEQUENCE: &'static str = "SEQUENCE";
+pub const SEQUENCE_OF: &'static str = "SEQUENCE OF";
+pub const SET: &'static str = "SET";
+pub const SET_OF: &'static str = "SET OF";
 
-pub const SIZE: &'static [u8] = b"SIZE";
-pub const ASSIGN: &'static [u8] = b"::=";
-pub const RANGE: &'static [u8] = b"..";
-pub const EXTENSION: &'static [u8] = b"...";
+pub const SIZE: &'static str = "SIZE";
+pub const DEFAULT: &'static str = "DEFAULT";
+pub const ASSIGN: &'static str = "::=";
+pub const RANGE: &'static str = "..";
+pub const EXTENSION: &'static str = "...";
 pub const COMMA: char = ',';
 
 pub trait Quote<'a> {
@@ -67,7 +69,7 @@ pub enum ASN1Type {
     Utf8String,
     NumericString,
     VisibleString,
-    Enumerated,
+    Enumerated(AsnEnumerated),
     Choice,
     Sequence,
     SequenceOf,
@@ -122,7 +124,22 @@ pub struct AsnNumericString {}
 
 pub struct AsnVisibleString {}
 
-pub struct AsnEnumerated {}
+#[derive(Debug, Clone, PartialEq)]
+pub struct AsnEnumerated {
+  pub members: Vec<Enumeral>
+}
+
+impl From<Vec<Enumeral>> for AsnEnumerated {
+    fn from(value: Vec<Enumeral>) -> Self {
+        AsnEnumerated { members: value }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct Enumeral {
+  pub name: String,
+  pub index: u64,
+}
 
 pub struct AsnChoice {}
 
@@ -147,10 +164,10 @@ impl From<(&str, i128)> for DistinguishedValue {
 }
 
 #[derive(Debug)]
-pub struct RangeParticle();
+pub struct RangeMarker();
 
 #[derive(Debug)]
-pub struct ExtensionParticle();
+pub struct ExtensionMarker();
 
 // TODO: Add check whether min is smaller than max
 #[derive(Debug, Clone, PartialEq)]
@@ -180,8 +197,8 @@ impl<'a> From<i128> for Constraint {
     }
 }
 
-impl<'a> From<(i128, RangeParticle, i128)> for Constraint {
-    fn from(value: (i128, RangeParticle, i128)) -> Self {
+impl<'a> From<(i128, RangeMarker, i128)> for Constraint {
+    fn from(value: (i128, RangeMarker, i128)) -> Self {
         Self {
             min_value: Some(value.0),
             max_value: Some(value.2),
@@ -190,8 +207,8 @@ impl<'a> From<(i128, RangeParticle, i128)> for Constraint {
     }
 }
 
-impl<'a> From<(i128, ExtensionParticle)> for Constraint {
-    fn from(value: (i128, ExtensionParticle)) -> Self {
+impl<'a> From<(i128, ExtensionMarker)> for Constraint {
+    fn from(value: (i128, ExtensionMarker)) -> Self {
         Self {
             min_value: Some(value.0),
             max_value: Some(value.0),
@@ -200,8 +217,8 @@ impl<'a> From<(i128, ExtensionParticle)> for Constraint {
     }
 }
 
-impl<'a> From<(i128, RangeParticle, i128, ExtensionParticle)> for Constraint {
-    fn from(value: (i128, RangeParticle, i128, ExtensionParticle)) -> Self {
+impl<'a> From<(i128, RangeMarker, i128, ExtensionMarker)> for Constraint {
+    fn from(value: (i128, RangeMarker, i128, ExtensionMarker)) -> Self {
         Self {
             min_value: Some(value.0),
             max_value: Some(value.2),
