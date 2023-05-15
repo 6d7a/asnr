@@ -1,24 +1,36 @@
 use nom::{
     branch::alt,
-    bytes::complete::{is_not, tag},
-    character::complete::{alpha1, alphanumeric1, char, digit1, i128, multispace0},
-    combinator::{map, recognize, value},
+    bytes::complete::{is_not, tag, take_until},
+    character::complete::{alpha1, alphanumeric1, char, digit1, i128, multispace0, multispace1},
+    combinator::{map, opt, recognize, value},
     multi::many0,
-    sequence::{delimited, pair, preceded, tuple, Tuple},
+    sequence::{delimited, pair, preceded, terminated, tuple, Tuple},
     IResult,
 };
 
 use crate::grammar::token::{INTEGER, RANGE};
 
 use super::{
-    token::{AsnInteger, Constraint, ExtensionParticle, RangeParticle, ASSIGN, EXTENSION},
-    util::{map_into, try_parse_result_into},
+    token::{
+        ASN1Type, AsnInteger, Constraint, DistinguishedValue, ExtensionParticle, RangeParticle,
+        ToplevelDeclaration, ASSIGN, COMMA, EXTENSION, LEFT_BRACE, LEFT_PARENTHESIS, RIGHT_BRACE,
+        RIGHT_PARENTHESIS,
+    },
+    util::map_into,
 };
+
+pub fn top_level_declaration<'a>(input: &'a str) -> IResult<&'a str, ToplevelDeclaration> {
+    map_into(tuple((
+        skip_ws(comment),
+        skip_ws(identifier),
+        preceded(assignment, integer),
+    )))(input)
+}
 
 /// This matches both spec-conform ASN1 comments ("--")
 /// as well as C-style comments commonly seen ("//", "/* */")
 pub fn comment<'a>(input: &'a str) -> IResult<&'a str, &'a str> {
-    alt((line_comment, block_comment))(input)
+    alt((block_comment, line_comment))(input)
 }
 
 fn line_comment<'a>(input: &'a str) -> IResult<&'a str, &'a str> {
@@ -28,7 +40,7 @@ fn line_comment<'a>(input: &'a str) -> IResult<&'a str, &'a str> {
 fn block_comment<'a>(input: &'a str) -> IResult<&'a str, &'a str> {
     delimited(
         alt((tag("/*"), tag("--"))),
-        alt((is_not("/*"), is_not("--"))),
+        alt((take_until("*/"), take_until("--"))),
         alt((tag("*/"), tag("--"))),
     )(input)
 }
@@ -47,25 +59,55 @@ where
     preceded(multispace0, inner)
 }
 
+fn skip_ws_and_comments<'a, F, O>(inner: F) -> impl FnMut(&'a str) -> IResult<&'a str, O>
+where
+    F: FnMut(&'a str) -> IResult<&'a str, O>,
+{
+    preceded(many0(alt((skip_ws(comment), multispace1))), inner)
+}
+
+fn distinguished_values<'a>(input: &'a str) -> IResult<&'a str, Vec<DistinguishedValue>> {
+    delimited(
+        skip_ws_and_comments(char(LEFT_BRACE)),
+        many0(terminated(
+            skip_ws_and_comments(distinguished_val),
+            opt(skip_ws_and_comments(char(COMMA))),
+        )),
+        skip_ws_and_comments(char(RIGHT_BRACE)),
+    )(input)
+}
+
+fn distinguished_val<'a>(input: &'a str) -> IResult<&'a str, DistinguishedValue> {
+    map_into(pair(
+        skip_ws_and_comments(identifier),
+        delimited(
+            skip_ws_and_comments(char(LEFT_PARENTHESIS)),
+            skip_ws_and_comments(i128),
+            skip_ws_and_comments(char(RIGHT_PARENTHESIS)),
+        ),
+    ))(input)
+}
+
 fn constraint<'a>(input: &'a str) -> IResult<&'a str, Constraint> {
     delimited(
-        char('('),
-        alt((
+        skip_ws_and_comments(char(LEFT_PARENTHESIS)),
+        skip_ws_and_comments(alt((
             extensible_range_constraint, // The most elaborate match first
             strict_extensible_constraint,
             range_constraint,
             strict_constraint, // The most simple match last
-        )),
-        char(')'),
+        ))),
+        skip_ws_and_comments(char(RIGHT_PARENTHESIS)),
     )(input)
 }
 
 fn range_particle<'a>(input: &'a str) -> IResult<&'a str, RangeParticle> {
-    tag(RANGE)(input).map(|(remaining, dotdot)| (remaining, RangeParticle()))
+    skip_ws_and_comments(tag(RANGE))(input).map(|(remaining, _)| (remaining, RangeParticle()))
 }
 
 fn extension_particle<'a>(input: &'a str) -> IResult<&'a str, ExtensionParticle> {
-    tag(EXTENSION)(input).map(|(remaining, dotdotdot)| (remaining, ExtensionParticle()))
+    skip_ws_and_comments(tag(EXTENSION))(input)
+        .map(|(remaining, _)| (remaining, ExtensionParticle()))
 }
 
 fn strict_constraint<'a>(input: &'a str) -> IResult<&'a str, Constraint> {
@@ -73,38 +115,47 @@ fn strict_constraint<'a>(input: &'a str) -> IResult<&'a str, Constraint> {
 }
 
 fn strict_extensible_constraint<'a>(input: &'a str) -> IResult<&'a str, Constraint> {
-    map_into(pair(i128, preceded(char(','), skip_ws(extension_particle))))(input)
+    map_into(pair(i128, preceded(char(','), extension_particle)))(input)
 }
 
 fn range_constraint<'a>(input: &'a str) -> IResult<&'a str, Constraint> {
-    map_into(tuple((i128, range_particle, i128)))(input)
+    map_into(tuple((i128, range_particle, skip_ws_and_comments(i128))))(input)
 }
 
 fn extensible_range_constraint<'a>(input: &'a str) -> IResult<&'a str, Constraint> {
     map_into(tuple((
         i128,
         range_particle,
-        i128,
-        preceded(char(','), skip_ws(extension_particle)),
+        skip_ws_and_comments(i128),
+        preceded(skip_ws_and_comments(char(',')), extension_particle),
     )))(input)
 }
 
 fn assignment<'a>(input: &'a str) -> IResult<&'a str, &'a str> {
-    tag(ASSIGN)(input)
+    skip_ws_and_comments(tag(ASSIGN))(input)
 }
 
-pub fn integer<'a>(input: &'a str) -> IResult<&'a str, AsnInteger> {
-    alt((
-        map_into(preceded(skip_ws(tag(INTEGER)), skip_ws(constraint))),
-        value(AsnInteger::default(), skip_ws(tag(INTEGER))),
-    ))(input)
+pub fn integer<'a>(input: &'a str) -> IResult<&'a str, ASN1Type> {
+    map(
+        tuple((
+            skip_ws_and_comments(tag(INTEGER)),
+            opt(skip_ws_and_comments(distinguished_values)),
+            opt(skip_ws_and_comments(constraint)),
+        )),
+        |m| ASN1Type::Integer(m.into()),
+    )(input)
 }
 
 #[cfg(test)]
 mod tests {
+    use core::panic;
+
     use crate::grammar::{
-        parser::{constraint, identifier, integer, skip_ws},
-        token::{Constraint, AsnInteger},
+        parser::{
+            constraint, distinguished_values, identifier, integer, skip_ws, skip_ws_and_comments,
+            top_level_declaration,
+        },
+        token::{ASN1Type, AsnInteger, Constraint, DistinguishedValue},
     };
 
     use super::comment;
@@ -118,13 +169,32 @@ mod tests {
 
     #[test]
     fn parses_block_comment() {
-        let line = r#"/* Test, one, two, three
-    and one */"#;
         assert_eq!(
             r#" Test, one, two, three
     and one "#,
-            comment(line).unwrap().1
+            comment(
+                r#"/* Test, one, two, three
+    and one */"#
+            )
+            .unwrap()
+            .1
         );
+        assert_eq!(
+            r#"*
+           * Hello
+           "#,
+            comment(
+                r#"/**
+           * Hello
+           */"#
+            )
+            .unwrap()
+            .1
+        );
+        assert_eq!(
+            " Very annoying! ",
+            comment("-- Very annoying! --").unwrap().1
+        )
     }
 
     #[test]
@@ -161,6 +231,14 @@ mod tests {
     }
 
     #[test]
+    fn discards_whitespace_and_comments() {
+        assert_eq!(
+            skip_ws_and_comments(identifier)(" -- comment --EEE-DDD"),
+            Ok(("", "EEE-DDD"))
+        );
+    }
+
+    #[test]
     fn parses_constraint() {
         assert_eq!(
             constraint("(5)"),
@@ -181,18 +259,108 @@ mod tests {
     }
 
     #[test]
+    fn parses_constraint_with_inserted_comment() {
+        assert_eq!(
+            constraint("(-9..-4, -- Very annoying! -- ...)"),
+            Ok(("", Constraint::new(Some(-9), Some(-4), true)))
+        );
+        assert_eq!(
+            constraint("(-9-- Very annoying! --..-4,  ...)"),
+            Ok(("", Constraint::new(Some(-9), Some(-4), true)))
+        );
+    }
+
+    #[test]
     fn parses_integer() {
         assert_eq!(
             integer("INTEGER"),
-            Ok(("", AsnInteger::default()))
+            Ok(("", ASN1Type::Integer(AsnInteger::default())))
         );
         assert_eq!(
             integer("INTEGER  (-9..-4, ...)"),
-            Ok(("", Constraint::new(Some(-9), Some(-4), true).into()))
+            Ok((
+                "",
+                ASN1Type::Integer(Constraint::new(Some(-9), Some(-4), true).into())
+            ))
         );
         assert_eq!(
             integer("\r\nINTEGER(-9..-4)"),
-            Ok(("", Constraint::new(Some(-9), Some(-4), false).into()))
+            Ok((
+                "",
+                ASN1Type::Integer(Constraint::new(Some(-9), Some(-4), false).into())
+            ))
         );
+    }
+
+    #[test]
+    fn parses_distinguished_values() {
+        let sample = r#"{
+        positiveOutOfRange (160),
+        unavailable        (161)  
+    }"#;
+        println!("{:#?}", distinguished_values(sample))
+    }
+
+    #[test]
+    fn parses_toplevel_simple_integer_declaration() {
+        let tld = top_level_declaration(
+            "/**
+            * The DE represents a cardinal number that counts the size of a set. 
+            * 
+            * @category: Basic information
+            * @revision: Created in V2.1.1
+           */
+           CardinalNumber3b ::= INTEGER(1..8)",
+        )
+        .unwrap()
+        .1;
+        assert_eq!(tld.name, String::from("CardinalNumber3b"));
+        assert!(tld.comments.contains("@revision: Created in V2.1.1"));
+        if let ASN1Type::Integer(int) = tld.r#type {
+            assert!(int.constraint.is_some());
+            assert_eq!(int.constraint.as_ref().unwrap().min_value, Some(1));
+            assert_eq!(int.constraint.as_ref().unwrap().max_value, Some(8));
+            assert_eq!(int.constraint.as_ref().unwrap().extensible, false);
+        } else {
+            panic!("Top-level declaration contains other type than integer.")
+        }
+    }
+
+    #[test]
+    fn parses_toplevel_macro_integer_declaration() {
+        let tld = top_level_declaration(r#"/** 
+          * This DE represents the magnitude of the acceleration vector in a defined coordinate system.
+          *
+          * The value shall be set to:
+          * - `0` to indicate no acceleration,
+          * - `n` (`n > 0` and `n < 160`) to indicate acceleration equal to or less than n x 0,1 m/s^2, and greater than (n-1) x 0,1 m/s^2,
+          * - `160` for acceleration values greater than 15,9 m/s^2,
+          * - `161` when the data is unavailable.
+          *
+          * @unit 0,1 m/s^2
+          * @category: Kinematic information
+          * @revision: Created in V2.1.1
+        */
+        AccelerationMagnitudeValue ::= INTEGER {
+            positiveOutOfRange (160),
+            unavailable        (161)  
+        } (0.. 161, ...)"#).unwrap().1;
+        assert_eq!(tld.name, String::from("AccelerationMagnitudeValue"));
+        assert!(tld.comments.contains("@unit 0,1 m/s^2"));
+        if let ASN1Type::Integer(int) = tld.r#type {
+            assert_eq!(int.constraint.as_ref().unwrap().min_value, Some(0));
+            assert_eq!(int.constraint.as_ref().unwrap().max_value, Some(161));
+            assert_eq!(int.constraint.as_ref().unwrap().extensible, true);
+            assert_eq!(int.distinguished_values.as_ref().unwrap().len(), 2);
+            assert_eq!(
+                int.distinguished_values.as_ref().unwrap()[0],
+                DistinguishedValue {
+                    name: String::from("positiveOutOfRange"),
+                    value: 160
+                }
+            );
+        } else {
+            panic!("Top-level declaration contains other type than integer.")
+        }
     }
 }

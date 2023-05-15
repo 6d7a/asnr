@@ -10,7 +10,7 @@ where
     match result {
         Ok((input, s)) => match s.try_into() {
             Ok(res) => Ok((input, res)),
-            Err(e) => Err(nom::Err::Failure(Error::new(input, ErrorKind::Fail))),
+            Err(_) => Err(nom::Err::Failure(Error::new(input, ErrorKind::Fail))),
         },
         Err(e) => Err(e),
     }

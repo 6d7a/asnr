@@ -1,7 +1,3 @@
-use std::{num::{ParseIntError, self}, collections::btree_map::Range};
-
-use nom::{IResult, error::{ParseError, Error}};
-
 /// Comment tokens
 pub const BLOCK_COMMENT_BEGIN: &'static [u8] = b"/*";
 pub const BLOCK_COMMENT_CONTINUED_LINE: &'static [u8] = b"*";
@@ -9,14 +5,14 @@ pub const BLOCK_COMMENT_END: &'static [u8] = b"*/";
 pub const LINE_COMMENT: &'static [u8] = b"//";
 
 /// Bracket tokens
-pub const LEFT_PARENTHESIS: &'static [u8] = b"(";
-pub const RIGHT_PARENTHESIS: &'static [u8] = b")";
-pub const LEFT_BRACKET: &'static [u8] = b"[";
-pub const RIGHT_BRACKET: &'static [u8] = b"]";
-pub const LEFT_BRACE: &'static [u8] = b"{";
-pub const RIGHT_BRACE: &'static [u8] = b"}";
-pub const LEFT_CHEVRON: &'static [u8] = b"<";
-pub const RIGHT_CHEVRON: &'static [u8] = b">";
+pub const LEFT_PARENTHESIS: char = '(';
+pub const RIGHT_PARENTHESIS: char = ')';
+pub const LEFT_BRACKET: char = '[';
+pub const RIGHT_BRACKET: char = ']';
+pub const LEFT_BRACE: char = '{';
+pub const RIGHT_BRACE: char = '}';
+pub const LEFT_CHEVRON: char = '<';
+pub const RIGHT_CHEVRON: char = '>';
 
 /// Type tokens
 pub const NULL: &'static [u8] = b"NULL";
@@ -40,104 +36,114 @@ pub const SIZE: &'static [u8] = b"SIZE";
 pub const ASSIGN: &'static [u8] = b"::=";
 pub const RANGE: &'static [u8] = b"..";
 pub const EXTENSION: &'static [u8] = b"...";
-pub const COMMA: &'static [u8] = b",";
+pub const COMMA: char = ',';
 
 pub trait Quote<'a> {
-  fn quote(&self) -> &'a str;
+    fn quote(&self) -> &'a str;
 }
 
-pub enum ASN1Type {
-    Null(AsnNull),
-    Boolean(AsnBoolean),
-    Integer(AsnInteger),
-    Real(AsnReal),
-    BitString(AsnBitString),
-    OctetString(AsnOctetString),
-    Ia5String(AsnIa5String),
-    Utf8String(AsnUtf8String),
-    NumericString(AsnNumericString),
-    VisibleString(AsnVisibleString),
-    Enumerated(AsnEnumerated),
-    Choice(AsnChoice),
-    Sequence(AsnSequence),
-    SequenceOf(AsnSequenceOf),
-    Set(AsnSet),
-    SetOf(AsnSetOf),
+#[derive(Debug, PartialEq)]
+pub struct ToplevelDeclaration {
+    pub comments: String,
+    pub name: String,
+    pub r#type: ASN1Type,
 }
 
-pub struct AsnNull {
-}
-
-pub struct AsnBoolean {
+impl From<(&str, &str, ASN1Type)> for ToplevelDeclaration {
+    fn from(value: (&str, &str, ASN1Type)) -> Self {
+        Self { comments: value.0.into(), name: value.1.into(), r#type: value.2 }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
+pub enum ASN1Type {
+    Null,
+    Boolean,
+    Integer(AsnInteger),
+    Real,
+    BitString,
+    OctetString,
+    Ia5String,
+    Utf8String,
+    NumericString,
+    VisibleString,
+    Enumerated,
+    Choice,
+    Sequence,
+    SequenceOf,
+    Set,
+    SetOf,
+}
+
+pub struct AsnNull {}
+
+pub struct AsnBoolean {}
+
+#[derive(Debug, Clone, PartialEq)]
 pub struct AsnInteger {
-  pub constraint: Option<Constraint>
+    pub constraint: Option<Constraint>,
+    pub distinguished_values: Option<Vec<DistinguishedValue>>
 }
 
 impl Default for AsnInteger {
     fn default() -> Self {
-        Self { constraint: None }
+        Self { constraint: None, distinguished_values: None }
     }
 }
 
+#[cfg(test)]
 impl From<Constraint> for AsnInteger {
-    fn from(value: Constraint) -> Self {
-        Self { constraint: Some(value) }
+  fn from(value: Constraint) -> Self {
+      Self { constraint: Some(value), distinguished_values: None }
+  }
+}
+
+
+impl From<(&str, Option<Vec<DistinguishedValue>>, Option<Constraint>)> for AsnInteger {
+  fn from(value: (&str, Option<Vec<DistinguishedValue>>, Option<Constraint>)) -> Self {
+      Self {
+          constraint: value.2,
+          distinguished_values: value.1,
+      }
+  }
+}
+
+pub struct AsnReal {}
+
+pub struct AsnBitString {}
+
+pub struct AsnOctetString {}
+
+pub struct AsnIa5String {}
+
+pub struct AsnUtf8String {}
+
+pub struct AsnNumericString {}
+
+pub struct AsnVisibleString {}
+
+pub struct AsnEnumerated {}
+
+pub struct AsnChoice {}
+
+pub struct AsnSequence {}
+
+pub struct AsnSequenceOf {}
+
+pub struct AsnSet {}
+
+pub struct AsnSetOf {}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct DistinguishedValue {
+  pub name: String,
+  pub value: i128
+}
+
+impl From<(&str, i128)> for DistinguishedValue {
+    fn from(value: (&str, i128)) -> Self {
+        Self { name: value.0.into(), value: value.1 }
     }
-}
-
-pub struct AsnReal {
-
-}
-
-pub struct AsnBitString {
-
-}
-
-pub struct AsnOctetString {
-
-}
-
-pub struct AsnIa5String {
-
-}
-
-pub struct AsnUtf8String {
-
-}
-
-pub struct AsnNumericString {
-
-}
-
-pub struct AsnVisibleString {
-
-}
-
-pub struct AsnEnumerated {
-
-}
-
-pub struct AsnChoice {
-
-}
-
-pub struct AsnSequence {
-
-}
-
-pub struct AsnSequenceOf {
-
-}
-
-pub struct AsnSet {
-
-}
-
-pub struct AsnSetOf {
-
 }
 
 #[derive(Debug)]
@@ -146,39 +152,60 @@ pub struct RangeParticle();
 #[derive(Debug)]
 pub struct ExtensionParticle();
 
-#[derive(Debug, PartialEq, Clone)]
+// TODO: Add check whether min is smaller than max
+#[derive(Debug, Clone, PartialEq)]
 pub struct Constraint {
-  pub min_value: Option<i128>,
-  pub max_value: Option<i128>,
-  pub extensible: bool,
+    pub min_value: Option<i128>,
+    pub max_value: Option<i128>,
+    pub extensible: bool,
 }
 
 impl Constraint {
     pub fn new(min: Option<i128>, max: Option<i128>, extensible: bool) -> Self {
-      Self { min_value: min, max_value: max, extensible }
+        Self {
+            min_value: min,
+            max_value: max,
+            extensible,
+        }
     }
 }
 
 impl<'a> From<i128> for Constraint {
-  fn from(value: i128) -> Self {
-    Self { min_value: Some(value), max_value: Some(value), extensible: false }
-  }
+    fn from(value: i128) -> Self {
+        Self {
+            min_value: Some(value),
+            max_value: Some(value),
+            extensible: false,
+        }
+    }
 }
 
 impl<'a> From<(i128, RangeParticle, i128)> for Constraint {
-  fn from(value: (i128, RangeParticle, i128)) -> Self {
-    Self { min_value: Some(value.0), max_value: Some(value.2), extensible: false }
-  }
+    fn from(value: (i128, RangeParticle, i128)) -> Self {
+        Self {
+            min_value: Some(value.0),
+            max_value: Some(value.2),
+            extensible: false,
+        }
+    }
 }
 
 impl<'a> From<(i128, ExtensionParticle)> for Constraint {
-  fn from(value: (i128, ExtensionParticle)) -> Self {
-    Self { min_value: Some(value.0), max_value: Some(value.0), extensible: true }
-  }
+    fn from(value: (i128, ExtensionParticle)) -> Self {
+        Self {
+            min_value: Some(value.0),
+            max_value: Some(value.0),
+            extensible: true,
+        }
+    }
 }
 
 impl<'a> From<(i128, RangeParticle, i128, ExtensionParticle)> for Constraint {
-  fn from(value: (i128, RangeParticle, i128, ExtensionParticle)) -> Self {
-    Self { min_value: Some(value.0), max_value: Some(value.2), extensible: true }
-  }
+    fn from(value: (i128, RangeParticle, i128, ExtensionParticle)) -> Self {
+        Self {
+            min_value: Some(value.0),
+            max_value: Some(value.2),
+            extensible: true,
+        }
+    }
 }
