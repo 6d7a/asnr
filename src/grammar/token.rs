@@ -63,7 +63,7 @@ pub enum ASN1Type {
     Boolean,
     Integer(AsnInteger),
     Real,
-    BitString,
+    BitString(AsnBitString),
     OctetString,
     Ia5String,
     Utf8String,
@@ -76,10 +76,6 @@ pub enum ASN1Type {
     Set,
     SetOf,
 }
-
-pub struct AsnNull {}
-
-pub struct AsnBoolean {}
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct AsnInteger {
@@ -112,7 +108,16 @@ impl From<(&str, Option<Vec<DistinguishedValue>>, Option<Constraint>)> for AsnIn
 
 pub struct AsnReal {}
 
-pub struct AsnBitString {}
+#[derive(Debug, Clone, PartialEq)]
+pub struct AsnBitString {
+  pub constraint: Option<Constraint>,
+}
+
+impl From<Option<Constraint>> for AsnBitString {
+    fn from(value: Option<Constraint>) -> Self {
+        AsnBitString { constraint: value }
+    }
+}
 
 pub struct AsnOctetString {}
 

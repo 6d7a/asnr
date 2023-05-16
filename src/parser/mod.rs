@@ -8,6 +8,7 @@ use crate::grammar::token::{ToplevelDeclaration, COMMA, LEFT_BRACE, RIGHT_BRACE}
 
 use self::{boolean::boolean, common::*, enumerated::*, integer::*, util::map_into};
 
+mod bit_string;
 mod boolean;
 mod common;
 mod enumerated;
