@@ -1,12 +1,14 @@
 use nom::{
+    branch::alt,
     sequence::{preceded, tuple},
     IResult,
 };
 
 use crate::grammar::token::{ToplevelDeclaration, COMMA, LEFT_BRACE, RIGHT_BRACE};
 
-use self::{common::*, integer::*, util::map_into};
+use self::{boolean::boolean, common::*, enumerated::*, integer::*, util::map_into};
 
+mod boolean;
 mod common;
 mod enumerated;
 mod integer;
@@ -16,7 +18,7 @@ pub fn top_level_declaration<'a>(input: &'a str) -> IResult<&'a str, ToplevelDec
     map_into(tuple((
         skip_ws(comment),
         skip_ws(identifier),
-        preceded(assignment, integer),
+        preceded(assignment, alt((integer, enumerated, boolean))),
     )))(input)
 }
 
@@ -24,7 +26,7 @@ pub fn top_level_declaration<'a>(input: &'a str) -> IResult<&'a str, ToplevelDec
 mod tests {
     use core::panic;
 
-    use crate::grammar::token::{ASN1Type, DistinguishedValue};
+    use crate::grammar::token::{ASN1Type, DistinguishedValue, Enumeral};
 
     use super::top_level_declaration;
 
@@ -89,5 +91,56 @@ mod tests {
         } else {
             panic!("Top-level declaration contains other type than integer.")
         }
+    }
+
+    #[test]
+    fn parses_toplevel_enumerated_declaration() {
+        let tld = top_level_declaration(
+            r#"-- Coverage Enhancement level encoded according to TS 36.331 [16] --
+        CE-mode-B-SupportIndicator ::= ENUMERATED {
+           supported,
+           ...
+        }"#,
+        )
+        .unwrap()
+        .1;
+        assert_eq!(tld.name, String::from("CE-mode-B-SupportIndicator"));
+        assert_eq!(
+            tld.comments,
+            String::from(" Coverage Enhancement level encoded according to TS 36.331 [16] ")
+        );
+        if let ASN1Type::Enumerated(e) = tld.r#type {
+            assert_eq!(e.members.len(), 1);
+            assert_eq!(
+                e.members[0],
+                Enumeral {
+                    name: "supported".into(),
+                    index: 0,
+                    description: None
+                }
+            );
+            assert_eq!(e.extensible, true);
+        } else {
+            panic!("Top-level declaration contains other type than integer.")
+        }
+    }
+
+    #[test]
+    fn parses_toplevel_boolean_declaration() {
+        let tld = top_level_declaration(
+            r#"/**
+            * This DE indicates whether a vehicle (e.g. public transport vehicle, truck) is under the embarkation process.
+            * If that is the case, the value is *TRUE*, otherwise *FALSE*.
+            *
+            * @category: Vehicle information
+            * @revision: editorial update in V2.1.1
+            */
+           EmbarkationStatus ::= BOOLEAN"#,
+        )
+        .unwrap()
+        .1;
+        assert_eq!(tld.name, String::from("EmbarkationStatus"));
+        assert!(tld.comments.contains("@revision: editorial update in V2.1.1"));
+        assert_eq!(tld.r#type, ASN1Type::Boolean);
     }
 }

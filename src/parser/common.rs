@@ -1,6 +1,6 @@
 use nom::{
     branch::alt,
-    bytes::complete::{is_not, tag, take_till, take_until},
+    bytes::complete::{tag, take_until},
     character::complete::{
         alpha1, alphanumeric1, char, i128, multispace0, multispace1, not_line_ending,
     },
@@ -13,7 +13,7 @@ use nom::{
 use crate::grammar::token::{
     Constraint, ExtensionMarker, RangeMarker, ASN1_COMMENT, ASSIGN, COMMA,
     C_STYLE_BLOCK_COMMENT_BEGIN, C_STYLE_BLOCK_COMMENT_END, C_STYLE_LINE_COMMENT, EXTENSION,
-    LEFT_PARENTHESIS, RANGE, RIGHT_PARENTHESIS,
+    LEFT_PARENTHESIS, RANGE, RIGHT_PARENTHESIS, LEFT_BRACE, RIGHT_BRACE,
 };
 
 use super::util::{map_into, take_until_or};
@@ -67,7 +67,7 @@ where
     preceded(many0(alt((comment, multispace1))), inner)
 }
 
-pub fn int_in_parentheses<'a, F, O>(inner: F) -> impl FnMut(&'a str) -> IResult<&'a str, O>
+pub fn in_parentheses<'a, F, O>(inner: F) -> impl FnMut(&'a str) -> IResult<&'a str, O>
 where
     F: FnMut(&'a str) -> IResult<&'a str, O>,
 {
@@ -78,20 +78,28 @@ where
     )
 }
 
-pub fn constraint<'a>(input: &'a str) -> IResult<&'a str, Constraint> {
+pub fn in_braces<'a, F, O>(inner: F) -> impl FnMut(&'a str) -> IResult<&'a str, O>
+where
+    F: FnMut(&'a str) -> IResult<&'a str, O>,
+{
     delimited(
-        skip_ws_and_comments(char(LEFT_PARENTHESIS)),
-        skip_ws_and_comments(alt((
+        skip_ws_and_comments(char(LEFT_BRACE)),
+        skip_ws_and_comments(inner),
+        skip_ws_and_comments(char(RIGHT_BRACE)),
+    )
+}
+
+pub fn constraint<'a>(input: &'a str) -> IResult<&'a str, Constraint> {
+    in_parentheses(alt((
             extensible_range_constraint, // The most elaborate match first
             strict_extensible_constraint,
             range_constraint,
             strict_constraint, // The most simple match last
-        ))),
-        skip_ws_and_comments(char(RIGHT_PARENTHESIS)),
+        ))
     )(input)
 }
 
-pub fn range_particle<'a>(input: &'a str) -> IResult<&'a str, RangeMarker> {
+pub fn range_marker<'a>(input: &'a str) -> IResult<&'a str, RangeMarker> {
     skip_ws_and_comments(tag(RANGE))(input).map(|(remaining, _)| (remaining, RangeMarker()))
 }
 
@@ -108,13 +116,13 @@ pub fn strict_extensible_constraint<'a>(input: &'a str) -> IResult<&'a str, Cons
 }
 
 pub fn range_constraint<'a>(input: &'a str) -> IResult<&'a str, Constraint> {
-    map_into(tuple((i128, range_particle, skip_ws_and_comments(i128))))(input)
+    map_into(tuple((i128, range_marker, skip_ws_and_comments(i128))))(input)
 }
 
 pub fn extensible_range_constraint<'a>(input: &'a str) -> IResult<&'a str, Constraint> {
     map_into(tuple((
         i128,
-        range_particle,
+        range_marker,
         skip_ws_and_comments(i128),
         preceded(skip_ws_and_comments(char(COMMA)), extension_marker),
     )))(input)
@@ -127,10 +135,7 @@ pub fn assignment<'a>(input: &'a str) -> IResult<&'a str, &'a str> {
 #[cfg(test)]
 mod tests {
 
-    use crate::{
-        grammar::token::Constraint,
-        parser::common::{block_comment, line_comment},
-    };
+    use crate::grammar::token::Constraint;
 
     use super::{comment, constraint, identifier, skip_ws, skip_ws_and_comments};
 

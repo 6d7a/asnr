@@ -3,12 +3,12 @@ use nom::{
     character::complete::{char, u64},
     combinator::{map, opt},
     multi::fold_many1,
-    sequence::{delimited, pair, preceded, tuple},
+    sequence::{pair, preceded, tuple},
     IResult,
 };
 
 use crate::grammar::token::{
-    ASN1Type, Enumeral, ExtensionMarker, COMMA, ENUMERATED, LEFT_BRACE, RIGHT_BRACE,
+    ASN1Type, Enumeral, ExtensionMarker, COMMA, ENUMERATED, 
 };
 
 use super::common::*;
@@ -18,7 +18,7 @@ fn enumeral<'a>(
 ) -> IResult<&'a str, (&str, Option<u64>, Option<char>, Option<&str>)> {
     skip_ws_and_comments(tuple((
         skip_ws_and_comments(identifier),
-        skip_ws_and_comments(opt(int_in_parentheses(u64))),
+        skip_ws_and_comments(opt(in_parentheses(u64))),
         skip_ws(opt(char(COMMA))),
         opt(comment),
     )))(input)
@@ -42,14 +42,10 @@ fn enumerals<'a>(input: &'a str) -> IResult<&'a str, Vec<Enumeral>> {
 fn enumerated_body<'a>(
     input: &'a str,
 ) -> IResult<&'a str, (Vec<Enumeral>, Option<ExtensionMarker>)> {
-    delimited(
-        skip_ws_and_comments(char(LEFT_BRACE)),
-        pair(enumerals, opt(extension_marker)),
-        skip_ws_and_comments(char(RIGHT_BRACE)),
-    )(input)
+    in_braces(pair(enumerals, opt(extension_marker)))(input)
 }
 
-pub fn enumated<'a>(input: &'a str) -> IResult<&'a str, ASN1Type> {
+pub fn enumerated<'a>(input: &'a str) -> IResult<&'a str, ASN1Type> {
     map(
         preceded(skip_ws_and_comments(tag(ENUMERATED)), enumerated_body),
         |m| ASN1Type::Enumerated(m.into()),
@@ -60,7 +56,7 @@ pub fn enumated<'a>(input: &'a str) -> IResult<&'a str, ASN1Type> {
 mod tests {
     use crate::{
         grammar::token::{ASN1Type, AsnEnumerated, Enumeral},
-        parser::enumerated::{enumated, enumerals},
+        parser::enumerated::{enumerals, enumerated},
     };
 
     #[test]
@@ -96,7 +92,7 @@ mod tests {
     #[test]
     fn parses_enumerated() {
         assert_eq!(
-            enumated(
+            enumerated(
                 r#"ENUMERATED {
       onePerMeter-0-1,
       outOfRange,
@@ -131,7 +127,7 @@ mod tests {
     #[test]
     fn parses_extended_enumerated() {
         assert_eq!(
-            enumated("ENUMERATED {m1, m2, m3 -- another annoying comment we'll ignore --,...}")
+            enumerated("ENUMERATED {m1, m2, m3 -- another annoying comment we'll ignore --,...}")
                 .unwrap()
                 .1,
             ASN1Type::Enumerated(AsnEnumerated {
@@ -160,7 +156,7 @@ mod tests {
     #[test]
     fn parses_indexed_enumerated() {
         assert_eq!(
-            enumated(
+            enumerated(
                 r#"ENUMERATED {
           forward     (1),--This means forward
           -- Annoyance
@@ -196,7 +192,7 @@ mod tests {
     #[test]
     fn parses_indexed_extended_enumerated() {
         assert_eq!(
-            enumated(
+            enumerated(
                 r#"ENUMERATED {
           forward  -- this, too, ignored --   (1),
           -- let's consider this a comment concerning 'forward' -- ... 
@@ -207,7 +203,9 @@ mod tests {
             ASN1Type::Enumerated(AsnEnumerated {
                 members: vec![Enumeral {
                     name: "forward".into(),
-                    description: Some(" let's consider this a comment concerning 'forward' ".into()),
+                    description: Some(
+                        " let's consider this a comment concerning 'forward' ".into()
+                    ),
                     index: 1
                 },],
                 extensible: true

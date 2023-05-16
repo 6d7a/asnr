@@ -34,10 +34,7 @@ fn distinguished_values<'a>(input: &'a str) -> IResult<&'a str, Vec<Distinguishe
 }
 
 fn distinguished_val<'a>(input: &'a str) -> IResult<&'a str, DistinguishedValue> {
-    map_into(pair(
-        skip_ws_and_comments(identifier),
-        int_in_parentheses(i128),
-    ))(input)
+    map_into(pair(skip_ws_and_comments(identifier), in_parentheses(i128)))(input)
 }
 
 #[cfg(test)]
@@ -75,6 +72,44 @@ mod tests {
     positiveOutOfRange (160),
     unavailable        (161)  
 }"#;
-        println!("{:#?}", distinguished_values(sample))
+        assert_eq!(
+            distinguished_values(sample).unwrap().1,
+            [
+                DistinguishedValue {
+                    name: "positiveOutOfRange".into(),
+                    value: 160,
+                },
+                DistinguishedValue {
+                    name: "unavailable".into(),
+                    value: 161,
+                },
+            ]
+        )
+    }
+
+    #[test]
+    fn parses_distinguished_values_with_line_comments() {
+        let sample = r#"{
+    negativeOutOfRange (159), -- ignore this comment
+    positiveOutOfRange (160), -- ignore this comment, too
+    unavailable        (161)  
+}"#;
+        assert_eq!(
+            distinguished_values(sample).unwrap().1,
+            [
+                DistinguishedValue {
+                    name: "negativeOutOfRange".into(),
+                    value: 159,
+                },
+                DistinguishedValue {
+                    name: "positiveOutOfRange".into(),
+                    value: 160,
+                },
+                DistinguishedValue {
+                    name: "unavailable".into(),
+                    value: 161,
+                },
+            ]
+        )
     }
 }
