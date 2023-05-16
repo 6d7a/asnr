@@ -4,22 +4,26 @@ use nom::{
     IResult,
 };
 
-use crate::grammar::token::{ToplevelDeclaration, COMMA, LEFT_BRACE, RIGHT_BRACE};
+use crate::grammar::token::{ToplevelDeclaration, LEFT_BRACE, RIGHT_BRACE};
 
-use self::{boolean::boolean, common::*, enumerated::*, integer::*, util::map_into};
+use self::{
+    bit_string::bit_string, boolean::boolean, common::*, enumerated::*, integer::*,
+    octet_string::octet_string, util::map_into,
+};
 
 mod bit_string;
 mod boolean;
 mod common;
 mod enumerated;
 mod integer;
+mod octet_string;
 mod util;
 
 pub fn top_level_declaration<'a>(input: &'a str) -> IResult<&'a str, ToplevelDeclaration> {
     map_into(tuple((
         skip_ws(comment),
         skip_ws(identifier),
-        preceded(assignment, alt((integer, enumerated, boolean))),
+        preceded(assignment, alt((integer, enumerated, boolean, bit_string, octet_string))),
     )))(input)
 }
 
@@ -141,7 +145,9 @@ mod tests {
         .unwrap()
         .1;
         assert_eq!(tld.name, String::from("EmbarkationStatus"));
-        assert!(tld.comments.contains("@revision: editorial update in V2.1.1"));
+        assert!(tld
+            .comments
+            .contains("@revision: editorial update in V2.1.1"));
         assert_eq!(tld.r#type, ASN1Type::Boolean);
     }
 }

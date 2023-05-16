@@ -4,16 +4,16 @@ use nom::{
     character::complete::{
         alpha1, alphanumeric1, char, i128, multispace0, multispace1, not_line_ending,
     },
-    combinator::recognize,
+    combinator::{opt, recognize},
     multi::many0,
-    sequence::{delimited, pair, preceded, tuple},
+    sequence::{delimited, pair, preceded, terminated, tuple},
     IResult,
 };
 
 use crate::grammar::token::{
-    Constraint, ExtensionMarker, RangeMarker, ASN1_COMMENT, ASSIGN, COMMA,
+    Constraint, DistinguishedValue, ExtensionMarker, RangeMarker, ASN1_COMMENT, ASSIGN, COMMA,
     C_STYLE_BLOCK_COMMENT_BEGIN, C_STYLE_BLOCK_COMMENT_END, C_STYLE_LINE_COMMENT, EXTENSION,
-    LEFT_PARENTHESIS, RANGE, RIGHT_PARENTHESIS, LEFT_BRACE, RIGHT_BRACE,
+    LEFT_BRACE, LEFT_PARENTHESIS, RANGE, RIGHT_BRACE, RIGHT_PARENTHESIS,
 };
 
 use super::util::{map_into, take_until_or};
@@ -91,12 +91,11 @@ where
 
 pub fn constraint<'a>(input: &'a str) -> IResult<&'a str, Constraint> {
     in_parentheses(alt((
-            extensible_range_constraint, // The most elaborate match first
-            strict_extensible_constraint,
-            range_constraint,
-            strict_constraint, // The most simple match last
-        ))
-    )(input)
+        extensible_range_constraint, // The most elaborate match first
+        strict_extensible_constraint,
+        range_constraint,
+        strict_constraint, // The most simple match last
+    )))(input)
 }
 
 pub fn range_marker<'a>(input: &'a str) -> IResult<&'a str, RangeMarker> {
@@ -132,10 +131,28 @@ pub fn assignment<'a>(input: &'a str) -> IResult<&'a str, &'a str> {
     skip_ws_and_comments(tag(ASSIGN))(input)
 }
 
+pub fn distinguished_values<'a>(input: &'a str) -> IResult<&'a str, Vec<DistinguishedValue>> {
+    delimited(
+        skip_ws_and_comments(char(LEFT_BRACE)),
+        many0(terminated(
+            skip_ws_and_comments(distinguished_val),
+            opt(skip_ws_and_comments(char(COMMA))),
+        )),
+        skip_ws_and_comments(char(RIGHT_BRACE)),
+    )(input)
+}
+
+pub fn distinguished_val<'a>(input: &'a str) -> IResult<&'a str, DistinguishedValue> {
+    map_into(pair(skip_ws_and_comments(identifier), in_parentheses(i128)))(input)
+}
+
 #[cfg(test)]
 mod tests {
 
-    use crate::grammar::token::Constraint;
+    use crate::{
+        grammar::token::{Constraint, DistinguishedValue},
+        parser::common::distinguished_values,
+    };
 
     use super::{comment, constraint, identifier, skip_ws, skip_ws_and_comments};
 
@@ -268,5 +285,52 @@ and one */"#
             constraint("(-9-- Very annoying! --..-4,  ...)"),
             Ok(("", Constraint::new(Some(-9), Some(-4), true)))
         );
+    }
+
+    #[test]
+    fn parses_distinguished_values() {
+        let sample = r#"{
+    positiveOutOfRange (160),
+    unavailable        (161)  
+}"#;
+        assert_eq!(
+            distinguished_values(sample).unwrap().1,
+            [
+                DistinguishedValue {
+                    name: "positiveOutOfRange".into(),
+                    value: 160,
+                },
+                DistinguishedValue {
+                    name: "unavailable".into(),
+                    value: 161,
+                },
+            ]
+        )
+    }
+
+    #[test]
+    fn parses_distinguished_values_with_line_comments() {
+        let sample = r#"{
+    negativeOutOfRange (159), -- ignore this comment
+    positiveOutOfRange (160), -- ignore this comment, too
+    unavailable        (161)  
+}"#;
+        assert_eq!(
+            distinguished_values(sample).unwrap().1,
+            [
+                DistinguishedValue {
+                    name: "negativeOutOfRange".into(),
+                    value: 159,
+                },
+                DistinguishedValue {
+                    name: "positiveOutOfRange".into(),
+                    value: 160,
+                },
+                DistinguishedValue {
+                    name: "unavailable".into(),
+                    value: 161,
+                },
+            ]
+        )
     }
 }

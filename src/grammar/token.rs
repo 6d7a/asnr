@@ -53,7 +53,11 @@ pub struct ToplevelDeclaration {
 
 impl From<(&str, &str, ASN1Type)> for ToplevelDeclaration {
     fn from(value: (&str, &str, ASN1Type)) -> Self {
-        Self { comments: value.0.into(), name: value.1.into(), r#type: value.2 }
+        Self {
+            comments: value.0.into(),
+            name: value.1.into(),
+            r#type: value.2,
+        }
     }
 }
 
@@ -64,7 +68,7 @@ pub enum ASN1Type {
     Integer(AsnInteger),
     Real,
     BitString(AsnBitString),
-    OctetString,
+    OctetString(AsnOctetString),
     Ia5String,
     Utf8String,
     NumericString,
@@ -80,47 +84,64 @@ pub enum ASN1Type {
 #[derive(Debug, Clone, PartialEq)]
 pub struct AsnInteger {
     pub constraint: Option<Constraint>,
-    pub distinguished_values: Option<Vec<DistinguishedValue>>
+    pub distinguished_values: Option<Vec<DistinguishedValue>>,
 }
 
 impl Default for AsnInteger {
     fn default() -> Self {
-        Self { constraint: None, distinguished_values: None }
+        Self {
+            constraint: None,
+            distinguished_values: None,
+        }
     }
 }
 
 #[cfg(test)]
 impl From<Constraint> for AsnInteger {
-  fn from(value: Constraint) -> Self {
-      Self { constraint: Some(value), distinguished_values: None }
-  }
+    fn from(value: Constraint) -> Self {
+        Self {
+            constraint: Some(value),
+            distinguished_values: None,
+        }
+    }
 }
 
-
 impl From<(&str, Option<Vec<DistinguishedValue>>, Option<Constraint>)> for AsnInteger {
-  fn from(value: (&str, Option<Vec<DistinguishedValue>>, Option<Constraint>)) -> Self {
-      Self {
-          constraint: value.2,
-          distinguished_values: value.1,
-      }
-  }
+    fn from(value: (&str, Option<Vec<DistinguishedValue>>, Option<Constraint>)) -> Self {
+        Self {
+            constraint: value.2,
+            distinguished_values: value.1,
+        }
+    }
 }
 
 pub struct AsnReal {}
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct AsnBitString {
-  pub constraint: Option<Constraint>,
+    pub constraint: Option<Constraint>,
+    pub distinguished_values: Option<Vec<DistinguishedValue>>,
 }
 
-impl From<Option<Constraint>> for AsnBitString {
-    fn from(value: Option<Constraint>) -> Self {
-        AsnBitString { constraint: value }
+impl From<(Option<Vec<DistinguishedValue>>, Option<Constraint>)> for AsnBitString {
+    fn from(value: (Option<Vec<DistinguishedValue>>, Option<Constraint>)) -> Self {
+        AsnBitString {
+            constraint: value.1,
+            distinguished_values: value.0,
+        }
     }
 }
 
-pub struct AsnOctetString {}
+#[derive(Debug, Clone, PartialEq)]
+pub struct AsnOctetString {
+    pub constraint: Option<Constraint>,
+}
 
+impl From<Option<Constraint>> for AsnOctetString {
+    fn from(value: Option<Constraint>) -> Self {
+        AsnOctetString { constraint: value }
+    }
+}
 pub struct AsnIa5String {}
 
 pub struct AsnUtf8String {}
@@ -131,21 +152,24 @@ pub struct AsnVisibleString {}
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct AsnEnumerated {
-  pub members: Vec<Enumeral>,
-  pub extensible: bool
+    pub members: Vec<Enumeral>,
+    pub extensible: bool,
 }
 
 impl From<(Vec<Enumeral>, Option<ExtensionMarker>)> for AsnEnumerated {
     fn from(value: (Vec<Enumeral>, Option<ExtensionMarker>)) -> Self {
-        AsnEnumerated { members: value.0, extensible: value.1.is_some() }
+        AsnEnumerated {
+            members: value.0,
+            extensible: value.1.is_some(),
+        }
     }
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Enumeral {
-  pub name: String,
-  pub description: Option<String>,
-  pub index: u64,
+    pub name: String,
+    pub description: Option<String>,
+    pub index: u64,
 }
 
 pub struct AsnChoice {}
@@ -160,13 +184,16 @@ pub struct AsnSetOf {}
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct DistinguishedValue {
-  pub name: String,
-  pub value: i128
+    pub name: String,
+    pub value: i128,
 }
 
 impl From<(&str, i128)> for DistinguishedValue {
     fn from(value: (&str, i128)) -> Self {
-        Self { name: value.0.into(), value: value.1 }
+        Self {
+            name: value.0.into(),
+            value: value.1,
+        }
     }
 }
 
