@@ -1,3 +1,13 @@
+//! The `parser` module contains the parser combinator 
+//! responsible for interpreting the input as ASN1 notation.
+//! The parser is made up of a number of sub-parsers that 
+//! interpret single elements of ASN1 syntax.SS
+//! 
+//! The `parser` submodules provide parsers for their
+//! respective eponymous ASN1 type, with the exception
+//! of `common`, which contains parsers for the more
+//! generic elements of ASN1 syntax, and `util`, which 
+//! contains helper parsers not specific to ASN1's notation.
 use nom::{
     branch::alt,
     combinator::{into, map},

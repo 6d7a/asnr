@@ -1,11 +1,11 @@
-/// Comment tokens
+// Comment tokens
 pub const C_STYLE_BLOCK_COMMENT_BEGIN: &'static str = "/*";
 pub const C_STYLE_BLOCK_COMMENT_CONTINUED_LINE: char = '*';
 pub const C_STYLE_BLOCK_COMMENT_END: &'static str = "*/";
 pub const C_STYLE_LINE_COMMENT: &'static str = "//";
 pub const ASN1_COMMENT: &'static str = "--";
 
-/// Bracket tokens
+// Bracket tokens
 pub const LEFT_PARENTHESIS: char = '(';
 pub const RIGHT_PARENTHESIS: char = ')';
 pub const LEFT_BRACKET: char = '[';
@@ -15,7 +15,7 @@ pub const RIGHT_BRACE: char = '}';
 pub const LEFT_CHEVRON: char = '<';
 pub const RIGHT_CHEVRON: char = '>';
 
-/// Type tokens
+// Type tokens
 pub const NULL: &'static str = "NULL";
 pub const BOOLEAN: &'static str = "BOOLEAN";
 pub const INTEGER: &'static str = "INTEGER";
@@ -33,7 +33,7 @@ pub const SEQUENCE_OF: &'static str = "SEQUENCE OF";
 pub const SET: &'static str = "SET";
 pub const SET_OF: &'static str = "SET OF";
 
-/// Value tokens
+// Value tokens
 pub const TRUE: &'static str = "TRUE";
 pub const FALSE: &'static str = "FALSE";
 
@@ -99,6 +99,8 @@ pub enum ASN1Value {
     String(String),
 }
 
+/// Representation of an ASN1 INTEGER data element
+/// with corresponding constraints and distinguished values
 #[derive(Debug, Clone, PartialEq)]
 pub struct AsnInteger {
     pub constraint: Option<Constraint>,
@@ -133,6 +135,9 @@ impl From<(&str, Option<Vec<DistinguishedValue>>, Option<Constraint>)> for AsnIn
     }
 }
 
+/// Representation of an ASN1 BIT STRING data element
+/// with corresponding constraints and distinguished values
+/// defining the individual bits
 #[derive(Debug, Clone, PartialEq)]
 pub struct AsnBitString {
     pub constraint: Option<Constraint>,
@@ -148,6 +153,8 @@ impl From<(Option<Vec<DistinguishedValue>>, Option<Constraint>)> for AsnBitStrin
     }
 }
 
+/// Representation of an ASN1 OCTET STRING data element
+/// with corresponding constraints 
 #[derive(Debug, Clone, PartialEq)]
 pub struct AsnOctetString {
     pub constraint: Option<Constraint>,
@@ -159,6 +166,8 @@ impl From<Option<Constraint>> for AsnOctetString {
     }
 }
 
+/// Representation of an ASN1 SEQUENCE data element
+/// with corresponding members and extension information 
 #[derive(Debug, Clone, PartialEq)]
 pub struct AsnSequence {
     pub extensible: bool,
@@ -171,6 +180,7 @@ impl From<(Vec<SequenceMember>, Option<ExtensionMarker>)> for AsnSequence {
     }
 }
 
+/// Representation of an single ASN1 SEQUENCE member 
 #[derive(Debug, Clone, PartialEq)]
 pub struct SequenceMember {
     pub name: String,
@@ -190,6 +200,8 @@ impl From<(&str, ASN1Type, Option<OptionalMarker>, Option<ASN1Value>)> for Seque
     }
 }
 
+/// Representation of an ASN1 SEQUENCE data element
+/// with corresponding enumerals and extension information 
 #[derive(Debug, Clone, PartialEq)]
 pub struct AsnEnumerated {
     pub members: Vec<Enumeral>,
@@ -205,6 +217,8 @@ impl From<(Vec<Enumeral>, Option<ExtensionMarker>)> for AsnEnumerated {
     }
 }
 
+/// Representation of a single member/enumeral of an ASN1 
+/// ENUMERATED data element
 #[derive(Debug, Clone, PartialEq)]
 pub struct Enumeral {
     pub name: String,
@@ -212,6 +226,8 @@ pub struct Enumeral {
     pub index: u64,
 }
 
+/// Representation of a ASN1 distinguished value,
+/// as seen in some INTEGER declarations
 #[derive(Debug, Clone, PartialEq)]
 pub struct DistinguishedValue {
     pub name: String,
@@ -236,6 +252,9 @@ impl From<&str> for OptionalMarker {
     }
 }
 
+/// Intermediate placeholder for a type declared in
+/// some other part of the ASN1 specification that is
+/// being parsed or in one of its imports.
 #[derive(Debug, Clone, PartialEq)]
 pub struct DeclarationElsewhere(pub String);
 
@@ -252,6 +271,8 @@ pub struct RangeMarker();
 pub struct ExtensionMarker();
 
 // TODO: Add check whether min is smaller than max
+/// Representation of a constraint used for subtyping
+/// in ASN1 specifications
 #[derive(Debug, Clone, PartialEq)]
 pub struct Constraint {
     pub min_value: Option<i128>,
