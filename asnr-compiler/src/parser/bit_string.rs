@@ -24,7 +24,7 @@ pub fn bit_string_value<'a>(input: &'a str) -> IResult<&'a str, ASN1Value> {
             ),
             one_of("HB"),
         )),
-        |m| ASN1Value::BitString(m),
+        |m| ASN1Value::String(m),
     )(input)
 }
 

@@ -1,14 +1,20 @@
 use nom::{
     branch::alt,
+    combinator::{into, map},
     sequence::{preceded, tuple},
-    IResult, combinator::{into, map},
+    IResult,
 };
 
-use crate::grammar::token::{ToplevelDeclaration, ASN1Type, ASN1Value};
+use crate::grammar::token::{ASN1Type, ASN1Value, ToplevelDeclaration};
 
 use self::{
-    bit_string::{bit_string, bit_string_value}, boolean::{boolean, boolean_value}, common::*, enumerated::*, integer::*,
+    bit_string::{bit_string, bit_string_value},
+    boolean::{boolean, boolean_value},
+    common::*,
+    enumerated::*,
+    integer::*,
     octet_string::octet_string,
+    sequence::sequence,
 };
 
 mod bit_string;
@@ -24,23 +30,35 @@ pub fn top_level_declaration<'a>(input: &'a str) -> IResult<&'a str, ToplevelDec
     into(tuple((
         skip_ws(comment),
         skip_ws(identifier),
-        preceded(
-            assignment,
-            asn1_type,
-        ),
+        preceded(assignment, asn1_type),
     )))(input)
 }
 
 pub fn asn1_type<'a>(input: &'a str) -> IResult<&'a str, ASN1Type> {
-  alt((integer, enumerated, boolean, bit_string, octet_string, elsewhere_declared_type))(input)
+    alt((
+        sequence,
+        integer,
+        enumerated,
+        boolean,
+        bit_string,
+        octet_string,
+        elsewhere_declared_type,
+    ))(input)
 }
 
 pub fn asn1_value<'a>(input: &'a str) -> IResult<&'a str, ASN1Value> {
-  alt((bit_string_value, boolean_value, integer_value, enumerated_value))(input)
+    alt((
+        bit_string_value,
+        boolean_value,
+        integer_value,
+        enumerated_value,
+    ))(input)
 }
 
 pub fn elsewhere_declared_type<'a>(input: &'a str) -> IResult<&'a str, ASN1Type> {
-  map(skip_ws_and_comments(identifier), |m| ASN1Type::ElsewhereDeclaredType(m.into()))(input)
+    map(skip_ws_and_comments(identifier), |m| {
+        ASN1Type::ElsewhereDeclaredType(m.into())
+    })(input)
 }
 
 #[cfg(test)]

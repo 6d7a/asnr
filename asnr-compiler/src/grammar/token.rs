@@ -96,10 +96,7 @@ pub enum ASN1Type {
 pub enum ASN1Value {
     Boolean(bool),
     Integer(i128),
-    BitString(String),
-    OctetString(String),
-    Enumerated(String),
-    Choice(i128),
+    String(String),
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -168,6 +165,12 @@ pub struct AsnSequence {
     pub members: Vec<SequenceMember>,
 }
 
+impl From<(Vec<SequenceMember>, Option<ExtensionMarker>)> for AsnSequence {
+    fn from(value: (Vec<SequenceMember>, Option<ExtensionMarker>)) -> Self {
+        AsnSequence { extensible: value.1.is_some(), members: value.0 }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct SequenceMember {
     pub name: String,
@@ -176,12 +179,12 @@ pub struct SequenceMember {
     pub is_optional: bool,
 }
 
-impl From<(&str, ASN1Type, Option<OptionMarker>, Option<ASN1Value>)> for SequenceMember {
-    fn from(value: (&str, ASN1Type, Option<OptionMarker>, Option<ASN1Value>)) -> Self {
+impl From<(&str, ASN1Type, Option<OptionalMarker>, Option<ASN1Value>)> for SequenceMember {
+    fn from(value: (&str, ASN1Type, Option<OptionalMarker>, Option<ASN1Value>)) -> Self {
         SequenceMember {
             name: value.0.into(),
             r#type: value.1,
-            is_optional: value.2.is_some(),
+            is_optional: value.2.is_some() || value.3.is_some(),
             default_value: value.3,
         }
     }
@@ -224,17 +227,17 @@ impl From<(&str, i128)> for DistinguishedValue {
     }
 }
 
-#[derive(Debug)]
-pub struct OptionMarker();
+#[derive(Debug, PartialEq)]
+pub struct OptionalMarker();
 
-impl From<&str> for OptionMarker {
+impl From<&str> for OptionalMarker {
     fn from(_: &str) -> Self {
-        OptionMarker()
+        OptionalMarker()
     }
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct DeclarationElsewhere(String);
+pub struct DeclarationElsewhere(pub String);
 
 impl From<&str> for DeclarationElsewhere {
     fn from(value: &str) -> Self {

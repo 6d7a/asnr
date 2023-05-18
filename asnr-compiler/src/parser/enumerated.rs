@@ -14,7 +14,7 @@ use crate::grammar::token::{
 use super::common::*;
 
 pub fn enumerated_value<'a>(input: &'a str) -> IResult<&'a str, ASN1Value> {
-  map(skip_ws_and_comments(identifier), |m| ASN1Value::Enumerated(m.into()))(input)
+  map(skip_ws_and_comments(identifier), |m| ASN1Value::String(m.into()))(input)
 }
 
 pub fn enumerated<'a>(input: &'a str) -> IResult<&'a str, ASN1Type> {
