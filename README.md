@@ -13,6 +13,7 @@ encoding-rule-agnostic, so that its output can be used regardless whether the ac
 BER, DER, CER, PER, XER, or whatever exotic *ERs still out there.
 
 # ASNR Transcoder
-The transcoder aims to be suitable for `no_std` environments and `wasm-unknown` targets.
+The transcoder crate handles the actual encoding and decoding of data at runtime.
+It aims to be suitable for `no_std` environments and `wasm-unknown` targets.
 For a start, the asnr transcoder will provide support for UPER encoding rules, 
 but transcoding can be easily customized by implementing the crate's `Encode` and `Decode` traits.
