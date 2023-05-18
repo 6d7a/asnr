@@ -1,0 +1,5 @@
+{
+  "rust-analyzer.linkedProjects": [
+    ".\\asnr-compiler\\Cargo.toml"
+  ]
+}

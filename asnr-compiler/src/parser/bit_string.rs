@@ -1,13 +1,32 @@
 use nom::{
     bytes::complete::tag,
+    character::complete::{one_of, char},
     combinator::{map, opt},
-    sequence::{pair, preceded},
+    multi::fold_many0,
+    sequence::{delimited, pair, preceded, terminated},
     IResult,
 };
 
-use crate::grammar::token::{ASN1Type, BIT_STRING, SIZE};
+use crate::grammar::token::{ASN1Type, ASN1Value, BIT_STRING, SINGLE_QUOTE, SIZE};
 
 use super::common::*;
+
+pub fn bit_string_value<'a>(input: &'a str) -> IResult<&'a str, ASN1Value> {
+    map(
+        skip_ws_and_comments(terminated(
+            delimited(
+                char(SINGLE_QUOTE),
+                fold_many0(one_of("0123456789ABCDEF"), String::new, |mut acc, curr| {
+                    acc.push(curr);
+                    acc
+                }),
+                char(SINGLE_QUOTE),
+            ),
+            one_of("HB"),
+        )),
+        |m| ASN1Value::BitString(m),
+    )(input)
+}
 
 pub fn bit_string<'a>(input: &'a str) -> IResult<&'a str, ASN1Type> {
     map(

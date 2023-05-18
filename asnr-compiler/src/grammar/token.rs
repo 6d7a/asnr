@@ -33,12 +33,18 @@ pub const SEQUENCE_OF: &'static str = "SEQUENCE OF";
 pub const SET: &'static str = "SET";
 pub const SET_OF: &'static str = "SET OF";
 
+/// Value tokens
+pub const TRUE: &'static str = "TRUE";
+pub const FALSE: &'static str = "FALSE";
+
 pub const SIZE: &'static str = "SIZE";
 pub const DEFAULT: &'static str = "DEFAULT";
+pub const OPTIONAL: &'static str = "OPTIONAL";
 pub const ASSIGN: &'static str = "::=";
 pub const RANGE: &'static str = "..";
 pub const EXTENSION: &'static str = "...";
 pub const COMMA: char = ',';
+pub const SINGLE_QUOTE: char = '\'';
 
 pub trait Quote<'a> {
     fn quote(&self) -> &'a str;
@@ -61,24 +67,39 @@ impl From<(&str, &str, ASN1Type)> for ToplevelDeclaration {
     }
 }
 
+/// The possible types of an ASN1 data element.
+/// In addition, the `ElsewhereDeclaredType` enumeral denotes an type
+/// specified in the same or an imported ASN1 specification.
 #[derive(Debug, Clone, PartialEq)]
 pub enum ASN1Type {
-    Null,
+    // Null,
     Boolean,
     Integer(AsnInteger),
-    Real,
+    // Real,
     BitString(AsnBitString),
     OctetString(AsnOctetString),
-    Ia5String,
-    Utf8String,
-    NumericString,
-    VisibleString,
+    // Ia5String,
+    // Utf8String,
+    // NumericString,
+    // VisibleString,
     Enumerated(AsnEnumerated),
-    Choice,
-    Sequence,
-    SequenceOf,
-    Set,
-    SetOf,
+    // Choice,
+    Sequence(AsnSequence),
+    // SequenceOf,
+    // Set,
+    // SetOf,
+    ElsewhereDeclaredType(DeclarationElsewhere),
+}
+
+/// The possible types of an ASN1 value.
+#[derive(Debug, Clone, PartialEq)]
+pub enum ASN1Value {
+    Boolean(bool),
+    Integer(i128),
+    BitString(String),
+    OctetString(String),
+    Enumerated(String),
+    Choice(i128),
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -115,8 +136,6 @@ impl From<(&str, Option<Vec<DistinguishedValue>>, Option<Constraint>)> for AsnIn
     }
 }
 
-pub struct AsnReal {}
-
 #[derive(Debug, Clone, PartialEq)]
 pub struct AsnBitString {
     pub constraint: Option<Constraint>,
@@ -142,13 +161,31 @@ impl From<Option<Constraint>> for AsnOctetString {
         AsnOctetString { constraint: value }
     }
 }
-pub struct AsnIa5String {}
 
-pub struct AsnUtf8String {}
+#[derive(Debug, Clone, PartialEq)]
+pub struct AsnSequence {
+    pub extensible: bool,
+    pub members: Vec<SequenceMember>,
+}
 
-pub struct AsnNumericString {}
+#[derive(Debug, Clone, PartialEq)]
+pub struct SequenceMember {
+    pub name: String,
+    pub r#type: ASN1Type,
+    pub default_value: Option<ASN1Value>,
+    pub is_optional: bool,
+}
 
-pub struct AsnVisibleString {}
+impl From<(&str, ASN1Type, Option<OptionMarker>, Option<ASN1Value>)> for SequenceMember {
+    fn from(value: (&str, ASN1Type, Option<OptionMarker>, Option<ASN1Value>)) -> Self {
+        SequenceMember {
+            name: value.0.into(),
+            r#type: value.1,
+            is_optional: value.2.is_some(),
+            default_value: value.3,
+        }
+    }
+}
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct AsnEnumerated {
@@ -172,16 +209,6 @@ pub struct Enumeral {
     pub index: u64,
 }
 
-pub struct AsnChoice {}
-
-pub struct AsnSequence {}
-
-pub struct AsnSequenceOf {}
-
-pub struct AsnSet {}
-
-pub struct AsnSetOf {}
-
 #[derive(Debug, Clone, PartialEq)]
 pub struct DistinguishedValue {
     pub name: String,
@@ -198,6 +225,24 @@ impl From<(&str, i128)> for DistinguishedValue {
 }
 
 #[derive(Debug)]
+pub struct OptionMarker();
+
+impl From<&str> for OptionMarker {
+    fn from(_: &str) -> Self {
+        OptionMarker()
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct DeclarationElsewhere(String);
+
+impl From<&str> for DeclarationElsewhere {
+    fn from(value: &str) -> Self {
+        DeclarationElsewhere(value.into())
+    }
+}
+
+#[derive(Debug)]
 pub struct RangeMarker();
 
 #[derive(Debug)]
@@ -209,16 +254,6 @@ pub struct Constraint {
     pub min_value: Option<i128>,
     pub max_value: Option<i128>,
     pub extensible: bool,
-}
-
-impl Constraint {
-    pub fn new(min: Option<i128>, max: Option<i128>, extensible: bool) -> Self {
-        Self {
-            min_value: min,
-            max_value: max,
-            extensible,
-        }
-    }
 }
 
 impl<'a> From<i128> for Constraint {

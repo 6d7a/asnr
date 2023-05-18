@@ -8,10 +8,21 @@ use nom::{
 };
 
 use crate::grammar::token::{
-    ASN1Type, Enumeral, ExtensionMarker, COMMA, ENUMERATED, 
+    ASN1Type, Enumeral, ExtensionMarker, COMMA, ENUMERATED, ASN1Value, 
 };
 
 use super::common::*;
+
+pub fn enumerated_value<'a>(input: &'a str) -> IResult<&'a str, ASN1Value> {
+  map(skip_ws_and_comments(identifier), |m| ASN1Value::Enumerated(m.into()))(input)
+}
+
+pub fn enumerated<'a>(input: &'a str) -> IResult<&'a str, ASN1Type> {
+  map(
+      preceded(skip_ws_and_comments(tag(ENUMERATED)), enumerated_body),
+      |m| ASN1Type::Enumerated(m.into()),
+  )(input)
+}
 
 fn enumeral<'a>(
     input: &'a str,
@@ -43,13 +54,6 @@ fn enumerated_body<'a>(
     input: &'a str,
 ) -> IResult<&'a str, (Vec<Enumeral>, Option<ExtensionMarker>)> {
     in_braces(pair(enumerals, opt(extension_marker)))(input)
-}
-
-pub fn enumerated<'a>(input: &'a str) -> IResult<&'a str, ASN1Type> {
-    map(
-        preceded(skip_ws_and_comments(tag(ENUMERATED)), enumerated_body),
-        |m| ASN1Type::Enumerated(m.into()),
-    )(input)
 }
 
 #[cfg(test)]

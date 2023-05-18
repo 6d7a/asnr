@@ -16,7 +16,7 @@ use crate::grammar::token::{
     LEFT_BRACE, LEFT_PARENTHESIS, RANGE, RIGHT_BRACE, RIGHT_PARENTHESIS,
 };
 
-use super::util::{map_into, take_until_or};
+use super::util::{take_until_or, map_into};
 
 /// This matches both spec-conform ASN1 comments ("--")
 /// as well as C-style comments commonly seen ("//", "/* */")
@@ -259,19 +259,47 @@ and one */"#
     fn parses_constraint() {
         assert_eq!(
             constraint("(5)"),
-            Ok(("", Constraint::new(Some(5), Some(5), false)))
+            Ok((
+                "",
+                Constraint {
+                    min_value: Some(5),
+                    max_value: Some(5),
+                    extensible: false
+                }
+            ))
         );
         assert_eq!(
             constraint("(5..9)"),
-            Ok(("", Constraint::new(Some(5), Some(9), false)))
+            Ok((
+                "",
+                Constraint {
+                    min_value: Some(5),
+                    max_value: Some(9),
+                    extensible: false
+                }
+            ))
         );
         assert_eq!(
             constraint("(-5..9)"),
-            Ok(("", Constraint::new(Some(-5), Some(9), false)))
+            Ok((
+                "",
+                Constraint {
+                    min_value: Some(-5),
+                    max_value: Some(9),
+                    extensible: false
+                }
+            ))
         );
         assert_eq!(
             constraint("(-9..-4, ...)"),
-            Ok(("", Constraint::new(Some(-9), Some(-4), true)))
+            Ok((
+                "",
+                Constraint {
+                    min_value: Some(-9),
+                    max_value: Some(-4),
+                    extensible: true
+                }
+            ))
         );
     }
 
@@ -279,11 +307,25 @@ and one */"#
     fn parses_constraint_with_inserted_comment() {
         assert_eq!(
             constraint("(-9..-4, -- Very annoying! -- ...)"),
-            Ok(("", Constraint::new(Some(-9), Some(-4), true)))
+            Ok((
+                "",
+                Constraint {
+                    min_value: Some(-9),
+                    max_value: Some(-4),
+                    extensible: true
+                }
+            ))
         );
         assert_eq!(
             constraint("(-9-- Very annoying! --..-4,  ...)"),
-            Ok(("", Constraint::new(Some(-9), Some(-4), true)))
+            Ok((
+                "",
+                Constraint {
+                    min_value: Some(-9),
+                    max_value: Some(-4),
+                    extensible: true
+                }
+            ))
         );
     }
 
