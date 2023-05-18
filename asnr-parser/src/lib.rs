@@ -12,7 +12,5 @@ pub trait Decode {
   fn decode_integer<'a, O: Integer>(&self, input: &'a [u8]) -> IResult<&'a [u8], O>;
   fn decode_boolean<'a>(&self, input: &'a [u8]) -> IResult<&'a [u8], bool>;
   fn decode_bitstring<'a>(&self, input: &'a [u8]) -> IResult<&'a [u8], &'a str>;
-  fn before_decoding_sequence_fields<'a, T>(&self, input: &'a [u8]) -> IResult<&'a [u8], T>;
-  fn decode_sequence_field<'a, T>(&self, input: &'a [u8]) -> IResult<&'a [u8], T>;
-  fn after_decoding_sequence_fields<'a, T>(&self, input: &'a [u8]) -> IResult<&'a [u8], T>;
+  fn decode_sequence<'a, T>(&self, input: &'a [u8]) -> IResult<&'a [u8], T>;
 }

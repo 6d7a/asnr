@@ -49,8 +49,6 @@ fn default<'a>(input: &'a str) -> IResult<&'a str, Option<ASN1Value>> {
 
 #[cfg(test)]
 mod tests {
-    use num::Integer;
-
     use crate::grammar::token::{
         AsnBitString, AsnInteger, AsnOctetString, AsnSequence, Constraint, DeclarationElsewhere,
     };

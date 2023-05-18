@@ -1,7 +1,9 @@
 use parser::top_level_declaration;
 
+mod generator;
 mod grammar;
 mod parser;
+mod validator;
 
 fn main() {
   let _tld = top_level_declaration(r#"/** 

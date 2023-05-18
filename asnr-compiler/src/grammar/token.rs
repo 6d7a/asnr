@@ -1,3 +1,5 @@
+use crate::validator::error::{ValidatorError, ValidatorErrorType};
+
 // Comment tokens
 pub const C_STYLE_BLOCK_COMMENT_BEGIN: &'static str = "/*";
 pub const C_STYLE_BLOCK_COMMENT_CONTINUED_LINE: char = '*';
@@ -45,10 +47,6 @@ pub const RANGE: &'static str = "..";
 pub const EXTENSION: &'static str = "...";
 pub const COMMA: char = ',';
 pub const SINGLE_QUOTE: char = '\'';
-
-pub trait Quote<'a> {
-    fn quote(&self) -> &'a str;
-}
 
 #[derive(Debug, PartialEq)]
 pub struct ToplevelDeclaration {
@@ -154,7 +152,7 @@ impl From<(Option<Vec<DistinguishedValue>>, Option<Constraint>)> for AsnBitStrin
 }
 
 /// Representation of an ASN1 OCTET STRING data element
-/// with corresponding constraints 
+/// with corresponding constraints
 #[derive(Debug, Clone, PartialEq)]
 pub struct AsnOctetString {
     pub constraint: Option<Constraint>,
@@ -167,7 +165,7 @@ impl From<Option<Constraint>> for AsnOctetString {
 }
 
 /// Representation of an ASN1 SEQUENCE data element
-/// with corresponding members and extension information 
+/// with corresponding members and extension information
 #[derive(Debug, Clone, PartialEq)]
 pub struct AsnSequence {
     pub extensible: bool,
@@ -176,11 +174,14 @@ pub struct AsnSequence {
 
 impl From<(Vec<SequenceMember>, Option<ExtensionMarker>)> for AsnSequence {
     fn from(value: (Vec<SequenceMember>, Option<ExtensionMarker>)) -> Self {
-        AsnSequence { extensible: value.1.is_some(), members: value.0 }
+        AsnSequence {
+            extensible: value.1.is_some(),
+            members: value.0,
+        }
     }
 }
 
-/// Representation of an single ASN1 SEQUENCE member 
+/// Representation of an single ASN1 SEQUENCE member
 #[derive(Debug, Clone, PartialEq)]
 pub struct SequenceMember {
     pub name: String,
@@ -201,7 +202,7 @@ impl From<(&str, ASN1Type, Option<OptionalMarker>, Option<ASN1Value>)> for Seque
 }
 
 /// Representation of an ASN1 SEQUENCE data element
-/// with corresponding enumerals and extension information 
+/// with corresponding enumerals and extension information
 #[derive(Debug, Clone, PartialEq)]
 pub struct AsnEnumerated {
     pub members: Vec<Enumeral>,
@@ -217,7 +218,7 @@ impl From<(Vec<Enumeral>, Option<ExtensionMarker>)> for AsnEnumerated {
     }
 }
 
-/// Representation of a single member/enumeral of an ASN1 
+/// Representation of a single member/enumeral of an ASN1
 /// ENUMERATED data element
 #[derive(Debug, Clone, PartialEq)]
 pub struct Enumeral {
