@@ -2,5 +2,5 @@
 
 members = [
     "asnr-compiler",
-    "asnr-parser"
+    "asnr-transcoder"
 ]

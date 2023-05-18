@@ -1,5 +1,5 @@
 [package]
-name = "asnr-parser"
+name = "asnr-transcoder"
 version = "0.1.0"
 edition = "2021"
 

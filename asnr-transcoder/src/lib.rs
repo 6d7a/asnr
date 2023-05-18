@@ -1,9 +1,9 @@
-//! The `asnr-parser` library encodes and decodes data elements resulting from compiling
+//! The `asnr-transcoder` library encodes and decodes data elements resulting from compiling
 //! an ASN1 specification with the `asnr-compiler`.
 //! 
-//! The parser aims to be suitable for `no_std` environments and `wasm-unknown` targets.
-//! For a start, the asnr parser will provide support for UPER encoding rules, 
-//! but you can inject your own custom parser by implementing the `Decode` and `Encode` traits.
+//! The transcoder aims to be suitable for `no_std` environments and `wasm-unknown` targets.
+//! For a start, the asnr transcoder will provide support for UPER encoding rules, 
+//! but you can inject your own custom transcoder by implementing the `Decode` and `Encode` traits.
 //! 
 use nom::IResult;
 use num::Integer;
