@@ -1,12 +1,9 @@
-use parser::top_level_declaration;
-
 mod generator;
-mod grammar;
 mod parser;
 mod validator;
 
 fn main() {
-  let _tld = top_level_declaration(r#"/** 
+  let _tld = parser::top_level_declaration(r#"/** 
         * This DE represents the magnitude of the acceleration vector in a defined coordinate system.
         *
         * The value shall be set to:

@@ -7,7 +7,7 @@ use nom::{
     IResult,
 };
 
-use crate::grammar::token::{
+use asnr_grammar::{
     ASN1Type, Enumeral, ExtensionMarker, COMMA, ENUMERATED, ASN1Value, 
 };
 
@@ -58,10 +58,9 @@ fn enumerated_body<'a>(
 
 #[cfg(test)]
 mod tests {
-    use crate::{
-        grammar::token::{ASN1Type, AsnEnumerated, Enumeral},
-        parser::enumerated::{enumerals, enumerated},
-    };
+    use asnr_grammar::AsnEnumerated;
+
+    use super::*;
 
     #[test]
     fn parses_enumerals_with_line_comments() {

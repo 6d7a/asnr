@@ -1,6 +1,6 @@
 use nom::{bytes::complete::tag, combinator::value, IResult, branch::alt};
 
-use crate::grammar::token::{ASN1Type, ASN1Value, BOOLEAN, FALSE, TRUE};
+use asnr_grammar::{ASN1Type, ASN1Value, BOOLEAN, FALSE, TRUE};
 
 use super::common::skip_ws_and_comments;
 

@@ -5,7 +5,7 @@ use nom::{
     IResult, character::complete::i128,
 };
 
-use crate::grammar::token::{ASN1Type, INTEGER, ASN1Value};
+use asnr_grammar::{ASN1Type, INTEGER, ASN1Value};
 
 use super::*;
 
@@ -27,7 +27,7 @@ pub fn integer<'a>(input: &'a str) -> IResult<&'a str, ASN1Type> {
 #[cfg(test)]
 mod tests {
 
-    use crate::grammar::token::{AsnInteger, Constraint};
+    use asnr_grammar::{AsnInteger, Constraint};
 
     use super::*;
 

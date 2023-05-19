@@ -7,7 +7,7 @@ use nom::{
     IResult,
 };
 
-use crate::grammar::token::{ASN1Type, ASN1Value, BIT_STRING, SINGLE_QUOTE, SIZE};
+use asnr_grammar::{ASN1Type, ASN1Value, BIT_STRING, SINGLE_QUOTE, SIZE};
 
 use super::common::*;
 
@@ -43,7 +43,7 @@ pub fn bit_string<'a>(input: &'a str) -> IResult<&'a str, ASN1Type> {
 
 #[cfg(test)]
 mod tests {
-    use crate::grammar::token::{ASN1Type, AsnBitString, Constraint, DistinguishedValue};
+    use asnr_grammar::{ASN1Type, AsnBitString, Constraint, DistinguishedValue};
 
     use super::bit_string;
 

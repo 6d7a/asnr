@@ -7,7 +7,7 @@ use nom::{
     IResult,
 };
 
-use crate::grammar::token::{OptionalMarker, SequenceMember, COMMA, DEFAULT, OPTIONAL, SEQUENCE};
+use asnr_grammar::{OptionalMarker, SequenceMember, COMMA, DEFAULT, OPTIONAL, SEQUENCE};
 
 use super::*;
 
@@ -49,7 +49,7 @@ fn default<'a>(input: &'a str) -> IResult<&'a str, Option<ASN1Value>> {
 
 #[cfg(test)]
 mod tests {
-    use crate::grammar::token::{
+    use asnr_grammar::{
         AsnBitString, AsnInteger, AsnOctetString, AsnSequence, Constraint, DeclarationElsewhere,
     };
 

@@ -16,4 +16,4 @@ BER, DER, CER, PER, XER, or whatever exotic *ERs still out there.
 The transcoder crate handles the actual encoding and decoding of data at runtime.
 It aims to be suitable for `no_std` environments and `wasm-unknown` targets.
 For a start, the asnr transcoder will provide support for UPER encoding rules, 
-but transcoding can be easily customized by implementing the crate's `Encode` and `Decode` traits.
+but transcoding can be easily customized by implementing the crate's `Encoder` and `Decoder` traits.

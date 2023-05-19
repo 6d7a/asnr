@@ -6,14 +6,21 @@ version = 3
 name = "asnr-compiler"
 version = "0.1.0"
 dependencies = [
+ "asnr-grammar",
+ "asnr-transcoder",
  "nom",
  "num",
 ]
 
 [[package]]
+name = "asnr-grammar"
+version = "0.1.0"
+
+[[package]]
 name = "asnr-transcoder"
 version = "0.1.0"
 dependencies = [
+ "asnr-grammar",
  "nom",
  "num",
 ]

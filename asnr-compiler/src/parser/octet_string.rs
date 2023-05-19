@@ -5,7 +5,7 @@ use nom::{
     IResult,
 };
 
-use crate::grammar::token::{ASN1Type, OCTET_STRING, SIZE};
+use asnr_grammar::{ASN1Type, OCTET_STRING, SIZE};
 
 use super::common::*;
 
@@ -21,7 +21,7 @@ pub fn octet_string<'a>(input: &'a str) -> IResult<&'a str, ASN1Type> {
 
 #[cfg(test)]
 mod tests {
-    use crate::grammar::token::{ASN1Type, Constraint, AsnOctetString};
+    use asnr_grammar::{ASN1Type, Constraint, AsnOctetString};
 
     use super::octet_string;
 

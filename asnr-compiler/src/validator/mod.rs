@@ -7,7 +7,7 @@
 //! constraints and value definitions.
 pub(crate) mod error;
 
-use crate::grammar::token::{
+use asnr_grammar::{
     ASN1Type, AsnBitString, AsnInteger, AsnOctetString, Constraint, ToplevelDeclaration,
 };
 

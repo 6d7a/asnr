@@ -10,7 +10,7 @@ use nom::{
     IResult,
 };
 
-use crate::grammar::token::{
+use asnr_grammar::{
     Constraint, DistinguishedValue, ExtensionMarker, RangeMarker, ASN1_COMMENT, ASSIGN, COMMA,
     C_STYLE_BLOCK_COMMENT_BEGIN, C_STYLE_BLOCK_COMMENT_END, C_STYLE_LINE_COMMENT, EXTENSION,
     LEFT_BRACE, LEFT_PARENTHESIS, RANGE, RIGHT_BRACE, RIGHT_PARENTHESIS,
@@ -149,12 +149,7 @@ pub fn distinguished_val<'a>(input: &'a str) -> IResult<&'a str, DistinguishedVa
 #[cfg(test)]
 mod tests {
 
-    use crate::{
-        grammar::token::{Constraint, DistinguishedValue},
-        parser::common::distinguished_values,
-    };
-
-    use super::{comment, constraint, identifier, skip_ws, skip_ws_and_comments};
+    use super::*;
 
     #[test]
     fn parses_line_comment() {

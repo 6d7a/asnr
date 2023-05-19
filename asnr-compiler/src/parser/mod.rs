@@ -15,7 +15,7 @@ use nom::{
     IResult,
 };
 
-use crate::grammar::token::{ASN1Type, ASN1Value, ToplevelDeclaration};
+use asnr_grammar::{ASN1Type, ASN1Value, ToplevelDeclaration};
 
 use self::{
     bit_string::{bit_string, bit_string_value},
@@ -75,7 +75,7 @@ pub fn elsewhere_declared_type<'a>(input: &'a str) -> IResult<&'a str, ASN1Type>
 mod tests {
     use core::panic;
 
-    use crate::grammar::token::{ASN1Type, DistinguishedValue, Enumeral};
+    use asnr_grammar::{ASN1Type, DistinguishedValue, Enumeral};
 
     use super::top_level_declaration;
 
