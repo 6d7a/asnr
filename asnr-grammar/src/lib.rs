@@ -53,6 +53,10 @@ pub const EXTENSION: &'static str = "...";
 pub const COMMA: char = ',';
 pub const SINGLE_QUOTE: char = '\'';
 
+pub trait Quote {
+    fn quote(&self) -> String;
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct ToplevelDeclaration {
     pub comments: String,
@@ -108,6 +112,25 @@ pub enum ASN1Value {
 pub struct AsnInteger {
     pub constraint: Option<Constraint>,
     pub distinguished_values: Option<Vec<DistinguishedValue>>,
+}
+
+impl Quote for AsnInteger {
+    fn quote(&self) -> String {
+        format!(
+            "AsnInteger {{ constraint: {}, distinguished_values: {} }}",
+            self.constraint
+                .as_ref()
+                .map_or("None".to_owned(), |c| "Some(".to_owned() + &c.quote() + ")"),
+            self.distinguished_values
+                .as_ref()
+                .map_or("None".to_owned(), |c| "Some(vec![".to_owned()
+                    + &c.iter()
+                        .map(|dv| dv.quote())
+                        .collect::<Vec<String>>()
+                        .join(",")
+                    + "])"),
+        )
+    }
 }
 
 impl Default for AsnInteger {
@@ -226,6 +249,16 @@ pub struct AsnEnumerated {
     pub extensible: bool,
 }
 
+impl Quote for AsnEnumerated {
+  fn quote(&self) -> String {
+    format!(
+        "AsnEnumerated {{ members: vec![{}], extensible: {} }}",
+        self.members.iter().map(|m| m.quote()).collect::<Vec<String>>().join(","),
+        self.extensible
+    )
+}
+}
+
 impl From<(Vec<Enumeral>, Option<ExtensionMarker>)> for AsnEnumerated {
     fn from(value: (Vec<Enumeral>, Option<ExtensionMarker>)) -> Self {
         AsnEnumerated {
@@ -244,12 +277,32 @@ pub struct Enumeral {
     pub index: u64,
 }
 
+impl Quote for Enumeral {
+  fn quote(&self) -> String {
+    format!(
+        "Enumeral {{ name: \"{}\".into(), description: {}, index: {} }}",
+        self.name,
+        self.description.as_ref().map_or("None".to_owned(), |d| "Some(\"".to_owned() + d + "\".into())"),
+        self.index
+    )
+}
+}
+
 /// Representation of a ASN1 distinguished value,
 /// as seen in some INTEGER declarations
 #[derive(Debug, Clone, PartialEq)]
 pub struct DistinguishedValue {
     pub name: String,
     pub value: i128,
+}
+
+impl Quote for DistinguishedValue {
+    fn quote(&self) -> String {
+        format!(
+            "DistinguishedValue {{ name: \"{}\".into(), value: {} }}",
+            self.name, self.value
+        )
+    }
 }
 
 impl From<(&str, i128)> for DistinguishedValue {
@@ -296,6 +349,19 @@ pub struct Constraint {
     pub min_value: Option<i128>,
     pub max_value: Option<i128>,
     pub extensible: bool,
+}
+
+impl Quote for Constraint {
+    fn quote(&self) -> String {
+        format!(
+            "Constraint {{ min_value: {}, max_value: {}, extensible: {} }}",
+            self.min_value
+                .map_or("None".to_owned(), |m| "Some(".to_owned() + &m.to_string() + ")"),
+            self.max_value
+                .map_or("None".to_owned(), |m| "Some(".to_owned() + &m.to_string() + ")"),
+            self.extensible
+        )
+    }
 }
 
 impl Constraint {
