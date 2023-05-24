@@ -2,15 +2,16 @@ use asnr_grammar::{ASN1Type, Quote, ToplevelDeclaration};
 
 use super::{
     error::{GeneratorError, GeneratorErrorType},
-    util::{format_comments, format_enumeral, format_enumeral_from_int},
+    util::{format_comments, format_enumeral, format_enumeral_from_int, rustify_name},
 };
+
 
 pub fn integer_template<'a>(
     tld: ToplevelDeclaration,
     custom_derive: Option<&'a str>,
 ) -> Result<String, GeneratorError> {
     if let ASN1Type::Integer(ref int) = tld.r#type {
-        let name = tld.name;
+        let name = rustify_name(&tld.name);
         let integer_type = int
             .constraint
             .as_ref()
@@ -19,21 +20,21 @@ pub fn integer_template<'a>(
         let derive = custom_derive.unwrap_or("#[derive(Debug, Clone, PartialEq)]");
         Ok(format!(
             r#"
-        {comments}{derive}
-        pub struct {name}(pub {integer_type});
+{comments}{derive}
+pub struct {name}(pub {integer_type});
 
-        impl Decode for {name} {{
-            fn decode<'a, D>(decoder: D, input: &'a [u8]) -> nom::IResult<&'a [u8], Self>
-            where
-                D: asnr_transcoder::Decoder,
-                Self: Sized,
-            {{
-                decoder
-                    .decode_integer({}, input)
-                    .map(|(remaining, res)| (remaining, Self(res)))
-            }}
-        }}
-        "#,
+impl Decode for {name} {{
+    fn decode<'a, D>(decoder: D, input: &'a [u8]) -> nom::IResult<&'a [u8], Self>
+    where
+        D: asnr_transcoder::Decoder,
+        Self: Sized,
+    {{
+        decoder
+            .decode_integer({}, input)
+            .map(|(remaining, res)| (remaining, Self(res)))
+    }}
+}}
+"#,
             int.quote()
         ))
     } else {
@@ -50,26 +51,26 @@ pub fn boolean_template<'a>(
     custom_derive: Option<&'a str>,
 ) -> Result<String, GeneratorError> {
     if let ASN1Type::Boolean = tld.r#type {
-        let name = tld.name;
+        let name = rustify_name(&tld.name);
         let comments = format_comments(&tld.comments);
         let derive = custom_derive.unwrap_or("#[derive(Debug, Clone, PartialEq)]");
         Ok(format!(
             r#"
-      {comments}{derive}
-      pub struct {name}(pub bool);
+{comments}{derive}
+pub struct {name}(pub bool);
 
-      impl Decode for {name} {{
-          fn decode<'a, D>(decoder: D, input: &'a [u8]) -> nom::IResult<&'a [u8], Self>
-          where
-              D: asnr_transcoder::Decoder,
-              Self: Sized,
-          {{
-              decoder
-                  .decode_boolean(input)
-                  .map(|(remaining, res)| (remaining, Self(res)))
-          }}
-      }}
-      "#
+impl Decode for {name} {{
+    fn decode<'a, D>(decoder: D, input: &'a [u8]) -> nom::IResult<&'a [u8], Self>
+    where
+        D: asnr_transcoder::Decoder,
+        Self: Sized,
+    {{
+        decoder
+            .decode_boolean(input)
+            .map(|(remaining, res)| (remaining, Self(res)))
+    }}
+}}
+"#
         ))
     } else {
         Err(GeneratorError::new(
@@ -85,44 +86,44 @@ pub fn enumerated_template<'a>(
     custom_derive: Option<&'a str>,
 ) -> Result<String, GeneratorError> {
     if let ASN1Type::Enumerated(ref enumerated) = tld.r#type {
-        let name = tld.name;
+        let name = rustify_name(&tld.name);
         let comments = format_comments(&tld.comments);
         let derive = custom_derive.unwrap_or("#[derive(Debug, Clone, PartialEq)]");
         Ok(format!(
             r#"
-      {comments}{derive}
-      pub enum {name} {{
-        {}
-      }}
+{comments}{derive}
+pub enum {name} {{
+  {}
+}}
 
-      impl TryFrom<i128> for {name} {{
-          type Error = DecodingError;
-      
-          fn try_from(v: i128) -> Result<Self, Self::Error> {{
-              match v {{
-                  {}
-                  _ => Err(
-                    DecodingError::new(
-                      &format!("Invalid enumerated index decoding {name}. Received index {{}}",v), DecodingErrorType::InvalidEnumeratedIndex
-                    )
-                  ),
-              }}
-          }}
-      }}
+impl TryFrom<i128> for {name} {{
+    type Error = DecodingError;
 
-      impl Decode for {name} {{
-          fn decode<'a, D>(decoder: D, input: &'a [u8]) -> nom::IResult<&'a [u8], Self>
-          where
-              D: asnr_transcoder::Decoder,
-              Self: Sized,
-          {{
-              decoder.decode_enumerated(
-                {}, 
-                input
+    fn try_from(v: i128) -> Result<Self, Self::Error> {{
+        match v {{
+            {}
+            _ => Err(
+              DecodingError::new(
+                &format!("Invalid enumerated index decoding {name}. Received index {{}}",v), DecodingErrorType::InvalidEnumeratedIndex
               )
-          }}
-      }}
-      "#,
+            ),
+        }}
+    }}
+}}
+
+impl Decode for {name} {{
+    fn decode<'a, D>(decoder: D, input: &'a [u8]) -> nom::IResult<&'a [u8], Self>
+    where
+        D: asnr_transcoder::Decoder,
+        Self: Sized,
+    {{
+        decoder.decode_enumerated(
+          {}, 
+          input
+        )
+    }}
+}}
+"#,
             enumerated
                 .members
                 .iter()

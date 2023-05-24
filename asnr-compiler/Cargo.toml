@@ -6,6 +6,17 @@ edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
+[lib]
+name = "asnr_compiler"
+path = "src/lib.rs"
+
+[[bin]]
+required-features = ["cli"]
+name = "asnr_compiler_cli"
+path = "src/bin.rs"
+
+[features]
+cli = []
 
 [dependencies]
 nom = "7.1.3"

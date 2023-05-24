@@ -13,15 +13,19 @@ pub fn format_enumeral(enumeral: &Enumeral) -> String {
         "/// ".to_owned() + enumeral.description.as_ref().unwrap() + "\n\t"
     } else {
         "".to_owned()
-    }) + &enumeral.name
+    }) + &rustify_name(&enumeral.name)
         + " = "
         + &enumeral.index.to_string()
         + ","
 }
 
 pub fn format_enumeral_from_int(enumeral: &Enumeral) -> String {
-  let name = &enumeral.name;
+  let name = &rustify_name(&enumeral.name);
   format!("x if x == Self::{name} as i128 => Ok(Self::{name}),")
+}
+
+pub fn rustify_name(name: &String) -> String {
+  name.replace("-", "_")
 }
 
 #[cfg(test)]

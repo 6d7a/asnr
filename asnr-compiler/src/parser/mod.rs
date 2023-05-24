@@ -1,16 +1,17 @@
-//! The `parser` module contains the parser combinator 
+//! The `parser` module contains the parser combinator
 //! responsible for interpreting the input as ASN1 notation.
-//! The parser is made up of a number of sub-parsers that 
+//! The parser is made up of a number of sub-parsers that
 //! interpret single elements of ASN1 syntax.SS
-//! 
+//!
 //! The `parser` submodules provide parsers for their
 //! respective eponymous ASN1 type, with the exception
 //! of `common`, which contains parsers for the more
-//! generic elements of ASN1 syntax, and `util`, which 
+//! generic elements of ASN1 syntax, and `util`, which
 //! contains helper parsers not specific to ASN1's notation.
 use nom::{
     branch::alt,
     combinator::{into, map},
+    multi::many0,
     sequence::{preceded, tuple},
     IResult,
 };
@@ -22,6 +23,7 @@ use self::{
     boolean::{boolean, boolean_value},
     common::*,
     enumerated::*,
+    error::ParserError,
     integer::*,
     octet_string::octet_string,
     sequence::sequence,
@@ -31,10 +33,17 @@ mod bit_string;
 mod boolean;
 mod common;
 mod enumerated;
+mod error;
 mod integer;
 mod octet_string;
 mod sequence;
 mod util;
+
+pub fn asn_string<'a>(input: &'a str) -> Result<Vec<ToplevelDeclaration>, ParserError> {
+    many0(skip_ws(top_level_declaration))(input)
+        .map(|(_, tlds)| tlds)
+        .map_err(|e| e.into())
+}
 
 pub fn top_level_declaration<'a>(input: &'a str) -> IResult<&'a str, ToplevelDeclaration> {
     into(tuple((
