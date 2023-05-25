@@ -39,9 +39,9 @@ use std::{
 };
 
 use asnr_grammar::ToplevelDeclaration;
-use generator::{error::GeneratorError, generate, GENERATED_RUST_IMPORTS};
+use generator::{generate, GENERATED_RUST_IMPORTS};
 use parser::asn_string;
-use validator::{error::ValidatorError, Validate};
+use validator::{Validate};
 
 /// The ASNR compiler
 #[derive(Debug, PartialEq)]
@@ -116,37 +116,42 @@ impl AsnrCompiler {
     /// * _Err_ - Unrecoverable error, no rust representations were generated
     pub fn compile(self) -> Result<Vec<Box<dyn Error>>, Box<dyn Error>> {
         let mut result = String::from(GENERATED_RUST_IMPORTS);
+        let mut warnings = Vec::<Box<dyn Error>>::new();
         for src in self.sources {
             let toplevel_declarations = asn_string(&read_to_string(src)?)?;
-            let (valid_tlds, validator_errors) = toplevel_declarations.into_iter().fold(
+            let (valid_tlds, mut validator_errors) = toplevel_declarations.into_iter().fold(
                 (
                     Vec::<ToplevelDeclaration>::new(),
-                    Vec::<ValidatorError>::new(),
+                    Vec::<Box<dyn Error>>::new(),
                 ),
                 |(mut tlds, mut errors), tld| {
                     match tld.validate() {
                         Ok(_) => tlds.push(tld),
-                        Err(e) => errors.push(e),
+                        Err(e) => errors.push(Box::new(e)),
                     }
                     (tlds, errors)
                 },
             );
-            let (generated, generator_errors) = valid_tlds.into_iter().fold(
-                (String::new(), Vec::<GeneratorError>::new()),
+            let (generated, mut generator_errors) = valid_tlds.into_iter().fold(
+                (String::new(), Vec::<Box<dyn Error>>::new()),
                 |(mut rust, mut errors), tld| {
                     match generate(tld, None) {
                         Ok(r) => {
                             rust = rust + &r + "\n";
                         }
-                        Err(e) => errors.push(e),
+                        Err(e) => errors.push(Box::new(e)),
                     }
                     (rust, errors)
                 },
             );
             result += &generated;
+            warnings.append(&mut validator_errors);
+            warnings.append(&mut generator_errors);
         }
-        fs::write("test.rs", result)?;
-        Ok(())
+
+        fs::write(self.output_path, result)?;
+
+        Ok(warnings)
     }
 }
 
