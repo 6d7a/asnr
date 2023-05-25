@@ -1,6 +1,5 @@
 mod generator;
 mod parser;
-mod test;
 mod validator;
 
 use std::{error::Error, fs::{read_to_string, self}, path::PathBuf};
