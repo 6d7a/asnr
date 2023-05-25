@@ -12,6 +12,28 @@ The ASNR compiler is a parser combinator that parses ASN1 specifications and out
 encoding-rule-agnostic, so that its output can be used regardless whether the actual encoding follows
 BER, DER, CER, PER, XER, or whatever exotic *ERs still out there.
 
+## Example
+In order to compile ASN1 in your build process, invoke the ASNR compiler in your [`build.rs` build script](https://doc.rust-lang.org/cargo/reference/build-scripts.html).
+```rust
+// build.rs build script
+use std::path::PathBuf;
+use asnr_compiler::Asnr;
+
+fn main() {
+  match Asnr::compiler()                                    // Initialize the compiler
+    .add_asn_source(PathBuf::from("spec_1.asn"))            // add a single ASN1 source file
+    .add_asn_sources(vec![                                  // add several ASN1 source files
+        PathBuf::from("spec_2.asn"),
+        PathBuf::from("spec_3.asn"),
+    ])
+    .set_output_path(PathBuf::from("./asn/generated.rs"))   // Set an output path for the generated rust code
+    .compile() {
+    Ok(warnings: Vec<Box<dyn Error>>) -> { /* handle compilation warnings */ }
+    Err(error: Box<dyn Error>) -> { /* handle unrecoverable compilation error */ }
+  }
+}
+```
+
 # ASNR Transcoder
 The transcoder crate handles the actual encoding and decoding of data at runtime.
 It aims to be suitable for `no_std` environments and `wasm-unknown` targets.
