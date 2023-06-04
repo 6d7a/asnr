@@ -157,7 +157,7 @@ mod tests {
 "#;
         assert_eq!(" Test, one, two, three/", comment(line).unwrap().1);
     }
-
+    
     #[test]
     fn parses_block_comment() {
         assert_eq!(

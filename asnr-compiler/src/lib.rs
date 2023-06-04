@@ -40,7 +40,7 @@ use std::{
 
 use asnr_grammar::ToplevelDeclaration;
 use generator::{generate, GENERATED_RUST_IMPORTS};
-use parser::asn_string;
+use parser::asn_spec;
 use validator::{Validate};
 
 /// The ASNR compiler
@@ -118,7 +118,7 @@ impl AsnrCompiler {
         let mut result = String::from(GENERATED_RUST_IMPORTS);
         let mut warnings = Vec::<Box<dyn Error>>::new();
         for src in self.sources {
-            let toplevel_declarations = asn_string(&read_to_string(src)?)?;
+            let (_header, toplevel_declarations) = asn_spec(&read_to_string(src)?)?;
             let (valid_tlds, mut validator_errors) = toplevel_declarations.into_iter().fold(
                 (
                     Vec::<ToplevelDeclaration>::new(),
@@ -175,12 +175,8 @@ mod tests {
     #[test]
     fn compiles_a_simple_spec() {
         let _ = Asnr::compiler()
-            .add_asn_source(PathBuf::from("spec_1.asn"))
-            .add_asn_sources(vec![
-                PathBuf::from("spec_2.asn"),
-                PathBuf::from("spec_3.asn"),
-            ])
-            .set_output_path(PathBuf::from("./asn/generated.rs"))
+            .add_asn_source(PathBuf::from("simple.asn"))
+            .set_output_path(PathBuf::from("./generated.rs"))
             .compile();
     }
 }

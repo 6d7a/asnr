@@ -28,6 +28,14 @@ pub fn bit_string_value<'a>(input: &'a str) -> IResult<&'a str, ASN1Value> {
     )(input)
 }
 
+/// Tries to parse an ASN1 BIT STRING
+/// 
+/// *`input` - string slice to be matched against
+/// 
+/// `bit_string` will try to match an BIT STRING declaration in the `input` string.
+/// If the match succeeds, the parser will consume the match and return the remaining string
+/// and a wrapped `AsnBitString` value representing the ASN1 declaration.
+/// If the match fails, the parser will not consume the input and will return an error.
 pub fn bit_string<'a>(input: &'a str) -> IResult<&'a str, ASN1Type> {
     map(
         preceded(

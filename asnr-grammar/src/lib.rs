@@ -5,8 +5,6 @@
 //! from which the generator module produces de-/encodable
 //! types.
 
-use std::fmt::format;
-
 // Comment tokens
 pub const C_STYLE_BLOCK_COMMENT_BEGIN: &'static str = "/*";
 pub const C_STYLE_BLOCK_COMMENT_CONTINUED_LINE: char = '*';
@@ -41,10 +39,20 @@ pub const SEQUENCE: &'static str = "SEQUENCE";
 pub const SEQUENCE_OF: &'static str = "SEQUENCE OF";
 pub const SET: &'static str = "SET";
 pub const SET_OF: &'static str = "SET OF";
+pub const OBJECT_IDENTIFIER: &'static str = "OBJECT IDENTIFIER";
 
 // Value tokens
 pub const TRUE: &'static str = "TRUE";
 pub const FALSE: &'static str = "FALSE";
+
+// Header tokens
+pub const BEGIN: &'static str = "BEGIN";
+pub const DEFINITIONS: &'static str = "DEFINITIONS";
+pub const AUTOMATIC: &'static str = "AUTOMATIC";
+pub const EXPLICIT: &'static str = "EXPLICIT";
+pub const IMPLICIT: &'static str = "IMPLICIT";
+pub const TAGS: &'static str = "TAGS";
+pub const EXTENSIBILITY_IMPLIED: &'static str = "EXTENSIBILITY IMPLIED";
 
 pub const SIZE: &'static str = "SIZE";
 pub const DEFAULT: &'static str = "DEFAULT";
@@ -90,16 +98,102 @@ pub trait Quote {
 }
 
 #[derive(Debug, Clone, PartialEq)]
+pub enum TaggingEnvironment {
+    AUTOMATIC,
+    IMPLICIT,
+    EXPLICIT,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum ExtensibilityEnvironment {
+    IMPLIED,
+    EXPLICIT,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct Header {
+    pub name: String,
+    pub module_identifier: ObjectIdentifier,
+    pub tagging_environment: TaggingEnvironment,
+    pub extensibility_environment: ExtensibilityEnvironment,
+}
+
+impl
+    From<(
+        &str,
+        ObjectIdentifier,
+        (TaggingEnvironment, ExtensibilityEnvironment),
+    )> for Header
+{
+    fn from(
+        value: (
+            &str,
+            ObjectIdentifier,
+            (TaggingEnvironment, ExtensibilityEnvironment),
+        ),
+    ) -> Self {
+        Self {
+            name: value.0.into(),
+            module_identifier: value.1,
+            tagging_environment: value.2 .0,
+            extensibility_environment: value.2 .1,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct ObjectIdentifier(pub Vec<ObjectIdentifierArc>);
+
+impl From<Vec<ObjectIdentifierArc>> for ObjectIdentifier {
+    fn from(value: Vec<ObjectIdentifierArc>) -> Self {
+        Self(value)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct ObjectIdentifierArc {
+    pub name: Option<String>,
+    pub number: Option<u128>,
+}
+
+impl From<u128> for ObjectIdentifierArc {
+    fn from(value: u128) -> Self {
+        Self {
+            name: None,
+            number: Some(value),
+        }
+    }
+}
+
+impl From<&str> for ObjectIdentifierArc {
+    fn from(value: &str) -> Self {
+        Self {
+            name: Some(value.into()),
+            number: None,
+        }
+    }
+}
+
+impl From<(&str, u128)> for ObjectIdentifierArc {
+    fn from(value: (&str, u128)) -> Self {
+        Self {
+            name: Some(value.0.into()),
+            number: Some(value.1),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
 pub struct ToplevelDeclaration {
     pub comments: String,
     pub name: String,
     pub r#type: ASN1Type,
 }
 
-impl From<(&str, &str, ASN1Type)> for ToplevelDeclaration {
-    fn from(value: (&str, &str, ASN1Type)) -> Self {
+impl From<(Vec<&str>, &str, ASN1Type)> for ToplevelDeclaration {
+    fn from(value: (Vec<&str>, &str, ASN1Type)) -> Self {
         Self {
-            comments: value.0.into(),
+            comments: value.0.join("\n"),
             name: value.1.into(),
             r#type: value.2,
         }
@@ -139,7 +233,9 @@ impl Quote for ASN1Type {
             ASN1Type::OctetString(o) => format!("ASN1Type::OctetString({})", o.quote()),
             ASN1Type::Enumerated(e) => format!("ASN1Type::Enumerated({})", e.quote()),
             ASN1Type::Sequence(s) => format!("ASN1Type::Sequence({})", s.quote()),
-            ASN1Type::ElsewhereDeclaredType(els) => format!("ASN1Type::ElsewhereDeclaredType({})", els.quote()),
+            ASN1Type::ElsewhereDeclaredType(els) => {
+                format!("ASN1Type::ElsewhereDeclaredType({})", els.quote())
+            }
         }
     }
 }
@@ -153,13 +249,13 @@ pub enum ASN1Value {
 }
 
 impl Quote for ASN1Value {
-  fn quote(&self) -> String {
-      match self {
-        ASN1Value::Boolean(b) => format!("ASN1Value::Boolean({})", b),
-        ASN1Value::Integer(i) => format!("ASN1Value::Integer({})", i),
-        ASN1Value::String(s) => format!("ASN1Value::String(\"{}\".into())", s)
+    fn quote(&self) -> String {
+        match self {
+            ASN1Value::Boolean(b) => format!("ASN1Value::Boolean({})", b),
+            ASN1Value::Integer(i) => format!("ASN1Value::Integer({})", i),
+            ASN1Value::String(s) => format!("ASN1Value::String(\"{}\".into())", s),
+        }
     }
-  }
 }
 
 /// Representation of an ASN1 INTEGER data element
@@ -280,14 +376,14 @@ impl From<Option<Constraint>> for AsnOctetString {
 }
 
 impl Quote for AsnOctetString {
-  fn quote(&self) -> String {
-      format!(
-          "AsnOctetString {{ constraint: {} }}",
-          self.constraint
-              .as_ref()
-              .map_or("None".to_owned(), |c| "Some(".to_owned() + &c.quote() + ")"),
-      )
-  }
+    fn quote(&self) -> String {
+        format!(
+            "AsnOctetString {{ constraint: {} }}",
+            self.constraint
+                .as_ref()
+                .map_or("None".to_owned(), |c| "Some(".to_owned() + &c.quote() + ")"),
+        )
+    }
 }
 
 /// Representation of an ASN1 SEQUENCE data element
@@ -310,9 +406,13 @@ impl From<(Vec<SequenceMember>, Option<ExtensionMarker>)> for AsnSequence {
 impl Quote for AsnSequence {
     fn quote(&self) -> String {
         format!(
-          "AsnSequence {{ extensible: {}, members: vec![{}] }}",
-          self.extensible,
-          self.members.iter().map(|m| m.quote()).collect::<Vec<String>>().join(",")
+            "AsnSequence {{ extensible: {}, members: vec![{}] }}",
+            self.extensible,
+            self.members
+                .iter()
+                .map(|m| m.quote())
+                .collect::<Vec<String>>()
+                .join(",")
         )
     }
 }

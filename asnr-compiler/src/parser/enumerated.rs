@@ -17,6 +17,14 @@ pub fn enumerated_value<'a>(input: &'a str) -> IResult<&'a str, ASN1Value> {
   map(skip_ws_and_comments(identifier), |m| ASN1Value::String(m.into()))(input)
 }
 
+/// Tries to parse an ASN1 ENUMERATED
+/// 
+/// *`input` - string slice to be matched against
+/// 
+/// `enumerated` will try to match an ENUMERATED declaration in the `input` string.
+/// If the match succeeds, the parser will consume the match and return the remaining string
+/// and a wrapped `AsnEnumerated` value representing the ASN1 declaration.
+/// If the match fails, the parser will not consume the input and will return an error.
 pub fn enumerated<'a>(input: &'a str) -> IResult<&'a str, ASN1Type> {
   map(
       preceded(skip_ws_and_comments(tag(ENUMERATED)), enumerated_body),

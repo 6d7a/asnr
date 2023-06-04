@@ -12,11 +12,11 @@ use nom::{
     branch::alt,
     combinator::{into, map},
     multi::many0,
-    sequence::{preceded, tuple},
+    sequence::{pair, preceded, tuple},
     IResult,
 };
 
-use asnr_grammar::{ASN1Type, ASN1Value, ToplevelDeclaration};
+use asnr_grammar::{ASN1Type, ASN1Value, Header, ToplevelDeclaration};
 
 use self::{
     bit_string::{bit_string, bit_string_value},
@@ -24,6 +24,7 @@ use self::{
     common::*,
     enumerated::*,
     error::ParserError,
+    header::header,
     integer::*,
     octet_string::octet_string,
     sequence::sequence,
@@ -34,20 +35,22 @@ mod boolean;
 mod common;
 mod enumerated;
 mod error;
+mod header;
 mod integer;
+mod object_identifier;
 mod octet_string;
 mod sequence;
 mod util;
 
-pub fn asn_string<'a>(input: &'a str) -> Result<Vec<ToplevelDeclaration>, ParserError> {
-    many0(skip_ws(top_level_declaration))(input)
-        .map(|(_, tlds)| tlds)
+pub fn asn_spec<'a>(input: &'a str) -> Result<(Header, Vec<ToplevelDeclaration>), ParserError> {
+    pair(header, many0(skip_ws(top_level_declaration)))(input)
+        .map(|(_, res)| res)
         .map_err(|e| e.into())
 }
 
 pub fn top_level_declaration<'a>(input: &'a str) -> IResult<&'a str, ToplevelDeclaration> {
     into(tuple((
-        skip_ws(comment),
+        skip_ws(many0(comment)),
         skip_ws(identifier),
         preceded(assignment, asn1_type),
     )))(input)
