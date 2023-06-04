@@ -174,7 +174,7 @@ mod tests {
 
     #[test]
     fn compiles_a_simple_spec() {
-        Asnr::compiler()
+        let _ = Asnr::compiler()
             .add_asn_source(PathBuf::from("spec_1.asn"))
             .add_asn_sources(vec![
                 PathBuf::from("spec_2.asn"),

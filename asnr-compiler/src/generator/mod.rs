@@ -5,7 +5,7 @@
 
 use asnr_grammar::ToplevelDeclaration;
 
-use self::{error::GeneratorError, template::{boolean_template, integer_template, enumerated_template}};
+use self::{error::GeneratorError, template::{boolean_template, integer_template, enumerated_template, bit_string_template, octet_string_template, sequence_template}};
 pub(crate) mod error;
 mod template;
 mod util;
@@ -23,6 +23,9 @@ pub fn generate<'a>(
         asnr_grammar::ASN1Type::Boolean => boolean_template(tld, custom_derive),
         asnr_grammar::ASN1Type::Integer(_) => integer_template(tld, custom_derive),
         asnr_grammar::ASN1Type::Enumerated(_) => enumerated_template(tld, custom_derive),
+        asnr_grammar::ASN1Type::BitString(_) => bit_string_template(tld, custom_derive),
+        asnr_grammar::ASN1Type::OctetString(_) => octet_string_template(tld, custom_derive),
+        asnr_grammar::ASN1Type::Sequence(_) => sequence_template(tld, custom_derive),
         _ => Ok("".into())
     }
 }

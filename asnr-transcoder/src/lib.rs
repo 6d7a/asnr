@@ -7,7 +7,7 @@
 //!
 pub mod error;
 
-use asnr_grammar::{AsnInteger, AsnEnumerated};
+use asnr_grammar::*;
 use nom::IResult;
 use num::Integer;
 
@@ -19,9 +19,30 @@ pub trait Decode {
 }
 
 pub trait Decoder {
-    fn decode_integer<'a, O: Integer>(&self, integer: AsnInteger, input: &'a [u8]) -> IResult<&'a [u8], O>;
-    fn decode_enumerated<'a, O>(&self, enumerated: AsnEnumerated, input: &'a [u8]) -> IResult<&'a [u8], O>;
+    fn decode_integer<'a, O: Integer>(
+        &self,
+        integer: AsnInteger,
+        input: &'a [u8],
+    ) -> IResult<&'a [u8], O>;
+    fn decode_enumerated<'a, O>(
+        &self,
+        enumerated: AsnEnumerated,
+        input: &'a [u8],
+    ) -> IResult<&'a [u8], O>;
     fn decode_boolean<'a>(&self, input: &'a [u8]) -> IResult<&'a [u8], bool>;
-    fn decode_bitstring<'a>(&self, input: &'a [u8]) -> IResult<&'a [u8], &'a str>;
-    fn decode_sequence<'a, T>(&self, input: &'a [u8]) -> IResult<&'a [u8], T>;
+    fn decode_bit_string<'a>(
+        &self,
+        bit_string: AsnBitString,
+        input: &'a [u8],
+    ) -> IResult<&'a [u8], Vec<bool>>;
+    fn decode_octet_string<'a>(
+        &self,
+        bit_string: AsnBitString,
+        input: &'a [u8],
+    ) -> IResult<&'a [u8], String>;
+    fn decode_sequence<'a, T>(
+        &self,
+        sequence: AsnSequence,
+        input: &'a [u8],
+    ) -> IResult<&'a [u8], T>;
 }

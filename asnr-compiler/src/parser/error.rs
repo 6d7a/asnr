@@ -10,7 +10,7 @@ pub struct ParserError {
 impl<'a> From<nom::Err<nom::error::Error<&'a str>>> for ParserError {
     fn from(value: nom::Err<nom::error::Error<&'a str>>) -> Self {
         match value {
-            nom::Err::Incomplete(e) => Self {
+            nom::Err::Incomplete(_) => Self {
                 details: "Unexpected end of input!".into(),
                 kind: ParserErrorType::NotEnoughData,
             },

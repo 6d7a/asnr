@@ -5,6 +5,8 @@
 //! from which the generator module produces de-/encodable
 //! types.
 
+use std::fmt::format;
+
 // Comment tokens
 pub const C_STYLE_BLOCK_COMMENT_BEGIN: &'static str = "/*";
 pub const C_STYLE_BLOCK_COMMENT_CONTINUED_LINE: char = '*';
@@ -53,7 +55,37 @@ pub const EXTENSION: &'static str = "...";
 pub const COMMA: char = ',';
 pub const SINGLE_QUOTE: char = '\'';
 
+/// The `Quote` trait serves to convert a structure
+/// into a stringified rust representation of its initialization.
+///
+/// #### Example
+/// Let's say we have
+/// ```rust
+/// # use asnr_grammar::Quote;
+///
+/// pub struct Foo {
+///   pub bar: u8
+/// }
+/// // The implementation of `Quote` for `Foo` would look like this:
+/// impl Quote for Foo {
+///   fn quote(&self) -> String {
+///     format!("Foo {{ bar: {} }}", self.bar)
+///   }
+/// }
+/// ```
 pub trait Quote {
+    /// Returns a stringified representation of the implementing struct's initialization
+    ///
+    /// #### Example
+    /// ```rust
+    /// # use asnr_grammar::Quote;
+    /// # pub struct Foo { pub bar: u8 }
+    /// # impl Quote for Foo {
+    /// #  fn quote(&self) -> String { format!("Foo {{ bar: {} }}", self.bar) }
+    /// # }
+    /// let foo = Foo { bar: 1 };
+    /// assert_eq!("Foo { bar: 1 }".to_string(), foo.quote());
+    /// ```
     fn quote(&self) -> String;
 }
 
@@ -98,12 +130,36 @@ pub enum ASN1Type {
     ElsewhereDeclaredType(DeclarationElsewhere),
 }
 
+impl Quote for ASN1Type {
+    fn quote(&self) -> String {
+        match self {
+            ASN1Type::Boolean => "ASN1Type::Boolean".into(),
+            ASN1Type::Integer(i) => format!("ASN1Type::Integer({})", i.quote()),
+            ASN1Type::BitString(b) => format!("ASN1Type::BitString({})", b.quote()),
+            ASN1Type::OctetString(o) => format!("ASN1Type::OctetString({})", o.quote()),
+            ASN1Type::Enumerated(e) => format!("ASN1Type::Enumerated({})", e.quote()),
+            ASN1Type::Sequence(s) => format!("ASN1Type::Sequence({})", s.quote()),
+            ASN1Type::ElsewhereDeclaredType(els) => format!("ASN1Type::ElsewhereDeclaredType({})", els.quote()),
+        }
+    }
+}
+
 /// The possible types of an ASN1 value.
 #[derive(Debug, Clone, PartialEq)]
 pub enum ASN1Value {
     Boolean(bool),
     Integer(i128),
     String(String),
+}
+
+impl Quote for ASN1Value {
+  fn quote(&self) -> String {
+      match self {
+        ASN1Value::Boolean(b) => format!("ASN1Value::Boolean({})", b),
+        ASN1Value::Integer(i) => format!("ASN1Value::Integer({})", i),
+        ASN1Value::String(s) => format!("ASN1Value::String(\"{}\".into())", s)
+    }
+  }
 }
 
 /// Representation of an ASN1 INTEGER data element
@@ -191,6 +247,25 @@ impl From<(Option<Vec<DistinguishedValue>>, Option<Constraint>)> for AsnBitStrin
     }
 }
 
+impl Quote for AsnBitString {
+    fn quote(&self) -> String {
+        format!(
+            "AsnBitString {{ constraint: {}, distinguished_values: {} }}",
+            self.constraint
+                .as_ref()
+                .map_or("None".to_owned(), |c| "Some(".to_owned() + &c.quote() + ")"),
+            self.distinguished_values
+                .as_ref()
+                .map_or("None".to_owned(), |c| "Some(vec![".to_owned()
+                    + &c.iter()
+                        .map(|dv| dv.quote())
+                        .collect::<Vec<String>>()
+                        .join(",")
+                    + "])"),
+        )
+    }
+}
+
 /// Representation of an ASN1 OCTET STRING data element
 /// with corresponding constraints
 #[derive(Debug, Clone, PartialEq)]
@@ -202,6 +277,17 @@ impl From<Option<Constraint>> for AsnOctetString {
     fn from(value: Option<Constraint>) -> Self {
         AsnOctetString { constraint: value }
     }
+}
+
+impl Quote for AsnOctetString {
+  fn quote(&self) -> String {
+      format!(
+          "AsnOctetString {{ constraint: {} }}",
+          self.constraint
+              .as_ref()
+              .map_or("None".to_owned(), |c| "Some(".to_owned() + &c.quote() + ")"),
+      )
+  }
 }
 
 /// Representation of an ASN1 SEQUENCE data element
@@ -218,6 +304,16 @@ impl From<(Vec<SequenceMember>, Option<ExtensionMarker>)> for AsnSequence {
             extensible: value.1.is_some(),
             members: value.0,
         }
+    }
+}
+
+impl Quote for AsnSequence {
+    fn quote(&self) -> String {
+        format!(
+          "AsnSequence {{ extensible: {}, members: vec![{}] }}",
+          self.extensible,
+          self.members.iter().map(|m| m.quote()).collect::<Vec<String>>().join(",")
+        )
     }
 }
 
@@ -241,6 +337,20 @@ impl From<(&str, ASN1Type, Option<OptionalMarker>, Option<ASN1Value>)> for Seque
     }
 }
 
+impl Quote for SequenceMember {
+    fn quote(&self) -> String {
+        format!(
+          "SequenceMember {{ name: \"{}\".into(), is_optional: {}, r#type: {}, default_value: {} }}",
+          self.name,
+          self.is_optional,
+          self.r#type.quote(),
+          self.default_value.as_ref().map_or("None".to_string(), |d| "Some(".to_owned()
+          + &d.quote()
+          + ")")
+      )
+    }
+}
+
 /// Representation of an ASN1 SEQUENCE data element
 /// with corresponding enumerals and extension information
 #[derive(Debug, Clone, PartialEq)]
@@ -250,13 +360,17 @@ pub struct AsnEnumerated {
 }
 
 impl Quote for AsnEnumerated {
-  fn quote(&self) -> String {
-    format!(
-        "AsnEnumerated {{ members: vec![{}], extensible: {} }}",
-        self.members.iter().map(|m| m.quote()).collect::<Vec<String>>().join(","),
-        self.extensible
-    )
-}
+    fn quote(&self) -> String {
+        format!(
+            "AsnEnumerated {{ members: vec![{}], extensible: {} }}",
+            self.members
+                .iter()
+                .map(|m| m.quote())
+                .collect::<Vec<String>>()
+                .join(","),
+            self.extensible
+        )
+    }
 }
 
 impl From<(Vec<Enumeral>, Option<ExtensionMarker>)> for AsnEnumerated {
@@ -278,18 +392,22 @@ pub struct Enumeral {
 }
 
 impl Quote for Enumeral {
-  fn quote(&self) -> String {
-    format!(
-        "Enumeral {{ name: \"{}\".into(), description: {}, index: {} }}",
-        self.name,
-        self.description.as_ref().map_or("None".to_owned(), |d| "Some(\"".to_owned() + d + "\".into())"),
-        self.index
-    )
-}
+    fn quote(&self) -> String {
+        format!(
+            "Enumeral {{ name: \"{}\".into(), description: {}, index: {} }}",
+            self.name,
+            self.description
+                .as_ref()
+                .map_or("None".to_owned(), |d| "Some(\"".to_owned()
+                    + d
+                    + "\".into())"),
+            self.index
+        )
+    }
 }
 
 /// Representation of a ASN1 distinguished value,
-/// as seen in some INTEGER declarations
+/// as seen in some INTEGER and BIT STRING declarations
 #[derive(Debug, Clone, PartialEq)]
 pub struct DistinguishedValue {
     pub name: String,
@@ -335,6 +453,12 @@ impl From<&str> for DeclarationElsewhere {
     }
 }
 
+impl Quote for DeclarationElsewhere {
+    fn quote(&self) -> String {
+        format!("DeclarationElsewhere::from(\"{}\")", self.0)
+    }
+}
+
 #[derive(Debug)]
 pub struct RangeMarker();
 
@@ -356,9 +480,13 @@ impl Quote for Constraint {
         format!(
             "Constraint {{ min_value: {}, max_value: {}, extensible: {} }}",
             self.min_value
-                .map_or("None".to_owned(), |m| "Some(".to_owned() + &m.to_string() + ")"),
+                .map_or("None".to_owned(), |m| "Some(".to_owned()
+                    + &m.to_string()
+                    + ")"),
             self.max_value
-                .map_or("None".to_owned(), |m| "Some(".to_owned() + &m.to_string() + ")"),
+                .map_or("None".to_owned(), |m| "Some(".to_owned()
+                    + &m.to_string()
+                    + ")"),
             self.extensible
         )
     }
