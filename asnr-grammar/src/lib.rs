@@ -36,7 +36,7 @@ pub const VISIBLE_STRING: &'static str = "VisibleString";
 pub const ENUMERATED: &'static str = "ENUMERATED";
 pub const CHOICE: &'static str = "CHOICE";
 pub const SEQUENCE: &'static str = "SEQUENCE";
-pub const SEQUENCE_OF: &'static str = "SEQUENCE OF";
+pub const OF: &'static str = "OF";
 pub const SET: &'static str = "SET";
 pub const SET_OF: &'static str = "SET OF";
 pub const OBJECT_IDENTIFIER: &'static str = "OBJECT IDENTIFIER";
@@ -218,7 +218,7 @@ pub enum ASN1Type {
     Enumerated(AsnEnumerated),
     // Choice,
     Sequence(AsnSequence),
-    // SequenceOf,
+    SequenceOf(AsnSequenceOf),
     // Set,
     // SetOf,
     ElsewhereDeclaredType(DeclarationElsewhere),
@@ -232,6 +232,7 @@ impl Quote for ASN1Type {
             ASN1Type::BitString(b) => format!("ASN1Type::BitString({})", b.quote()),
             ASN1Type::OctetString(o) => format!("ASN1Type::OctetString({})", o.quote()),
             ASN1Type::Enumerated(e) => format!("ASN1Type::Enumerated({})", e.quote()),
+            ASN1Type::SequenceOf(s) => format!("ASN1Type::SequenceOf({})", s.quote()),
             ASN1Type::Sequence(s) => format!("ASN1Type::Sequence({})", s.quote()),
             ASN1Type::ElsewhereDeclaredType(els) => {
                 format!("ASN1Type::ElsewhereDeclaredType({})", els.quote())
@@ -386,6 +387,32 @@ impl Quote for AsnOctetString {
     }
 }
 
+/// Representation of an ASN1 SEQUENCE OF data element
+/// with corresponding constraints and element type info
+#[derive(Debug, Clone, PartialEq)]
+pub struct AsnSequenceOf {
+    pub constraint: Option<Constraint>,
+    pub r#type: Box<ASN1Type>,
+}
+
+impl Quote for AsnSequenceOf {
+  fn quote(&self) -> String {
+      format!(
+          "AsnSequenceOf {{ constraint: {}, r#type: {} }}",
+          self.constraint
+              .as_ref()
+              .map_or("None".to_owned(), |c| "Some(".to_owned() + &c.quote() + ")"),
+          self.r#type.quote(),
+      )
+  }
+}
+
+impl From<(Option<Constraint>, ASN1Type)> for AsnSequenceOf {
+    fn from(value: (Option<Constraint>, ASN1Type)) -> Self {
+        Self { constraint: value.0, r#type: Box::new(value.1) }
+    }
+}
+
 /// Representation of an ASN1 SEQUENCE data element
 /// with corresponding members and extension information
 #[derive(Debug, Clone, PartialEq)]
@@ -451,7 +478,7 @@ impl Quote for SequenceMember {
     }
 }
 
-/// Representation of an ASN1 SEQUENCE data element
+/// Representation of an ASN1 ENUMERATED data element
 /// with corresponding enumerals and extension information
 #[derive(Debug, Clone, PartialEq)]
 pub struct AsnEnumerated {

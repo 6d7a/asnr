@@ -23,6 +23,7 @@ use self::{
     boolean::{boolean, boolean_value},
     common::*,
     enumerated::*,
+    sequence_of::*,
     error::ParserError,
     header::header,
     integer::*,
@@ -40,6 +41,7 @@ mod integer;
 mod object_identifier;
 mod octet_string;
 mod sequence;
+mod sequence_of;
 mod util;
 
 pub fn asn_spec<'a>(input: &'a str) -> Result<(Header, Vec<ToplevelDeclaration>), ParserError> {
@@ -58,6 +60,7 @@ pub fn top_level_declaration<'a>(input: &'a str) -> IResult<&'a str, ToplevelDec
 
 pub fn asn1_type<'a>(input: &'a str) -> IResult<&'a str, ASN1Type> {
     alt((
+        sequence_of,
         sequence,
         integer,
         enumerated,
