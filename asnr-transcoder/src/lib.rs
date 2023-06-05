@@ -22,27 +22,22 @@ pub trait Decoder {
     fn decode_integer<'a, O: Integer>(
         &self,
         integer: AsnInteger,
-        input: &'a [u8],
-    ) -> IResult<&'a [u8], O>;
+    ) -> &'a mut dyn FnMut(&'a [u8]) -> IResult<&'a [u8], O>;
     fn decode_enumerated<'a, O>(
         &self,
         enumerated: AsnEnumerated,
-        input: &'a [u8],
-    ) -> IResult<&'a [u8], O>;
+    ) -> &'a mut dyn FnMut(&'a [u8]) -> IResult<&'a [u8], O>;
     fn decode_boolean<'a>(&self, input: &'a [u8]) -> IResult<&'a [u8], bool>;
     fn decode_bit_string<'a>(
         &self,
         bit_string: AsnBitString,
-        input: &'a [u8],
-    ) -> IResult<&'a [u8], Vec<bool>>;
+    ) -> &'a mut dyn FnMut(&'a [u8]) -> IResult<&'a [u8], Vec<bool>>;
     fn decode_octet_string<'a>(
         &self,
         bit_string: AsnBitString,
-        input: &'a [u8],
-    ) -> IResult<&'a [u8], String>;
+    ) -> &'a mut dyn FnMut(&'a [u8]) -> IResult<&'a [u8], String>;
     fn decode_sequence<'a, T>(
         &self,
         sequence: AsnSequence,
-        input: &'a [u8],
-    ) -> IResult<&'a [u8], T>;
+    ) -> &'a mut dyn FnMut(&'a [u8]) -> IResult<&'a [u8], T>;
 }

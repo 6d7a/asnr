@@ -11,7 +11,7 @@ mod template;
 mod util;
 
 pub const GENERATED_RUST_IMPORTS: &str = r#"use asnr_grammar::*;
-use asnr_transcoder::{error::{DecodingError, DecodingErrorType}, Decode};
+use asnr_transcoder::{error::{DecodingError, DecodingErrorType}, Decode, Decoder};
 
 "#;
 

@@ -32,7 +32,7 @@ impl Decode for {name} {{
         Self: Sized,
     {{
         decoder
-            .decode_integer({}, input)
+            .decode_integer({})(input)
             .map(|(remaining, res)| (remaining, Self(res)))
     }}
 }}
@@ -69,7 +69,7 @@ impl Decode for {name} {{
       Self: Sized,
   {{
       decoder
-          .decode_bit_string({}, input)
+          .decode_bit_string({})(input)
           .map(|(remaining, res)| (remaining, Self(res)))
   }}
 }}
@@ -106,7 +106,7 @@ where
     Self: Sized,
 {{
     decoder
-        .decode_octet_string({}, input)
+        .decode_octet_string({})(input)
         .map(|(remaining, res)| (remaining, Self(res)))
 }}
 }}
@@ -193,8 +193,7 @@ impl Decode for {name} {{
         D: Decoder,
         Self: Sized,
     {{
-        decoder.decode_enumerated(
-          {}, 
+        decoder.decode_enumerated({})( 
           input
         )
     }}
@@ -250,7 +249,7 @@ where
     Self: Sized,
 {{
     decoder
-        .decode_sequence({}, input)
+        .decode_sequence({})(input)
         .map(|(remaining, res)| (remaining, res))
 }}
 }}

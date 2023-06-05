@@ -42,7 +42,7 @@ pub fn format_distinguished_values(tld: &ToplevelDeclaration) -> String {
                     r#"
 
 impl {name} {{
-    {d_vals}
+  {d_vals}
 }}"#
                 )
             }
