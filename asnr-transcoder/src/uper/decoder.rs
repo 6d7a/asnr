@@ -33,9 +33,9 @@ impl Decoder for Uper {
         todo!()
     }
 
-    fn decode_octet_string<'a>(
+    fn decode_character_string<'a>(
         &self,
-        _bit_string: asnr_grammar::AsnOctetString,
+        _bit_string: asnr_grammar::AsnCharacterString,
     ) -> fn(&'a [u8]) -> nom::IResult<&'a [u8], String> {
         todo!()
     }

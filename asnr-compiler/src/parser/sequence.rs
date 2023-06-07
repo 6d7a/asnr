@@ -64,7 +64,7 @@ fn default<'a>(input: &'a str) -> IResult<&'a str, Option<ASN1Value>> {
 #[cfg(test)]
 mod tests {
     use asnr_grammar::{
-        AsnBitString, AsnInteger, AsnOctetString, AsnSequence, Constraint, DeclarationElsewhere,
+        AsnBitString, AsnInteger, AsnCharacterString, AsnSequence, Constraint, DeclarationElsewhere,
     };
 
     use super::*;
@@ -281,12 +281,13 @@ mod tests {
                     },
                     SequenceMember {
                         name: "emergencyActionCode".into(),
-                        r#type: ASN1Type::OctetString(AsnOctetString {
+                        r#type: ASN1Type::CharacterString(AsnCharacterString {
                             constraint: Some(Constraint {
                                 min_value: Some(1),
                                 max_value: Some(24),
                                 extensible: false
-                            })
+                            }),
+                            r#type: asnr_grammar::CharacterStringType::OctetString
                         }),
                         default_value: None,
                         is_optional: true

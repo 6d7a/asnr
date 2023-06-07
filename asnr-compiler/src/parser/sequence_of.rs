@@ -1,14 +1,15 @@
-use asnr_grammar::{ASN1Type, OF, SEQUENCE, SIZE};
+use asnr_grammar::{ASN1Type, LEFT_PARENTHESIS, OF, RIGHT_PARENTHESIS, SEQUENCE, SIZE};
 use nom::{
     bytes::complete::tag,
+    character::complete::char,
     combinator::{map, opt},
-    sequence::{pair, preceded},
+    sequence::{delimited, pair, preceded},
     IResult,
 };
 
 use super::{
     asn1_type,
-    common::{constraint, in_parentheses, skip_ws_and_comments},
+    common::{constraint, skip_ws_and_comments},
 };
 
 /// Tries to parse an ASN1 SEQUENCE OF
@@ -24,9 +25,13 @@ pub fn sequence_of<'a>(input: &'a str) -> IResult<&'a str, ASN1Type> {
         pair(
             preceded(
                 skip_ws_and_comments(tag(SEQUENCE)),
-                opt(preceded(
-                    skip_ws_and_comments(tag(SIZE)),
-                    skip_ws_and_comments(constraint),
+                opt(delimited(
+                    opt(skip_ws_and_comments(char(LEFT_PARENTHESIS))),
+                    preceded(
+                        skip_ws_and_comments(tag(SIZE)),
+                        skip_ws_and_comments(constraint),
+                    ),
+                    opt(skip_ws_and_comments(char(RIGHT_PARENTHESIS))),
                 )),
             ),
             preceded(skip_ws_and_comments(tag(OF)), asn1_type),
@@ -71,6 +76,25 @@ mod tests {
     fn parses_constraint_sequence_of_elsewhere_declared_type() {
         assert_eq!(
             sequence_of("SEQUENCE SIZE (1..13,...) OF CorrelationCellValue  ")
+                .unwrap()
+                .1,
+            ASN1Type::SequenceOf(AsnSequenceOf {
+                constraint: Some(Constraint {
+                    min_value: Some(1),
+                    max_value: Some(13),
+                    extensible: true
+                }),
+                r#type: Box::new(ASN1Type::ElsewhereDeclaredType(DeclarationElsewhere(
+                    "CorrelationCellValue".into()
+                )))
+            })
+        );
+    }
+
+    #[test]
+    fn parses_constraint_sequence_of_with_extra_parentheses() {
+        assert_eq!(
+            sequence_of("SEQUENCE (SIZE (1..13, ...)) OF CorrelationCellValue  ")
                 .unwrap()
                 .1,
             ASN1Type::SequenceOf(AsnSequenceOf {
