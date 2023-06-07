@@ -3,7 +3,7 @@ use nom::{
     character::complete::{char, u64},
     combinator::{map, opt},
     multi::fold_many1,
-    sequence::{pair, preceded, terminated, tuple},
+    sequence::{preceded, terminated, tuple},
     IResult,
 };
 

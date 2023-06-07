@@ -1,4 +1,4 @@
-use asnr_grammar::{ASN1Type, Quote, ToplevelDeclaration, DeclarationElsewhere};
+use asnr_grammar::{ASN1Type, Quote, ToplevelDeclaration};
 
 use super::{
     error::{GeneratorError, GeneratorErrorType},
