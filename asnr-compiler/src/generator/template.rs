@@ -88,11 +88,11 @@ impl Decode for {name} {{
     }
 }
 
-pub fn octet_string_template<'a>(
+pub fn character_string_template<'a>(
     tld: ToplevelDeclaration,
     custom_derive: Option<&'a str>,
 ) -> Result<String, GeneratorError> {
-    if let ASN1Type::OctetString(ref octstr) = tld.r#type {
+    if let ASN1Type::CharacterString(ref char_str) = tld.r#type {
         let name = rustify_name(&tld.name);
         let comments = format_comments(&tld.comments);
         let derive = custom_derive.unwrap_or("#[derive(Debug, Clone, PartialEq, Default)]");
@@ -108,17 +108,17 @@ where
     Self: Sized,
 {{
     decoder
-        .decode_octet_string({})(input)
+        .decode_character_string({})(input)
         .map(|(remaining, res)| (remaining, Self(res)))
 }}
 }}
 "#,
-            octstr.quote()
+            char_str.quote()
         ))
     } else {
         Err(GeneratorError::new(
             tld,
-            "Expected OCTET STRING top-level declaration",
+            "Expected Character String top-level declaration",
             GeneratorErrorType::Asn1TypeMismatch,
         ))
     }
