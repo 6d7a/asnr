@@ -3,4 +3,5 @@ mod parser;
 mod validator;
 
 #[cfg(feature = "cli")]
-pub fn main() {}
+pub fn main() {
+}

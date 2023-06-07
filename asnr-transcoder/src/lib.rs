@@ -6,38 +6,39 @@
 //! but you can inject your own custom transcoder by implementing the `Decoder` and `Encoder` traits.
 //!
 pub mod error;
+//#[cfg(feature = "uper")]
+pub mod uper;
 
 use asnr_grammar::*;
 use nom::IResult;
-use num::Integer;
+use num::{FromPrimitive, Integer};
 
 pub trait Decode {
-    fn decode<'a, D>(decoder: D, input: &'a [u8]) -> IResult<&'a [u8], Self>
+    fn decode<'a, D>(decoder: &D, input: &'a [u8]) -> IResult<&'a [u8], Self>
     where
         D: Decoder,
         Self: Sized;
 }
 
 pub trait Decoder {
-    fn decode_integer<'a, O: Integer>(
+    fn decode_integer<'a, O: Integer + FromPrimitive>(
         &self,
         integer: AsnInteger,
-    ) -> &'a mut dyn FnMut(&'a [u8]) -> IResult<&'a [u8], O>;
-    fn decode_enumerated<'a, O>(
+    ) -> fn(&'a [u8]) -> IResult<&'a [u8], O>;
+    fn decode_enumerated<'a, O: TryFrom<i128>>(
         &self,
         enumerated: AsnEnumerated,
-    ) -> &'a mut dyn FnMut(&'a [u8]) -> IResult<&'a [u8], O>;
+    ) -> fn(&'a [u8]) -> IResult<&'a [u8], O>;
     fn decode_boolean<'a>(&self, input: &'a [u8]) -> IResult<&'a [u8], bool>;
     fn decode_bit_string<'a>(
         &self,
         bit_string: AsnBitString,
-    ) -> &'a mut dyn FnMut(&'a [u8]) -> IResult<&'a [u8], Vec<bool>>;
+    ) -> fn(&'a [u8]) -> IResult<&'a [u8], Vec<bool>>;
     fn decode_octet_string<'a>(
         &self,
-        bit_string: AsnBitString,
-    ) -> &'a mut dyn FnMut(&'a [u8]) -> IResult<&'a [u8], String>;
-    fn decode_sequence<'a, T>(
-        &self,
-        sequence: AsnSequence,
-    ) -> &'a mut dyn FnMut(&'a [u8]) -> IResult<&'a [u8], T>;
+        bit_string: AsnOctetString,
+    ) -> fn(&'a [u8]) -> IResult<&'a [u8], String>;
+    fn decode_extension_marker<'a>(&self, input: &'a [u8]) -> IResult<&'a [u8], bool>;
+    fn decode_unknown_extension<'a>(&self, input: &'a [u8]) -> IResult<&'a [u8], Vec<u8>>;
+    fn decode_sequence_of_size<'a>(&self, input: &'a [u8]) -> IResult<&'a [u8], usize>;
 }

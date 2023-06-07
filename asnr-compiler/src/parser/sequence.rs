@@ -12,26 +12,30 @@ use asnr_grammar::{OptionalMarker, SequenceMember, COMMA, DEFAULT, OPTIONAL, SEQ
 use super::*;
 
 /// Tries to parse an ASN1 SEQUENCE
-/// 
+///
 /// *`input` - string slice to be matched against
-/// 
+///
 /// `sequence` will try to match an SEQUENCE declaration in the `input` string.
 /// If the match succeeds, the parser will consume the match and return the remaining string
 /// and a wrapped `AsnSequence` value representing the ASN1 declaration. If the defined SEQUENCE
-/// contains anonymous SEQUENCEs as members, these nested SEQUENCEs will be represented as 
+/// contains anonymous SEQUENCEs as members, these nested SEQUENCEs will be represented as
 /// structs within the same global scope.
 /// If the match fails, the parser will not consume the input and will return an error.
 pub fn sequence<'a>(input: &'a str) -> IResult<&'a str, ASN1Type> {
     map(
         preceded(
             skip_ws_and_comments(tag(SEQUENCE)),
-            in_braces(pair(
+            in_braces(tuple((
                 many0(terminated(
                     skip_ws_and_comments(sequence_member),
                     skip_ws_and_comments(opt(char(COMMA))),
                 )),
-                opt(extension_marker),
-            )),
+                opt(terminated(extension_marker, opt(char(COMMA)))),
+                opt(many0(terminated(
+                    skip_ws_and_comments(sequence_member),
+                    skip_ws_and_comments(opt(char(COMMA))),
+                ))),
+            ))),
         ),
         |m| ASN1Type::Sequence(m.into()),
     )(input)
@@ -126,7 +130,7 @@ mod tests {
             .unwrap()
             .1,
             ASN1Type::Sequence(AsnSequence {
-                extensible: false,
+                extensible: None,
                 members: vec![
                     SequenceMember {
                         name: "value".into(),
@@ -163,7 +167,7 @@ mod tests {
             .unwrap()
             .1,
             ASN1Type::Sequence(AsnSequence {
-                extensible: false,
+                extensible: None,
                 members: vec![
                     SequenceMember {
                         name: "xCoordinate".into(),
@@ -209,7 +213,7 @@ mod tests {
             .unwrap()
             .1,
             ASN1Type::Sequence(AsnSequence {
-                extensible: true,
+                extensible: Some(3),
                 members: vec![
                     SequenceMember {
                         name: "horizontalPositionConfidence".into(),
@@ -254,7 +258,7 @@ mod tests {
             .unwrap()
             .1,
             ASN1Type::Sequence(AsnSequence {
-                extensible: true,
+                extensible: Some(3),
                 members: vec![
                     SequenceMember {
                         name: "unNumber".into(),
@@ -313,11 +317,11 @@ mod tests {
             .unwrap()
             .1,
             ASN1Type::Sequence(AsnSequence {
-                extensible: true,
+                extensible: Some(1),
                 members: vec![SequenceMember {
                     name: "nested".into(),
                     r#type: ASN1Type::Sequence(AsnSequence {
-                        extensible: true,
+                        extensible: Some(3),
                         members: vec![
                             SequenceMember {
                                 name: "wow".into(),
@@ -336,7 +340,7 @@ mod tests {
                             SequenceMember {
                                 name: "another".into(),
                                 r#type: ASN1Type::Sequence(AsnSequence {
-                                    extensible: false,
+                                    extensible: None,
                                     members: vec![SequenceMember {
                                         name: "inner".into(),
                                         r#type: ASN1Type::BitString(AsnBitString {

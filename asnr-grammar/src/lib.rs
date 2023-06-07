@@ -417,14 +417,16 @@ impl From<(Option<Constraint>, ASN1Type)> for AsnSequenceOf {
 /// with corresponding members and extension information
 #[derive(Debug, Clone, PartialEq)]
 pub struct AsnSequence {
-    pub extensible: bool,
+    pub extensible: Option<usize>,
     pub members: Vec<SequenceMember>,
 }
 
-impl From<(Vec<SequenceMember>, Option<ExtensionMarker>)> for AsnSequence {
-    fn from(value: (Vec<SequenceMember>, Option<ExtensionMarker>)) -> Self {
+impl From<(Vec<SequenceMember>, Option<ExtensionMarker>, Option<Vec<SequenceMember>>)> for AsnSequence {
+    fn from(mut value: (Vec<SequenceMember>, Option<ExtensionMarker>, Option<Vec<SequenceMember>>)) -> Self {
+      let index_of_first_extension = value.0.len();
+        value.0.append(&mut value.2.unwrap_or(vec![]));
         AsnSequence {
-            extensible: value.1.is_some(),
+            extensible: value.1.map(|_| index_of_first_extension),
             members: value.0,
         }
     }
@@ -434,7 +436,8 @@ impl Quote for AsnSequence {
     fn quote(&self) -> String {
         format!(
             "AsnSequence {{ extensible: {}, members: vec![{}] }}",
-            self.extensible,
+            self.extensible.as_ref()
+            .map_or("None".to_owned(), |d| format!("Some({})", d)),
             self.members
                 .iter()
                 .map(|m| m.quote())
@@ -483,7 +486,7 @@ impl Quote for SequenceMember {
 #[derive(Debug, Clone, PartialEq)]
 pub struct AsnEnumerated {
     pub members: Vec<Enumeral>,
-    pub extensible: bool,
+    pub extensible: Option<usize>,
 }
 
 impl Quote for AsnEnumerated {
@@ -495,16 +498,19 @@ impl Quote for AsnEnumerated {
                 .map(|m| m.quote())
                 .collect::<Vec<String>>()
                 .join(","),
-            self.extensible
+            self.extensible.as_ref()
+            .map_or("None".to_owned(), |d| format!("Some({})", d)),
         )
     }
 }
 
-impl From<(Vec<Enumeral>, Option<ExtensionMarker>)> for AsnEnumerated {
-    fn from(value: (Vec<Enumeral>, Option<ExtensionMarker>)) -> Self {
+impl From<(Vec<Enumeral>, Option<ExtensionMarker>, Option<Vec<Enumeral>>)> for AsnEnumerated {
+    fn from(mut value: (Vec<Enumeral>, Option<ExtensionMarker>, Option<Vec<Enumeral>>)) -> Self {
+        let index_of_first_extension = value.0.len();
+        value.0.append(&mut value.2.unwrap_or(vec![]));
         AsnEnumerated {
             members: value.0,
-            extensible: value.1.is_some(),
+            extensible: value.1.map(|_| index_of_first_extension),
         }
     }
 }

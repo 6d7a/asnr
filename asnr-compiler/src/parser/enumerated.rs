@@ -3,33 +3,33 @@ use nom::{
     character::complete::{char, u64},
     combinator::{map, opt},
     multi::fold_many1,
-    sequence::{pair, preceded, tuple},
+    sequence::{pair, preceded, terminated, tuple},
     IResult,
 };
 
-use asnr_grammar::{
-    ASN1Type, Enumeral, ExtensionMarker, COMMA, ENUMERATED, ASN1Value, 
-};
+use asnr_grammar::{ASN1Type, ASN1Value, Enumeral, ExtensionMarker, COMMA, ENUMERATED};
 
 use super::common::*;
 
 pub fn enumerated_value<'a>(input: &'a str) -> IResult<&'a str, ASN1Value> {
-  map(skip_ws_and_comments(identifier), |m| ASN1Value::String(m.into()))(input)
+    map(skip_ws_and_comments(identifier), |m| {
+        ASN1Value::String(m.into())
+    })(input)
 }
 
 /// Tries to parse an ASN1 ENUMERATED
-/// 
+///
 /// *`input` - string slice to be matched against
-/// 
+///
 /// `enumerated` will try to match an ENUMERATED declaration in the `input` string.
 /// If the match succeeds, the parser will consume the match and return the remaining string
 /// and a wrapped `AsnEnumerated` value representing the ASN1 declaration.
 /// If the match fails, the parser will not consume the input and will return an error.
 pub fn enumerated<'a>(input: &'a str) -> IResult<&'a str, ASN1Type> {
-  map(
-      preceded(skip_ws_and_comments(tag(ENUMERATED)), enumerated_body),
-      |m| ASN1Type::Enumerated(m.into()),
-  )(input)
+    map(
+        preceded(skip_ws_and_comments(tag(ENUMERATED)), enumerated_body),
+        |m| ASN1Type::Enumerated(m.into()),
+    )(input)
 }
 
 fn enumeral<'a>(
@@ -60,8 +60,19 @@ fn enumerals<'a>(input: &'a str) -> IResult<&'a str, Vec<Enumeral>> {
 
 fn enumerated_body<'a>(
     input: &'a str,
-) -> IResult<&'a str, (Vec<Enumeral>, Option<ExtensionMarker>)> {
-    in_braces(pair(enumerals, opt(extension_marker)))(input)
+) -> IResult<
+    &'a str,
+    (
+        Vec<Enumeral>,
+        Option<ExtensionMarker>,
+        Option<Vec<Enumeral>>,
+    ),
+> {
+    in_braces(tuple((
+        enumerals,
+        opt(terminated(extension_marker, opt(char(COMMA)))),
+        opt(enumerals),
+    )))(input)
 }
 
 #[cfg(test)]
@@ -130,7 +141,7 @@ mod tests {
                         index: 2
                     }
                 ],
-                extensible: false
+                extensible: None
             })
         )
     }
@@ -159,7 +170,37 @@ mod tests {
                         index: 2
                     }
                 ],
-                extensible: true
+                extensible: Some(3)
+            })
+        )
+    }
+
+    #[test]
+    fn parses_enumerated_with_ellipsis() {
+        assert_eq!(
+            enumerated(
+                r#"ENUMERATED {
+                permanentCenDsrcTolling (0), 
+                ..., 
+                temporaryCenDsrcTolling (1) 
+            }"#
+            )
+            .unwrap()
+            .1,
+            ASN1Type::Enumerated(AsnEnumerated {
+                members: vec![
+                    Enumeral {
+                        name: "permanentCenDsrcTolling".into(),
+                        description: None,
+                        index: 0
+                    },
+                    Enumeral {
+                        name: "temporaryCenDsrcTolling".into(),
+                        description: None,
+                        index: 1
+                    }
+                ],
+                extensible: Some(1)
             })
         )
     }
@@ -195,7 +236,7 @@ mod tests {
                         index: 3
                     }
                 ],
-                extensible: false
+                extensible: None
             })
         )
     }
@@ -219,7 +260,7 @@ mod tests {
                     ),
                     index: 1
                 },],
-                extensible: true
+                extensible: Some(1)
             })
         )
     }

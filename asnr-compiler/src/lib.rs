@@ -22,8 +22,8 @@
 //!     ])
 //!     .set_output_path(PathBuf::from("./asn/generated.rs"))   // Set an output path for the generated rust code
 //!     .compile() {
-//!     Ok(warnings: Vec<Box<dyn Error>>) -> { /* handle compilation warnings */ }
-//!     Err(error: Box<dyn Error>) -> { /* handle unrecoverable compilation error */ }
+//!     Ok(warnings /* Vec<Box<dyn Error>> */) => { /* handle compilation warnings */ }
+//!     Err(error /* Box<dyn Error> */) => { /* handle unrecoverable compilation error */ }
 //!   }
 //! }
 //! ```
@@ -174,9 +174,9 @@ mod tests {
 
     #[test]
     fn compiles_a_simple_spec() {
-        let _ = Asnr::compiler()
-            .add_asn_source(PathBuf::from("simple.asn"))
+        println!("{:#?}",Asnr::compiler()
+            .add_asn_source(PathBuf::from("test.asn"))
             .set_output_path(PathBuf::from("./generated.rs"))
-            .compile();
+            .compile().unwrap())
     }
 }

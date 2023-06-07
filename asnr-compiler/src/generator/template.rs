@@ -1,12 +1,14 @@
-use asnr_grammar::{ASN1Type, Quote, ToplevelDeclaration};
+use asnr_grammar::{ASN1Type, Quote, ToplevelDeclaration, DeclarationElsewhere};
 
 use super::{
     error::{GeneratorError, GeneratorErrorType},
-    util::{
-        format_comments, format_distinguished_values, format_enumeral, format_enumeral_from_int,
-        rustify_name, flatten_nested_sequence_members, format_sequence_members,
-    },
+    util::*, generate,
 };
+
+pub struct StringifiedNameType {
+    pub name: String,
+    pub r#type: String,
+}
 
 pub fn integer_template<'a>(
     tld: ToplevelDeclaration,
@@ -19,14 +21,14 @@ pub fn integer_template<'a>(
             .as_ref()
             .map_or("i128", |c| c.int_type_token());
         let comments = format_comments(&tld.comments);
-        let derive = custom_derive.unwrap_or("#[derive(Debug, Clone, PartialEq)]");
+        let derive = custom_derive.unwrap_or("#[derive(Debug, Clone, PartialEq, Default)]");
         Ok(format!(
             r#"
 {comments}{derive}
 pub struct {name}(pub {integer_type});{}
 
 impl Decode for {name} {{
-    fn decode<'a, D>(decoder: D, input: &'a [u8]) -> nom::IResult<&'a [u8], Self>
+    fn decode<'a, D>(decoder: &D, input: &'a [u8]) -> IResult<&'a [u8], Self>
     where
         D: Decoder,
         Self: Sized,
@@ -56,14 +58,14 @@ pub fn bit_string_template<'a>(
     if let ASN1Type::BitString(ref bitstr) = tld.r#type {
         let name = rustify_name(&tld.name);
         let comments = format_comments(&tld.comments);
-        let derive = custom_derive.unwrap_or("#[derive(Debug, Clone, PartialEq)]");
+        let derive = custom_derive.unwrap_or("#[derive(Debug, Clone, PartialEq, Default)]");
         Ok(format!(
             r#"
 {comments}{derive}
 pub struct {name}(pub Vec<bool>);{}
 
 impl Decode for {name} {{
-  fn decode<'a, D>(decoder: D, input: &'a [u8]) -> nom::IResult<&'a [u8], Self>
+  fn decode<'a, D>(decoder: &D, input: &'a [u8]) -> IResult<&'a [u8], Self>
   where
       D: Decoder,
       Self: Sized,
@@ -87,20 +89,20 @@ impl Decode for {name} {{
 }
 
 pub fn octet_string_template<'a>(
-  tld: ToplevelDeclaration,
-  custom_derive: Option<&'a str>,
+    tld: ToplevelDeclaration,
+    custom_derive: Option<&'a str>,
 ) -> Result<String, GeneratorError> {
-  if let ASN1Type::OctetString(ref octstr) = tld.r#type {
-      let name = rustify_name(&tld.name);
-      let comments = format_comments(&tld.comments);
-      let derive = custom_derive.unwrap_or("#[derive(Debug, Clone, PartialEq)]");
-      Ok(format!(
-          r#"
+    if let ASN1Type::OctetString(ref octstr) = tld.r#type {
+        let name = rustify_name(&tld.name);
+        let comments = format_comments(&tld.comments);
+        let derive = custom_derive.unwrap_or("#[derive(Debug, Clone, PartialEq, Default)]");
+        Ok(format!(
+            r#"
 {comments}{derive}
 pub struct {name}(pub String);
 
 impl Decode for {name} {{
-fn decode<'a, D>(decoder: D, input: &'a [u8]) -> nom::IResult<&'a [u8], Self>
+fn decode<'a, D>(decoder: &D, input: &'a [u8]) -> IResult<&'a [u8], Self>
 where
     D: Decoder,
     Self: Sized,
@@ -111,15 +113,15 @@ where
 }}
 }}
 "#,
-          octstr.quote()
-      ))
-  } else {
-      Err(GeneratorError::new(
-          tld,
-          "Expected OCTET STRING top-level declaration",
-          GeneratorErrorType::Asn1TypeMismatch,
-      ))
-  }
+            octstr.quote()
+        ))
+    } else {
+        Err(GeneratorError::new(
+            tld,
+            "Expected OCTET STRING top-level declaration",
+            GeneratorErrorType::Asn1TypeMismatch,
+        ))
+    }
 }
 
 pub fn boolean_template<'a>(
@@ -129,14 +131,14 @@ pub fn boolean_template<'a>(
     if let ASN1Type::Boolean = tld.r#type {
         let name = rustify_name(&tld.name);
         let comments = format_comments(&tld.comments);
-        let derive = custom_derive.unwrap_or("#[derive(Debug, Clone, PartialEq)]");
+        let derive = custom_derive.unwrap_or("#[derive(Debug, Clone, PartialEq, Default)]");
         Ok(format!(
             r#"
 {comments}{derive}
 pub struct {name}(pub bool);
 
 impl Decode for {name} {{
-    fn decode<'a, D>(decoder: D, input: &'a [u8]) -> nom::IResult<&'a [u8], Self>
+    fn decode<'a, D>(decoder: &D, input: &'a [u8]) -> IResult<&'a [u8], Self>
     where
         D: Decoder,
         Self: Sized,
@@ -164,11 +166,12 @@ pub fn enumerated_template<'a>(
     if let ASN1Type::Enumerated(ref enumerated) = tld.r#type {
         let name = rustify_name(&tld.name);
         let comments = format_comments(&tld.comments);
-        let derive = custom_derive.unwrap_or("#[derive(Debug, Clone, PartialEq)]");
+        let derive = custom_derive.unwrap_or("#[derive(Debug, Clone, PartialEq, Default)]");
         Ok(format!(
             r#"
 {comments}{derive}
 pub enum {name} {{
+  #[default]
   {}
 }}
 
@@ -188,7 +191,7 @@ impl TryFrom<i128> for {name} {{
 }}
 
 impl Decode for {name} {{
-    fn decode<'a, D>(decoder: D, input: &'a [u8]) -> nom::IResult<&'a [u8], Self>
+    fn decode<'a, D>(decoder: &D, input: &'a [u8]) -> IResult<&'a [u8], Self>
     where
         D: Decoder,
         Self: Sized,
@@ -222,44 +225,100 @@ impl Decode for {name} {{
     }
 }
 
-
 pub fn sequence_template<'a>(
-  tld: ToplevelDeclaration,
-  custom_derive: Option<&'a str>,
+    tld: ToplevelDeclaration,
+    custom_derive: Option<&'a str>,
 ) -> Result<String, GeneratorError> {
-  if let ASN1Type::Sequence(ref seq) = tld.r#type {
-      let name = rustify_name(&tld.name);
-      let comments = format_comments(&tld.comments);
-      let derive = custom_derive.unwrap_or("#[derive(Debug, Clone, PartialEq)]");
-      let inner_members = flatten_nested_sequence_members(&seq.members).join("\n");
-      let members = format_sequence_members(&seq.members);
-      Ok(format!(
-          r#"
+    if let ASN1Type::Sequence(ref seq) = tld.r#type {
+        let name = rustify_name(&tld.name);
+        let comments = format_comments(&tld.comments);
+        let derive = custom_derive.unwrap_or("#[derive(Debug, Clone, PartialEq, Default)]");
+        let inner_members = flatten_nested_sequence_members(&seq.members).join("\n");
+        let members = extract_sequence_members(&seq.members);
+        let member_declaration = format_member_declaration(&members);
+        let member_decoding = format_sequence_instance_construction(&members);
+        let (extension_decl, extension_marker, extension_decoder) =
+            format_extensible_sequence(seq.extensible.is_some());
+        Ok(format!(
+            r#"
 {inner_members}
 
 {comments}{derive}
 pub struct {name} {{
-  {members}
+  {member_declaration}{extension_decl}
 }}
 
 impl Decode for {name} {{
-fn decode<'a, D>(decoder: D, input: &'a [u8]) -> nom::IResult<&'a [u8], Self>
-where
+  fn decode<'a, D>(decoder: &D, input: &'a [u8]) -> IResult<&'a [u8], Self>
+  where
     D: Decoder,
     Self: Sized,
-{{
-    decoder
-        .decode_sequence({})(input)
-        .map(|(remaining, res)| (remaining, res))
+  {{
+      let mut remaining = input;
+      let mut instance = Self::default();{extension_marker}
+      {member_decoding};{extension_decoder}
+      Ok((remaining, instance))
+  }}
 }}
+"#
+        ))
+    } else {
+        Err(GeneratorError::new(
+            tld,
+            "Expected SEQUENCE top-level declaration",
+            GeneratorErrorType::Asn1TypeMismatch,
+        ))
+    }
+}
+
+pub fn sequence_of_template<'a>(
+  tld: ToplevelDeclaration,
+  custom_derive: Option<&'a str>,
+) -> Result<String, GeneratorError> {
+  if let ASN1Type::SequenceOf(ref seq_of) = tld.r#type {
+      let name = rustify_name(&tld.name);
+      let comments = format_comments(&tld.comments);
+      let derive = custom_derive.unwrap_or("#[derive(Debug, Clone, PartialEq, Default)]");
+      let anonymous_item = match seq_of.r#type.as_ref() {
+        ASN1Type::ElsewhereDeclaredType(_) => None,
+        n => Some(generate(ToplevelDeclaration { comments: " Anonymous SEQUENCE OF member ".into(), name: String::from("Anonymous_") + &name, r#type: n.clone() }, None)?)
+      }.unwrap_or(String::new());
+      let member_type = match seq_of.r#type.as_ref() {
+        ASN1Type::ElsewhereDeclaredType(d) => rustify_name(&d.0),
+        _ => String::from("Anonymous_") + &name
+      };
+      Ok(format!(
+          r#"{anonymous_item}
+    
+{comments}{derive}
+pub struct {name}(pub Vec<{member_type}>);
+
+impl Decode for {name} {{
+    fn decode<'a, D>(decoder: &D, input: &'a [u8]) -> IResult<&'a [u8], Self>
+    where
+        D: Decoder,
+        Self: Sized,
+    {{
+        let mut remaining = input;
+        let mut instance = Self::default();
+        let mut sequence_of_size: usize = 0;
+        decoder.decode_sequence_of_size(remaining).map(|(r, v)| {{ 
+          remaining = r; sequence_of_size = v; 
+        }})?;
+        for _ in 0..sequence_of_size {{
+          {member_type}::decode(decoder, remaining).map(|(r, v)| {{ 
+            remaining = r; instance.0.push(v); 
+          }})?;
+        }}
+        Ok((remaining, instance))
+    }}
 }}
-"#,
-          seq.quote()
+"#
       ))
   } else {
       Err(GeneratorError::new(
           tld,
-          "Expected SEQUENCE top-level declaration",
+          "Expected SEQUENCE OF top-level declaration",
           GeneratorErrorType::Asn1TypeMismatch,
       ))
   }
@@ -268,11 +327,13 @@ where
 #[cfg(test)]
 mod tests {
     use asnr_grammar::{
-        ASN1Type, AsnBitString, AsnEnumerated, AsnInteger, Constraint, DistinguishedValue,
-        Enumeral, ToplevelDeclaration, AsnSequence, SequenceMember, DeclarationElsewhere, ASN1Value,
+        ASN1Type, ASN1Value, AsnBitString, AsnEnumerated, AsnInteger, AsnSequence, Constraint,
+        DeclarationElsewhere, DistinguishedValue, Enumeral, SequenceMember, ToplevelDeclaration,
     };
 
-    use crate::generator::template::{bit_string_template, enumerated_template, integer_template, sequence_template};
+    use crate::generator::template::{
+        bit_string_template, enumerated_template, integer_template, sequence_template,
+    };
 
     #[test]
     fn generates_enumerated_from_template() {
@@ -297,7 +358,7 @@ mod tests {
                         index: 3,
                     },
                 ],
-                extensible: false,
+                extensible: None,
             }),
         };
         println!("{}", enumerated_template(enum_tld, None).unwrap())
@@ -369,52 +430,52 @@ mod tests {
             name: "Sequence".into(),
             comments: "".into(),
             r#type: ASN1Type::Sequence(AsnSequence {
-                extensible: false,
+                extensible: Some(1),
                 members: vec![SequenceMember {
-                  name: "nested".into(),
-                  r#type: ASN1Type::Sequence(AsnSequence {
-                      extensible: true,
-                      members: vec![
-                          SequenceMember {
-                              name: "wow".into(),
-                              r#type: ASN1Type::ElsewhereDeclaredType(DeclarationElsewhere(
-                                  "Wow".into()
-                              )),
-                              default_value: None,
-                              is_optional: false
-                          },
-                          SequenceMember {
-                              name: "this-is-annoying".into(),
-                              r#type: ASN1Type::Boolean,
-                              default_value: Some(ASN1Value::Boolean(true)),
-                              is_optional: true
-                          },
-                          SequenceMember {
-                              name: "another".into(),
-                              r#type: ASN1Type::Sequence(AsnSequence {
-                                  extensible: false,
-                                  members: vec![SequenceMember {
-                                      name: "inner".into(),
-                                      r#type: ASN1Type::BitString(AsnBitString {
-                                          constraint: Some(Constraint {
-                                              min_value: Some(1),
-                                              max_value: Some(1),
-                                              extensible: true
-                                          }),
-                                          distinguished_values: None
-                                      }),
-                                      default_value: Some(ASN1Value::String("0".into())),
-                                      is_optional: true
-                                  }]
-                              }),
-                              default_value: None,
-                              is_optional: true
-                          }
-                      ]
-                  }),
-                  default_value: None,
-                  is_optional: false
-              }],
+                    name: "nested".into(),
+                    r#type: ASN1Type::Sequence(AsnSequence {
+                        extensible: Some(3),
+                        members: vec![
+                            SequenceMember {
+                                name: "wow".into(),
+                                r#type: ASN1Type::ElsewhereDeclaredType(DeclarationElsewhere(
+                                    "Wow".into(),
+                                )),
+                                default_value: None,
+                                is_optional: false,
+                            },
+                            SequenceMember {
+                                name: "this-is-annoying".into(),
+                                r#type: ASN1Type::Boolean,
+                                default_value: Some(ASN1Value::Boolean(true)),
+                                is_optional: true,
+                            },
+                            SequenceMember {
+                                name: "another".into(),
+                                r#type: ASN1Type::Sequence(AsnSequence {
+                                    extensible: None,
+                                    members: vec![SequenceMember {
+                                        name: "inner".into(),
+                                        r#type: ASN1Type::BitString(AsnBitString {
+                                            constraint: Some(Constraint {
+                                                min_value: Some(1),
+                                                max_value: Some(1),
+                                                extensible: true,
+                                            }),
+                                            distinguished_values: None,
+                                        }),
+                                        default_value: Some(ASN1Value::String("0".into())),
+                                        is_optional: true,
+                                    }],
+                                }),
+                                default_value: None,
+                                is_optional: true,
+                            },
+                        ],
+                    }),
+                    default_value: None,
+                    is_optional: false,
+                }],
             }),
         };
         println!("{}", sequence_template(seq_tld, None).unwrap())

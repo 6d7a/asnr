@@ -1,8 +1,6 @@
-use asnr_grammar::{
-    ASN1Type, DistinguishedValue, Enumeral, SequenceMember, ToplevelDeclaration,
-};
+use asnr_grammar::{ASN1Type, DistinguishedValue, Enumeral, SequenceMember, ToplevelDeclaration};
 
-use super::{error::GeneratorError, generate};
+use super::{error::GeneratorError, generate, template::StringifiedNameType};
 
 pub fn format_comments(comments: &String) -> String {
     if comments.is_empty() {
@@ -92,7 +90,7 @@ pub fn flatten_nested_sequence_members(members: &Vec<SequenceMember>) -> Vec<Str
         .collect::<Vec<String>>()
 }
 
-pub fn format_sequence_members(members: &Vec<SequenceMember>) -> String {
+pub fn extract_sequence_members(members: &Vec<SequenceMember>) -> Vec<StringifiedNameType> {
     members
         .iter()
         .map(|m| {
@@ -101,10 +99,53 @@ pub fn format_sequence_members(members: &Vec<SequenceMember>) -> String {
                 ASN1Type::ElsewhereDeclaredType(d) => rustify_name(&d.0),
                 _ => inner_name(&m.name),
             };
-            format!("pub {name}: {rtype},")
+            StringifiedNameType {
+                name,
+                r#type: rtype,
+            }
         })
+        .collect()
+}
+
+pub fn format_member_declaration(members: &Vec<StringifiedNameType>) -> String {
+    members
+        .iter()
+        .map(|m| format!("pub {}: {},", m.name, m.r#type))
         .collect::<Vec<String>>()
         .join("\n  ")
+}
+
+pub fn format_extensible_sequence<'a>(extensible: bool) -> (&'a str, &'a str, &'a str) {
+  (
+    if extensible {
+      &"\n  pub unknown_extension: Vec<u8>,"
+    } else {
+      &""
+    },
+    if extensible {
+      &"\n      let mut is_extended = false;\n      decoder.decode_extension_marker(input).map(|(r, v)| {{ remaining = r; is_extended = v; }})?;"
+    } else {
+     &""
+    },
+    if extensible {
+      &"\n      decoder.decode_unknown_extension(input).map(|(r, v)| {{ remaining = r; instance.unknown_extension = v; }})?;"
+    } else {
+      &""
+    }
+  )
+}
+
+pub fn format_sequence_instance_construction(members: &Vec<StringifiedNameType>) -> String {
+    members
+        .iter()
+        .map(|m| {
+            format!(
+                "{}::decode(decoder, remaining).map(|(r, v)| {{ remaining = r; instance.{} = v; }})?",
+                m.r#type, m.name
+            )
+        })
+        .collect::<Vec<String>>()
+        .join(";\n      ")
 }
 
 fn declare_inner_sequence_member(member: &SequenceMember) -> Result<String, GeneratorError> {

@@ -183,7 +183,7 @@ mod tests {
                     description: None
                 }
             );
-            assert_eq!(e.extensible, true);
+            assert_eq!(e.extensible, Some(1));
         } else {
             panic!("Top-level declaration contains other type than integer.")
         }
