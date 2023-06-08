@@ -27,7 +27,7 @@ use self::{
     error::ParserError,
     header::header,
     integer::*,
-    octet_string::octet_string,
+    character_string::character_string,
     sequence::sequence,
 };
 
@@ -39,7 +39,7 @@ mod error;
 mod header;
 mod integer;
 mod object_identifier;
-mod octet_string;
+mod character_string;
 mod sequence;
 mod sequence_of;
 mod util;
@@ -66,7 +66,7 @@ pub fn asn1_type<'a>(input: &'a str) -> IResult<&'a str, ASN1Type> {
         enumerated,
         boolean,
         bit_string,
-        octet_string,
+        character_string,
         elsewhere_declared_type,
     ))(input)
 }

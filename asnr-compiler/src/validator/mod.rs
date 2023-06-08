@@ -8,7 +8,7 @@
 pub(crate) mod error;
 
 use asnr_grammar::{
-    ASN1Type, AsnBitString, AsnInteger, AsnOctetString, Constraint, ToplevelDeclaration,
+    ASN1Type, AsnBitString, AsnInteger, AsnCharacterString, Constraint, ToplevelDeclaration,
 };
 
 use self::error::{ValidatorError, ValidatorErrorType};
@@ -32,7 +32,7 @@ impl Validate for ASN1Type {
         match self {
             ASN1Type::Integer(ref i) => i.validate(),
             ASN1Type::BitString(ref b) => b.validate(),
-            ASN1Type::OctetString(ref o) => o.validate(),
+            ASN1Type::CharacterString(ref o) => o.validate(),
             _ => Ok(()),
         }
     }
@@ -50,7 +50,7 @@ impl Validate for AsnBitString {
     }
 }
 
-impl Validate for AsnOctetString {
+impl Validate for AsnCharacterString {
     fn validate(&self) -> Result<(), ValidatorError> {
         self.constraint.as_ref().map_or(Ok(()), |c| c.validate())
     }

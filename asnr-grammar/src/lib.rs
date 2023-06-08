@@ -33,6 +33,13 @@ pub const IA5_STRING: &'static str = "IA5String";
 pub const UTF8_STRING: &'static str = "UTF8String";
 pub const NUMERIC_STRING: &'static str = "NumericString";
 pub const VISIBLE_STRING: &'static str = "VisibleString";
+pub const TELETEX_STRING: &'static str = "TeletexString";
+pub const VIDEOTEX_STRING: &'static str = "VideotexString";
+pub const GRAPHIC_STRING: &'static str = "GraphicString";
+pub const GENERAL_STRING: &'static str = "GeneralString";
+pub const UNIVERSAL_STRING: &'static str = "UniversalString";
+pub const BMP_STRING: &'static str = "BMPString";
+pub const PRINTABLE_STRING: &'static str = "PrintableString";
 pub const ENUMERATED: &'static str = "ENUMERATED";
 pub const CHOICE: &'static str = "CHOICE";
 pub const SEQUENCE: &'static str = "SEQUENCE";
@@ -210,11 +217,7 @@ pub enum ASN1Type {
     Integer(AsnInteger),
     // Real,
     BitString(AsnBitString),
-    OctetString(AsnOctetString),
-    // Ia5String,
-    // Utf8String,
-    // NumericString,
-    // VisibleString,
+    CharacterString(AsnCharacterString),
     Enumerated(AsnEnumerated),
     // Choice,
     Sequence(AsnSequence),
@@ -224,13 +227,49 @@ pub enum ASN1Type {
     ElsewhereDeclaredType(DeclarationElsewhere),
 }
 
+/// The types of an ASN1 character strings.
+#[derive(Debug, Clone, PartialEq)]
+pub enum CharacterStringType {
+    OctetString,
+    NumericString,
+    VisibleString,
+    IA5String,
+    TeletexString,
+    VideotexString,
+    GraphicString,
+    GeneralString,
+    UniversalString,
+    UTF8String,
+    BMPString,
+    PrintableString,
+}
+
+impl From<&str> for CharacterStringType {
+    fn from(value: &str) -> Self {
+        match value {
+            IA5_STRING => Self::IA5String,
+            OCTET_STRING => Self::OctetString,
+            NUMERIC_STRING => Self::NumericString,
+            VISIBLE_STRING => Self::VisibleString,
+            TELETEX_STRING => Self::TeletexString,
+            VIDEOTEX_STRING => Self::VideotexString,
+            GRAPHIC_STRING => Self::GraphicString,
+            GENERAL_STRING => Self::GeneralString,
+            UNIVERSAL_STRING => Self::UniversalString,
+            BMP_STRING => Self::BMPString,
+            PRINTABLE_STRING => Self::PrintableString,
+            _ => Self::UTF8String,
+        }
+    }
+}
+
 impl Quote for ASN1Type {
     fn quote(&self) -> String {
         match self {
             ASN1Type::Boolean => "ASN1Type::Boolean".into(),
             ASN1Type::Integer(i) => format!("ASN1Type::Integer({})", i.quote()),
             ASN1Type::BitString(b) => format!("ASN1Type::BitString({})", b.quote()),
-            ASN1Type::OctetString(o) => format!("ASN1Type::OctetString({})", o.quote()),
+            ASN1Type::CharacterString(o) => format!("ASN1Type::CharacterString({})", o.quote()),
             ASN1Type::Enumerated(e) => format!("ASN1Type::Enumerated({})", e.quote()),
             ASN1Type::SequenceOf(s) => format!("ASN1Type::SequenceOf({})", s.quote()),
             ASN1Type::Sequence(s) => format!("ASN1Type::Sequence({})", s.quote()),
@@ -363,26 +402,33 @@ impl Quote for AsnBitString {
     }
 }
 
-/// Representation of an ASN1 OCTET STRING data element
-/// with corresponding constraints
+/// Representation of an ASN1 Character String type data element
+/// with corresponding constraints. ASN1 Character String types
+/// include IA5String, UTF8String, VideotexString, but also 
+/// OCTET STRING, which is treated like a String and not a buffer.
 #[derive(Debug, Clone, PartialEq)]
-pub struct AsnOctetString {
+pub struct AsnCharacterString {
     pub constraint: Option<Constraint>,
+    pub r#type: CharacterStringType,
 }
 
-impl From<Option<Constraint>> for AsnOctetString {
-    fn from(value: Option<Constraint>) -> Self {
-        AsnOctetString { constraint: value }
+impl From<(&str, Option<Constraint>)> for AsnCharacterString {
+    fn from(value: (&str, Option<Constraint>)) -> Self {
+        AsnCharacterString {
+            constraint: value.1,
+            r#type: value.0.into(),
+        }
     }
 }
 
-impl Quote for AsnOctetString {
+impl Quote for AsnCharacterString {
     fn quote(&self) -> String {
         format!(
-            "AsnOctetString {{ constraint: {} }}",
+            "AsnCharacterString {{ constraint: {}, r#type: CharacterStringType::{:?} }}",
             self.constraint
                 .as_ref()
                 .map_or("None".to_owned(), |c| "Some(".to_owned() + &c.quote() + ")"),
+            self.r#type
         )
     }
 }
@@ -396,20 +442,23 @@ pub struct AsnSequenceOf {
 }
 
 impl Quote for AsnSequenceOf {
-  fn quote(&self) -> String {
-      format!(
-          "AsnSequenceOf {{ constraint: {}, r#type: {} }}",
-          self.constraint
-              .as_ref()
-              .map_or("None".to_owned(), |c| "Some(".to_owned() + &c.quote() + ")"),
-          self.r#type.quote(),
-      )
-  }
+    fn quote(&self) -> String {
+        format!(
+            "AsnSequenceOf {{ constraint: {}, r#type: {} }}",
+            self.constraint
+                .as_ref()
+                .map_or("None".to_owned(), |c| "Some(".to_owned() + &c.quote() + ")"),
+            self.r#type.quote(),
+        )
+    }
 }
 
 impl From<(Option<Constraint>, ASN1Type)> for AsnSequenceOf {
     fn from(value: (Option<Constraint>, ASN1Type)) -> Self {
-        Self { constraint: value.0, r#type: Box::new(value.1) }
+        Self {
+            constraint: value.0,
+            r#type: Box::new(value.1),
+        }
     }
 }
 
@@ -421,9 +470,21 @@ pub struct AsnSequence {
     pub members: Vec<SequenceMember>,
 }
 
-impl From<(Vec<SequenceMember>, Option<ExtensionMarker>, Option<Vec<SequenceMember>>)> for AsnSequence {
-    fn from(mut value: (Vec<SequenceMember>, Option<ExtensionMarker>, Option<Vec<SequenceMember>>)) -> Self {
-      let index_of_first_extension = value.0.len();
+impl
+    From<(
+        Vec<SequenceMember>,
+        Option<ExtensionMarker>,
+        Option<Vec<SequenceMember>>,
+    )> for AsnSequence
+{
+    fn from(
+        mut value: (
+            Vec<SequenceMember>,
+            Option<ExtensionMarker>,
+            Option<Vec<SequenceMember>>,
+        ),
+    ) -> Self {
+        let index_of_first_extension = value.0.len();
         value.0.append(&mut value.2.unwrap_or(vec![]));
         AsnSequence {
             extensible: value.1.map(|_| index_of_first_extension),
@@ -436,8 +497,9 @@ impl Quote for AsnSequence {
     fn quote(&self) -> String {
         format!(
             "AsnSequence {{ extensible: {}, members: vec![{}] }}",
-            self.extensible.as_ref()
-            .map_or("None".to_owned(), |d| format!("Some({})", d)),
+            self.extensible
+                .as_ref()
+                .map_or("None".to_owned(), |d| format!("Some({})", d)),
             self.members
                 .iter()
                 .map(|m| m.quote())
@@ -498,14 +560,27 @@ impl Quote for AsnEnumerated {
                 .map(|m| m.quote())
                 .collect::<Vec<String>>()
                 .join(","),
-            self.extensible.as_ref()
-            .map_or("None".to_owned(), |d| format!("Some({})", d)),
+            self.extensible
+                .as_ref()
+                .map_or("None".to_owned(), |d| format!("Some({})", d)),
         )
     }
 }
 
-impl From<(Vec<Enumeral>, Option<ExtensionMarker>, Option<Vec<Enumeral>>)> for AsnEnumerated {
-    fn from(mut value: (Vec<Enumeral>, Option<ExtensionMarker>, Option<Vec<Enumeral>>)) -> Self {
+impl
+    From<(
+        Vec<Enumeral>,
+        Option<ExtensionMarker>,
+        Option<Vec<Enumeral>>,
+    )> for AsnEnumerated
+{
+    fn from(
+        mut value: (
+            Vec<Enumeral>,
+            Option<ExtensionMarker>,
+            Option<Vec<Enumeral>>,
+        ),
+    ) -> Self {
         let index_of_first_extension = value.0.len();
         value.0.append(&mut value.2.unwrap_or(vec![]));
         AsnEnumerated {

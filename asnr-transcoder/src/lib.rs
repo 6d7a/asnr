@@ -34,9 +34,9 @@ pub trait Decoder {
         &self,
         bit_string: AsnBitString,
     ) -> fn(&'a [u8]) -> IResult<&'a [u8], Vec<bool>>;
-    fn decode_octet_string<'a>(
+    fn decode_character_string<'a>(
         &self,
-        bit_string: AsnOctetString,
+        bit_string: AsnCharacterString,
     ) -> fn(&'a [u8]) -> IResult<&'a [u8], String>;
     fn decode_extension_marker<'a>(&self, input: &'a [u8]) -> IResult<&'a [u8], bool>;
     fn decode_unknown_extension<'a>(&self, input: &'a [u8]) -> IResult<&'a [u8], Vec<u8>>;
