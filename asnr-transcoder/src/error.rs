@@ -17,9 +17,17 @@ impl DecodingError {
 #[derive(Debug, Clone)]
 pub enum DecodingErrorType {
     InvalidEnumeratedIndex,
+    InvalidSequenceMemberIndex,
+    GenericParsingError,
 }
 
 impl Error for DecodingError {}
+
+impl From<nom::Err<nom::error::Error<&[u8]>>> for DecodingError {
+    fn from(value: nom::Err<nom::error::Error<&[u8]>>) -> Self {
+        DecodingError { details: value.to_string(), kind: DecodingErrorType::GenericParsingError }
+    }
+}
 
 impl Display for DecodingError {
     fn fmt(&self, f: &mut Formatter) -> Result {

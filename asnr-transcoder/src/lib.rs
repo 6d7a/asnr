@@ -10,11 +10,24 @@ pub mod error;
 pub mod uper;
 
 use asnr_grammar::*;
+use error::DecodingError;
 use nom::IResult;
 use num::{FromPrimitive, Integer};
 
 pub trait Decode {
     fn decode<'a, D>(decoder: &D, input: &'a [u8]) -> IResult<&'a [u8], Self>
+    where
+        D: Decoder,
+        Self: Sized;
+}
+
+pub trait DecodeMember {
+    fn decode_member_at_index<'a, D>(
+        &mut self,
+        index: usize,
+        decoder: &D,
+        input: &'a [u8],
+    ) -> Result<(&'a [u8], ()), DecodingError>
     where
         D: Decoder,
         Self: Sized;
@@ -36,9 +49,16 @@ pub trait Decoder {
     ) -> fn(&'a [u8]) -> IResult<&'a [u8], Vec<bool>>;
     fn decode_character_string<'a>(
         &self,
-        bit_string: AsnCharacterString,
+        char_string: AsnCharacterString,
     ) -> fn(&'a [u8]) -> IResult<&'a [u8], String>;
-    fn decode_extension_marker<'a>(&self, input: &'a [u8]) -> IResult<&'a [u8], bool>;
-    fn decode_unknown_extension<'a>(&self, input: &'a [u8]) -> IResult<&'a [u8], Vec<u8>>;
-    fn decode_sequence_of_size<'a>(&self, input: &'a [u8]) -> IResult<&'a [u8], usize>;
+    fn decode_sequence<'a, T: DecodeMember>(
+        &self,
+        sequence: AsnSequence,
+    ) -> fn(&'a [u8]) -> IResult<&'a [u8], T>;
+    fn decode_sequence_of<'a, T: Decode>(
+        &self,
+        sequence_of: AsnSequenceOf,
+        member_decoder: impl FnMut(&Self, &'a [u8]) -> IResult<&'a [u8], T>,
+    ) -> fn(&'a [u8]) -> IResult<&'a [u8], Vec<T>>;
+    fn decode_unknown_extension<'a>(&self, input: &'a [u8]) -> IResult<&'a [u8], &'a [u8]>;
 }

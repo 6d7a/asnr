@@ -1,6 +1,8 @@
-use asnr_grammar::{ASN1Type, DistinguishedValue, Enumeral, SequenceMember, ToplevelDeclaration};
+use asnr_grammar::{
+    ASN1Type, ChoiceOption, DistinguishedValue, Enumeral, SequenceMember, ToplevelDeclaration,
+};
 
-use super::{error::GeneratorError, generate, template::StringifiedNameType};
+use super::{error::GeneratorError, generate, builder::StringifiedNameType};
 
 pub fn format_comments(comments: &String) -> String {
     if comments.is_empty() {
@@ -90,6 +92,17 @@ pub fn flatten_nested_sequence_members(members: &Vec<SequenceMember>) -> Vec<Str
         .collect::<Vec<String>>()
 }
 
+pub fn flatten_nested_choice_options(options: &Vec<ChoiceOption>) -> Vec<String> {
+    options
+        .iter()
+        .filter(|m| match m.r#type {
+            ASN1Type::ElsewhereDeclaredType(_) => false,
+            _ => true,
+        })
+        .map(|i| declare_inner_choice_option(i).unwrap())
+        .collect::<Vec<String>>()
+}
+
 pub fn extract_sequence_members(members: &Vec<SequenceMember>) -> Vec<StringifiedNameType> {
     members
         .iter()
@@ -115,37 +128,38 @@ pub fn format_member_declaration(members: &Vec<StringifiedNameType>) -> String {
         .join("\n  ")
 }
 
-pub fn format_extensible_sequence<'a>(extensible: bool) -> (&'a str, &'a str, &'a str) {
-  (
-    if extensible {
-      &"\n  pub unknown_extension: Vec<u8>,"
-    } else {
-      &""
-    },
-    if extensible {
-      &"\n      let mut is_extended = false;\n      decoder.decode_extension_marker(input).map(|(r, v)| {{ remaining = r; is_extended = v; }})?;"
-    } else {
-     &""
-    },
-    if extensible {
-      &"\n      decoder.decode_unknown_extension(input).map(|(r, v)| {{ remaining = r; instance.unknown_extension = v; }})?;"
-    } else {
-      &""
-    }
-  )
+pub fn format_extensible_sequence<'a>(name: &String, extensible: bool) -> (String, String) {
+    (
+        if extensible {
+            "\n  pub unknown_extension: Vec<u8>,".into()
+        } else {
+            "".into()
+        },
+        if extensible {
+            "decoder.decode_unknown_extension(input).map(|(r, v)| {{ input = r; self.unknown_extension = v.to_vec(); }})?,".into()
+        } else {
+            format!(r#"return Err(
+              DecodingError::new(
+                &format!("Invalid sequence member index decoding {name}. Received index {{}}",index), DecodingErrorType::InvalidSequenceMemberIndex
+              )
+            )"#)
+        },
+    )
 }
 
-pub fn format_sequence_instance_construction(members: &Vec<StringifiedNameType>) -> String {
+pub fn format_decode_member_body(members: &Vec<StringifiedNameType>) -> String {
     members
         .iter()
-        .map(|m| {
+        .enumerate()
+        .map(|(i, m)| {
             format!(
-                "{}::decode(decoder, remaining).map(|(r, v)| {{ remaining = r; instance.{} = v; }})?",
-                m.r#type, m.name
+                "{i} => {t}::decode(decoder, input).map(|(r,v)| {{ self.{name} = v; input = r; }})?,",
+                t = m.r#type,
+                name = m.name
             )
         })
         .collect::<Vec<String>>()
-        .join(";\n      ")
+        .join("\n      ")
 }
 
 fn declare_inner_sequence_member(member: &SequenceMember) -> Result<String, GeneratorError> {
@@ -154,6 +168,17 @@ fn declare_inner_sequence_member(member: &SequenceMember) -> Result<String, Gene
             comments: " Inner type ".into(),
             name: inner_name(&member.name),
             r#type: member.r#type.clone(),
+        },
+        None,
+    )
+}
+
+fn declare_inner_choice_option(option: &ChoiceOption) -> Result<String, GeneratorError> {
+    generate(
+        ToplevelDeclaration {
+            comments: " Inner type ".into(),
+            name: inner_name(&option.name),
+            r#type: option.r#type.clone(),
         },
         None,
     )

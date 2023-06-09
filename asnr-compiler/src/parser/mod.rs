@@ -21,6 +21,7 @@ use asnr_grammar::{ASN1Type, ASN1Value, Header, ToplevelDeclaration};
 use self::{
     bit_string::{bit_string, bit_string_value},
     boolean::{boolean, boolean_value},
+    choice::*,
     common::*,
     enumerated::*,
     sequence_of::*,
@@ -33,6 +34,7 @@ use self::{
 
 mod bit_string;
 mod boolean;
+mod choice;
 mod common;
 mod enumerated;
 mod error;
@@ -62,6 +64,7 @@ pub fn asn1_type<'a>(input: &'a str) -> IResult<&'a str, ASN1Type> {
     alt((
         sequence_of,
         sequence,
+        choice,
         integer,
         enumerated,
         boolean,

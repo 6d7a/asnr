@@ -219,7 +219,7 @@ pub enum ASN1Type {
     BitString(AsnBitString),
     CharacterString(AsnCharacterString),
     Enumerated(AsnEnumerated),
-    // Choice,
+    Choice(AsnChoice),
     Sequence(AsnSequence),
     SequenceOf(AsnSequenceOf),
     // Set,
@@ -273,6 +273,7 @@ impl Quote for ASN1Type {
             ASN1Type::Enumerated(e) => format!("ASN1Type::Enumerated({})", e.quote()),
             ASN1Type::SequenceOf(s) => format!("ASN1Type::SequenceOf({})", s.quote()),
             ASN1Type::Sequence(s) => format!("ASN1Type::Sequence({})", s.quote()),
+            ASN1Type::Choice(c) => format!("ASN1Type::Choice({})", c.quote()),
             ASN1Type::ElsewhereDeclaredType(els) => {
                 format!("ASN1Type::ElsewhereDeclaredType({})", els.quote())
             }
@@ -448,7 +449,7 @@ impl Quote for AsnSequenceOf {
             self.constraint
                 .as_ref()
                 .map_or("None".to_owned(), |c| "Some(".to_owned() + &c.quote() + ")"),
-            self.r#type.quote(),
+            String::from("Box::new(") + &self.r#type.quote() + ")",
         )
     }
 }
@@ -542,6 +543,80 @@ impl Quote for SequenceMember {
       )
     }
 }
+
+/// Representation of an ASN1 CHOICE data element
+/// with corresponding members and extension information
+#[derive(Debug, Clone, PartialEq)]
+pub struct AsnChoice {
+    pub extensible: Option<usize>,
+    pub options: Vec<ChoiceOption>,
+}
+
+impl
+    From<(
+        Vec<ChoiceOption>,
+        Option<ExtensionMarker>,
+        Option<Vec<ChoiceOption>>,
+    )> for AsnChoice
+{
+    fn from(
+        mut value: (
+            Vec<ChoiceOption>,
+            Option<ExtensionMarker>,
+            Option<Vec<ChoiceOption>>,
+        ),
+    ) -> Self {
+        let index_of_first_extension = value.0.len();
+        value.0.append(&mut value.2.unwrap_or(vec![]));
+        AsnChoice {
+            extensible: value.1.map(|_| index_of_first_extension),
+            options: value.0,
+        }
+    }
+}
+
+impl Quote for AsnChoice {
+    fn quote(&self) -> String {
+        format!(
+            "AsnChoice {{ extensible: {}, options: vec![{}] }}",
+            self.extensible
+                .as_ref()
+                .map_or("None".to_owned(), |d| format!("Some({})", d)),
+            self.options
+                .iter()
+                .map(|m| m.quote())
+                .collect::<Vec<String>>()
+                .join(",")
+        )
+    }
+}
+
+/// Representation of an single ASN1 CHOICE option
+#[derive(Debug, Clone, PartialEq)]
+pub struct ChoiceOption {
+    pub name: String,
+    pub r#type: ASN1Type
+}
+
+impl From<(&str, ASN1Type)> for ChoiceOption {
+    fn from(value: (&str, ASN1Type)) -> Self {
+      ChoiceOption {
+            name: value.0.into(),
+            r#type: value.1
+        }
+    }
+}
+
+impl Quote for ChoiceOption {
+    fn quote(&self) -> String {
+        format!(
+          "ChoiceOption {{ name: \"{}\".into(), r#type: {} }}",
+          self.name,
+          self.r#type.quote(),
+      )
+    }
+}
+
 
 /// Representation of an ASN1 ENUMERATED data element
 /// with corresponding enumerals and extension information

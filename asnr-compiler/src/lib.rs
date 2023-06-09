@@ -41,7 +41,7 @@ use std::{
 };
 
 use asnr_grammar::ToplevelDeclaration;
-use generator::{generate, GENERATED_RUST_IMPORTS};
+use generator::{generate, template::RUST_IMPORTS_TEMPLATE};
 use parser::asn_spec;
 use validator::Validate;
 
@@ -117,7 +117,7 @@ impl AsnrCompiler {
     /// * _Ok_  - Vector of warnings raised during the compilation
     /// * _Err_ - Unrecoverable error, no rust representations were generated
     pub fn compile(self) -> Result<Vec<Box<dyn Error>>, Box<dyn Error>> {
-        let mut result = String::from(GENERATED_RUST_IMPORTS);
+        let mut result = String::from(RUST_IMPORTS_TEMPLATE);
         let mut warnings = Vec::<Box<dyn Error>>::new();
         for src in self.sources {
             let (_header, toplevel_declarations) = asn_spec(&read_to_string(src)?)?;

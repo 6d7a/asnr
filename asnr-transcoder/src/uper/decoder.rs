@@ -1,5 +1,3 @@
-
-
 use crate::Decoder;
 
 use super::Uper;
@@ -40,15 +38,22 @@ impl Decoder for Uper {
         todo!()
     }
 
-    fn decode_extension_marker<'a>(&self, _input: &'a [u8]) -> nom::IResult<&'a [u8], bool> {
+    fn decode_sequence<'a, T: crate::DecodeMember>(
+        &self,
+        _sequence: asnr_grammar::AsnSequence,
+    ) -> fn(&'a [u8]) -> nom::IResult<&'a [u8], T> {
         todo!()
     }
 
-    fn decode_unknown_extension<'a>(&self, _input: &'a [u8]) -> nom::IResult<&'a [u8], Vec<u8>> {
+    fn decode_sequence_of<'a, T: crate::Decode>(
+        &self,
+        sequence_of: asnr_grammar::AsnSequenceOf,
+        member_decoder: impl FnMut(&Self, &'a [u8]) -> nom::IResult<&'a [u8], T>,
+    ) -> fn(&'a [u8]) -> nom::IResult<&'a [u8], Vec<T>> {
         todo!()
     }
 
-    fn decode_sequence_of_size<'a>(&self, _input: &'a [u8]) -> nom::IResult<&'a [u8], usize> {
+    fn decode_unknown_extension<'a>(&self, input: &'a [u8]) -> nom::IResult<&'a [u8], &'a [u8]> {
         todo!()
     }
 }
