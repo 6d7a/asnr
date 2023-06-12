@@ -132,51 +132,43 @@ pub fn generate_enumerated<'a>(
     }
 }
 
-// pub fn choice_template<'a>(
-//   tld: ToplevelDeclaration,
-//   custom_derive: Option<&'a str>,
-// ) -> Result<String, GeneratorError> {
-//   if let ASN1Type::Choice(ref choice) = tld.r#type {
-//       let name = rustify_name(&tld.name);
-//       let comments = format_comments(&tld.comments);
-//       let derive = custom_derive.unwrap_or("#[derive(Debug, Clone, PartialEq, Default)]");
-//       let inner_options = flatten_nested_choice_options(&choice.options).join("\n");
-//       let members = extract_sequence_members(&seq.members);
-//       let member_declaration = format_member_declaration(&members);
-//       let member_decoding = format_sequence_instance_construction(&members);
-//       let (extension_decl, extension_marker, extension_decoder) =
-//           format_extensible_sequence(seq.extensible.is_some());
-//       Ok(format!(
-//           r#"
-// {inner_options}
-
-// {comments}{derive}
-// pub enum {name} {{
-// {member_declaration}{extension_decl}
-// }}
-
-// impl Decode for {name} {{
-// fn decode<'a, D>(decoder: &D, input: &'a [u8]) -> IResult<&'a [u8], Self>
-// where
-//   D: Decoder,
-//   Self: Sized,
-// {{
-//     let mut remaining = input;
-//     let mut instance = Self::default();{extension_marker}
-//     {member_decoding};{extension_decoder}
-//     Ok((remaining, instance))
-// }}
-// }}
-// "#
-//       ))
-//   } else {
-//       Err(GeneratorError::new(
-//           tld,
-//           "Expected SEQUENCE top-level declaration",
-//           GeneratorErrorType::Asn1TypeMismatch,
-//       ))
-//   }
-// }
+pub fn generate_choice<'a>(
+    tld: ToplevelDeclaration,
+    custom_derive: Option<&'a str>,
+) -> Result<String, GeneratorError> {
+    if let ASN1Type::Choice(ref choice) = tld.r#type {
+        let name = rustify_name(&tld.name);
+        let inner_options = flatten_nested_choice_options(&choice.options).join("\n");
+        let options = extract_choice_options(&choice.options);
+        let options_declaration = format_option_declaration(&options);
+        let default_option = match options.first() {
+          Some(o) => default_choice(o),
+          None => { return Err(GeneratorError { top_level_declaration: tld, details: "Empty CHOICE types are not yet supported!".into(), kind: GeneratorErrorType::EmptyChoiceType })}
+        };
+        let options_from_int: String = options
+            .iter()
+            .enumerate()
+            .map(format_option_from_int)
+            .collect::<Vec<String>>()
+            .join("\n\t\t  ");
+        Ok(choice_template(
+          format_comments(&tld.comments),
+            custom_derive.unwrap_or("#[derive(Debug, Clone, PartialEq)]"),
+            name,
+            inner_options,
+            default_option,
+            options_declaration,
+            options_from_int,
+            choice.quote(),
+        ))
+    } else {
+        Err(GeneratorError::new(
+            tld,
+            "Expected CHOICE top-level declaration",
+            GeneratorErrorType::Asn1TypeMismatch,
+        ))
+    }
+}
 
 pub fn generate_sequence<'a>(
     tld: ToplevelDeclaration,
@@ -236,7 +228,7 @@ pub fn generate_sequence_of<'a>(
             name,
             anonymous_item,
             member_type,
-            seq_of.quote()
+            seq_of.quote(),
         ))
     } else {
         Err(GeneratorError::new(

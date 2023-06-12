@@ -56,4 +56,11 @@ impl Decoder for Uper {
     fn decode_unknown_extension<'a>(&self, input: &'a [u8]) -> nom::IResult<&'a [u8], &'a [u8]> {
         todo!()
     }
+
+    fn decode_choice<'a, O: TryFrom<i128>>(
+      &self,
+      enumerated: asnr_grammar::AsnEnumerated,
+      ) -> fn(&'a [u8]) -> nom::IResult<&'a [u8], O> {
+        todo!()
+    }
 }

@@ -14,6 +14,8 @@ use error::DecodingError;
 use nom::IResult;
 use num::{FromPrimitive, Integer};
 
+mod generated;
+
 pub trait Decode {
     fn decode<'a, D>(decoder: &D, input: &'a [u8]) -> IResult<&'a [u8], Self>
     where
@@ -42,6 +44,10 @@ pub trait Decoder {
         &self,
         enumerated: AsnEnumerated,
     ) -> fn(&'a [u8]) -> IResult<&'a [u8], O>;
+    fn decode_choice<'a, O: TryFrom<i128>>(
+      &self,
+      enumerated: AsnEnumerated,
+  ) -> fn(&'a [u8]) -> IResult<&'a [u8], O>;
     fn decode_boolean<'a>(&self, input: &'a [u8]) -> IResult<&'a [u8], bool>;
     fn decode_bit_string<'a>(
         &self,

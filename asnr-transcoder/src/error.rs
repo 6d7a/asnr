@@ -17,6 +17,7 @@ impl DecodingError {
 #[derive(Debug, Clone)]
 pub enum DecodingErrorType {
     InvalidEnumeratedIndex,
+    InvalidChoiceIndex,
     InvalidSequenceMemberIndex,
     GenericParsingError,
 }

@@ -18,7 +18,8 @@ impl GeneratorError {
 
 #[derive(Debug, Clone)]
 pub enum GeneratorErrorType {
-    Asn1TypeMismatch
+    Asn1TypeMismatch,
+    EmptyChoiceType
 }
 
 impl Error for GeneratorError {}

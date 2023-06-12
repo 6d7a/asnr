@@ -2,7 +2,7 @@ use asnr_grammar::{
     ASN1Type, ChoiceOption, DistinguishedValue, Enumeral, SequenceMember, ToplevelDeclaration,
 };
 
-use super::{error::GeneratorError, generate, builder::StringifiedNameType};
+use super::{builder::StringifiedNameType, error::GeneratorError, generate};
 
 pub fn format_comments(comments: &String) -> String {
     if comments.is_empty() {
@@ -21,6 +21,12 @@ pub fn format_enumeral(enumeral: &Enumeral) -> String {
         + " = "
         + &enumeral.index.to_string()
         + ","
+}
+
+pub fn format_option_from_int(args: (usize, &StringifiedNameType)) -> String {
+  format!(r#"x if x == {index} => Ok(|decoder, input| {{
+    {t}::decode(decoder, input).map(|(r, v)|(r, Self::{name}(v)))
+  }}),"#, index = args.0, name = args.1.name, t = args.1.r#type)
 }
 
 pub fn format_enumeral_from_int(enumeral: &Enumeral) -> String {
@@ -103,6 +109,31 @@ pub fn flatten_nested_choice_options(options: &Vec<ChoiceOption>) -> Vec<String>
         .collect::<Vec<String>>()
 }
 
+pub fn extract_choice_options(options: &Vec<ChoiceOption>) -> Vec<StringifiedNameType> {
+    options
+        .iter()
+        .map(|m| {
+            let name = rustify_name(&m.name);
+            let rtype = match &m.r#type {
+                ASN1Type::ElsewhereDeclaredType(d) => rustify_name(&d.0),
+                _ => inner_name(&m.name),
+            };
+            StringifiedNameType {
+                name,
+                r#type: rtype,
+            }
+        })
+        .collect()
+}
+
+pub fn format_option_declaration(members: &Vec<StringifiedNameType>) -> String {
+  members
+      .iter()
+      .map(|m| format!("{}({}),", m.name, m.r#type))
+      .collect::<Vec<String>>()
+      .join("\n  ")
+}
+
 pub fn extract_sequence_members(members: &Vec<SequenceMember>) -> Vec<StringifiedNameType> {
     members
         .iter()
@@ -138,11 +169,13 @@ pub fn format_extensible_sequence<'a>(name: &String, extensible: bool) -> (Strin
         if extensible {
             "decoder.decode_unknown_extension(input).map(|(r, v)| {{ input = r; self.unknown_extension = v.to_vec(); }})?,".into()
         } else {
-            format!(r#"return Err(
+            format!(
+                r#"return Err(
               DecodingError::new(
                 &format!("Invalid sequence member index decoding {name}. Received index {{}}",index), DecodingErrorType::InvalidSequenceMemberIndex
               )
-            )"#)
+            )"#
+            )
         },
     )
 }
