@@ -35,7 +35,7 @@ pub fn integer<'a>(input: &'a str) -> IResult<&'a str, ASN1Type> {
 #[cfg(test)]
 mod tests {
 
-    use asnr_grammar::{AsnInteger, Constraint};
+    use asnr_grammar::{AsnInteger, SizeConstraint};
 
     use super::*;
 
@@ -50,7 +50,7 @@ mod tests {
             Ok((
                 "",
                 ASN1Type::Integer(
-                    Constraint {
+                    SizeConstraint {
                         min_value: Some(-9),
                         max_value: Some(-4),
                         extensible: true
@@ -64,7 +64,7 @@ mod tests {
             Ok((
                 "",
                 ASN1Type::Integer(
-                    Constraint {
+                    SizeConstraint {
                         min_value: Some(-9),
                         max_value: Some(-4),
                         extensible: false

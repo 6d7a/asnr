@@ -11,8 +11,8 @@ use nom::{
 };
 
 use asnr_grammar::{
-    Constraint, DistinguishedValue, ExtensionMarker, RangeMarker, ASN1_COMMENT, ASSIGN, COMMA,
-    C_STYLE_BLOCK_COMMENT_BEGIN, C_STYLE_BLOCK_COMMENT_END, C_STYLE_LINE_COMMENT, EXTENSION,
+    SizeConstraint, DistinguishedValue, ExtensionMarker, RangeMarker, ASN1_COMMENT, ASSIGN, COMMA,
+    C_STYLE_BLOCK_COMMENT_BEGIN, C_STYLE_BLOCK_COMMENT_END, C_STYLE_LINE_COMMENT, ELLIPSIS,
     LEFT_BRACE, LEFT_PARENTHESIS, RANGE, RIGHT_BRACE, RIGHT_PARENTHESIS,
 };
 
@@ -89,7 +89,7 @@ where
     )
 }
 
-pub fn constraint<'a>(input: &'a str) -> IResult<&'a str, Constraint> {
+pub fn constraint<'a>(input: &'a str) -> IResult<&'a str, SizeConstraint> {
     in_parentheses(alt((
         extensible_range_constraint, // The most elaborate match first
         strict_extensible_constraint,
@@ -103,22 +103,22 @@ pub fn range_marker<'a>(input: &'a str) -> IResult<&'a str, RangeMarker> {
 }
 
 pub fn extension_marker<'a>(input: &'a str) -> IResult<&'a str, ExtensionMarker> {
-    skip_ws_and_comments(tag(EXTENSION))(input).map(|(remaining, _)| (remaining, ExtensionMarker()))
+    skip_ws_and_comments(tag(ELLIPSIS))(input).map(|(remaining, _)| (remaining, ExtensionMarker()))
 }
 
-pub fn strict_constraint<'a>(input: &'a str) -> IResult<&'a str, Constraint> {
+pub fn strict_constraint<'a>(input: &'a str) -> IResult<&'a str, SizeConstraint> {
     map_into(i128)(input)
 }
 
-pub fn strict_extensible_constraint<'a>(input: &'a str) -> IResult<&'a str, Constraint> {
+pub fn strict_extensible_constraint<'a>(input: &'a str) -> IResult<&'a str, SizeConstraint> {
     map_into(pair(i128, preceded(char(','), extension_marker)))(input)
 }
 
-pub fn range_constraint<'a>(input: &'a str) -> IResult<&'a str, Constraint> {
+pub fn range_constraint<'a>(input: &'a str) -> IResult<&'a str, SizeConstraint> {
     map_into(tuple((i128, range_marker, skip_ws_and_comments(i128))))(input)
 }
 
-pub fn extensible_range_constraint<'a>(input: &'a str) -> IResult<&'a str, Constraint> {
+pub fn extensible_range_constraint<'a>(input: &'a str) -> IResult<&'a str, SizeConstraint> {
     map_into(tuple((
         i128,
         range_marker,
@@ -256,7 +256,7 @@ and one */"#
             constraint("(5)"),
             Ok((
                 "",
-                Constraint {
+                SizeConstraint {
                     min_value: Some(5),
                     max_value: Some(5),
                     extensible: false
@@ -267,7 +267,7 @@ and one */"#
             constraint("(5..9)"),
             Ok((
                 "",
-                Constraint {
+                SizeConstraint {
                     min_value: Some(5),
                     max_value: Some(9),
                     extensible: false
@@ -278,7 +278,7 @@ and one */"#
             constraint("(-5..9)"),
             Ok((
                 "",
-                Constraint {
+                SizeConstraint {
                     min_value: Some(-5),
                     max_value: Some(9),
                     extensible: false
@@ -289,7 +289,7 @@ and one */"#
             constraint("(-9..-4, ...)"),
             Ok((
                 "",
-                Constraint {
+                SizeConstraint {
                     min_value: Some(-9),
                     max_value: Some(-4),
                     extensible: true
@@ -304,7 +304,7 @@ and one */"#
             constraint("(-9..-4, -- Very annoying! -- ...)"),
             Ok((
                 "",
-                Constraint {
+                SizeConstraint {
                     min_value: Some(-9),
                     max_value: Some(-4),
                     extensible: true
@@ -315,7 +315,7 @@ and one */"#
             constraint("(-9-- Very annoying! --..-4,  ...)"),
             Ok((
                 "",
-                Constraint {
+                SizeConstraint {
                     min_value: Some(-9),
                     max_value: Some(-4),
                     extensible: true

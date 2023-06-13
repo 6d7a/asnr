@@ -14,8 +14,6 @@ use error::DecodingError;
 use nom::IResult;
 use num::{FromPrimitive, Integer};
 
-mod generated;
-
 pub trait Decode {
     fn decode<'a, D>(decoder: &D, input: &'a [u8]) -> IResult<&'a [u8], Self>
     where

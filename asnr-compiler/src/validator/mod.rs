@@ -8,7 +8,7 @@
 pub(crate) mod error;
 
 use asnr_grammar::{
-    ASN1Type, AsnBitString, AsnInteger, AsnCharacterString, Constraint, ToplevelDeclaration,
+    ASN1Type, AsnBitString, AsnInteger, AsnCharacterString, SizeConstraint, ToplevelDeclaration,
 };
 
 use self::error::{ValidatorError, ValidatorErrorType};
@@ -56,7 +56,7 @@ impl Validate for AsnCharacterString {
     }
 }
 
-impl Validate for Constraint {
+impl Validate for SizeConstraint {
     fn validate(&self) -> Result<(), ValidatorError> {
         if let Some((min, max)) = self.min_value.zip(self.max_value) {
             if min > max {

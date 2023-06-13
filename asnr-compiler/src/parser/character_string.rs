@@ -44,7 +44,7 @@ pub fn character_string<'a>(input: &'a str) -> IResult<&'a str, ASN1Type> {
 
 #[cfg(test)]
 mod tests {
-    use asnr_grammar::{ASN1Type, Constraint, AsnCharacterString, CharacterStringType};
+    use asnr_grammar::{ASN1Type, SizeConstraint, AsnCharacterString, CharacterStringType};
 
     use super::character_string;
 
@@ -64,7 +64,7 @@ mod tests {
         assert_eq!(
             character_string(sample).unwrap().1,
             ASN1Type::CharacterString(AsnCharacterString {
-                constraint: Some(Constraint {
+                constraint: Some(SizeConstraint {
                     max_value: Some(8),
                     min_value: Some(8),
                     extensible: false
@@ -80,7 +80,7 @@ mod tests {
         assert_eq!(
             character_string(sample).unwrap().1,
             ASN1Type::CharacterString(AsnCharacterString {
-                constraint: Some(Constraint {
+                constraint: Some(SizeConstraint {
                     max_value: Some(18),
                     min_value: Some(8),
                     extensible: false
@@ -97,7 +97,7 @@ mod tests {
         assert_eq!(
           character_string(sample).unwrap().1,
           ASN1Type::CharacterString(AsnCharacterString {
-              constraint: Some(Constraint {
+              constraint: Some(SizeConstraint {
                   max_value: Some(2),
                   min_value: Some(2),
                   extensible: true
@@ -113,7 +113,7 @@ mod tests {
         assert_eq!(
           character_string(sample).unwrap().1,
           ASN1Type::CharacterString(AsnCharacterString {
-              constraint: Some(Constraint {
+              constraint: Some(SizeConstraint {
                   max_value: Some(18),
                   min_value: Some(8),
                   extensible: true

@@ -1,13 +1,15 @@
 use nom::{
     bytes::complete::tag,
     character::complete::char,
-    combinator::{into, opt},
-    multi::many0,
+    combinator::{into, opt, value},
+    multi::{many0, many1},
     sequence::{terminated, tuple},
     IResult,
 };
 
-use asnr_grammar::{OptionalMarker, SequenceMember, COMMA, DEFAULT, OPTIONAL, SEQUENCE};
+use asnr_grammar::{
+    OptionalMarker, SequenceMember, COMMA, DEFAULT, ELLIPSIS, OPTIONAL, SEQUENCE, WITH_COMPONENTS, PRESENT, ABSENT,
+};
 
 use super::*;
 
@@ -45,6 +47,7 @@ fn sequence_member<'a>(input: &'a str) -> IResult<&'a str, SequenceMember> {
     into(tuple((
         skip_ws_and_comments(identifier),
         skip_ws_and_comments(asn1_type),
+        opt(with_components),
         optional_marker,
         default,
     )))(input)
@@ -54,6 +57,10 @@ fn optional_marker<'a>(input: &'a str) -> IResult<&'a str, Option<OptionalMarker
     opt(into(skip_ws_and_comments(tag(OPTIONAL))))(input)
 }
 
+fn subtype_marker<'a>(input: &'a str) -> IResult<&'a str, ()> {
+    value((), opt(skip_ws_and_comments(tag(OPTIONAL))))(input)
+}
+
 fn default<'a>(input: &'a str) -> IResult<&'a str, Option<ASN1Value>> {
     opt(preceded(
         skip_ws_and_comments(tag(DEFAULT)),
@@ -61,10 +68,38 @@ fn default<'a>(input: &'a str) -> IResult<&'a str, Option<ASN1Value>> {
     ))(input)
 }
 
+fn with_components<'a>(input: &'a str) -> IResult<&'a str, ()> {
+    value(
+        (),
+        in_parentheses(tuple((
+            skip_ws_and_comments(tag(WITH_COMPONENTS)),
+            skip_ws_and_comments(in_braces(pair(
+                opt(skip_ws_and_comments(terminated(
+                    tag(ELLIPSIS),
+                    skip_ws_and_comments(char(COMMA)),
+                ))),
+                many1(terminated(
+                    subset_member,
+                    opt(skip_ws_and_comments(char(COMMA))),
+                )),
+            ))),
+        ))),
+    )(input)
+}
+
+fn subset_member<'a>(input: &'a str) -> IResult<&'a str, (&str, Option<()>, Option<&str>)> {
+  skip_ws_and_comments(tuple((
+    identifier,
+    opt(skip_ws_and_comments(with_components)),
+    opt(skip_ws_and_comments(alt((tag(PRESENT), tag(ABSENT)))))
+  )))(input)
+}
+
 #[cfg(test)]
 mod tests {
     use asnr_grammar::{
-        AsnBitString, AsnInteger, AsnCharacterString, AsnSequence, Constraint, DeclarationElsewhere,
+        AsnBitString, AsnCharacterString, AsnInteger, AsnSequence, DeclarationElsewhere,
+        SizeConstraint,
     };
 
     use super::*;
@@ -116,6 +151,33 @@ mod tests {
             default("DEFAULT enumeral1").unwrap().1,
             Some(ASN1Value::String("enumeral1".into()))
         );
+    }
+
+    #[test]
+    fn parses_subtyped_sequence() {
+      assert_eq!(
+        sequence(
+            r#"SEQUENCE { 
+              clusterBoundingBoxShape    Shape (WITH COMPONENTS{..., elliptical ABSENT, radial ABSENT, radialShapes ABSENT}) OPTIONAL,
+              ...
+           }"#
+        )
+        .unwrap()
+        .1,
+        ASN1Type::Sequence(AsnSequence {
+            extensible: Some(1),
+            members: vec![
+                SequenceMember {
+                    name: "clusterBoundingBoxShape".into(),
+                    r#type: ASN1Type::ElsewhereDeclaredType(DeclarationElsewhere(
+                        "Shape".into()
+                    )),
+                    default_value: None,
+                    is_optional: true
+                }
+            ]
+        })
+    )
     }
 
     #[test]
@@ -263,7 +325,7 @@ mod tests {
                     SequenceMember {
                         name: "unNumber".into(),
                         r#type: ASN1Type::Integer(AsnInteger {
-                            constraint: Some(Constraint {
+                            constraint: Some(SizeConstraint {
                                 min_value: Some(0),
                                 max_value: Some(9999),
                                 extensible: false
@@ -282,7 +344,7 @@ mod tests {
                     SequenceMember {
                         name: "emergencyActionCode".into(),
                         r#type: ASN1Type::CharacterString(AsnCharacterString {
-                            constraint: Some(Constraint {
+                            constraint: Some(SizeConstraint {
                                 min_value: Some(1),
                                 max_value: Some(24),
                                 extensible: false
@@ -345,7 +407,7 @@ mod tests {
                                     members: vec![SequenceMember {
                                         name: "inner".into(),
                                         r#type: ASN1Type::BitString(AsnBitString {
-                                            constraint: Some(Constraint {
+                                            constraint: Some(SizeConstraint {
                                                 min_value: Some(1),
                                                 max_value: Some(1),
                                                 extensible: true

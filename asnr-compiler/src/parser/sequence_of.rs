@@ -43,7 +43,7 @@ pub fn sequence_of<'a>(input: &'a str) -> IResult<&'a str, ASN1Type> {
 #[cfg(test)]
 mod tests {
     use asnr_grammar::{
-        ASN1Type, AsnInteger, AsnSequenceOf, Constraint, DeclarationElsewhere, DistinguishedValue,
+        ASN1Type, AsnInteger, AsnSequenceOf, SizeConstraint, DeclarationElsewhere, DistinguishedValue,
     };
 
     use crate::parser::sequence_of;
@@ -79,7 +79,7 @@ mod tests {
                 .unwrap()
                 .1,
             ASN1Type::SequenceOf(AsnSequenceOf {
-                constraint: Some(Constraint {
+                constraint: Some(SizeConstraint {
                     min_value: Some(1),
                     max_value: Some(13),
                     extensible: true
@@ -98,7 +98,7 @@ mod tests {
                 .unwrap()
                 .1,
             ASN1Type::SequenceOf(AsnSequenceOf {
-                constraint: Some(Constraint {
+                constraint: Some(SizeConstraint {
                     min_value: Some(1),
                     max_value: Some(13),
                     extensible: true
@@ -121,13 +121,13 @@ mod tests {
             .unwrap()
             .1,
             ASN1Type::SequenceOf(AsnSequenceOf {
-                constraint: Some(Constraint {
+                constraint: Some(SizeConstraint {
                     min_value: Some(1),
                     max_value: Some(13),
                     extensible: true
                 }),
                 r#type: Box::new(ASN1Type::Integer(AsnInteger {
-                    constraint: Some(Constraint {
+                    constraint: Some(SizeConstraint {
                         min_value: Some(1),
                         max_value: Some(13),
                         extensible: true

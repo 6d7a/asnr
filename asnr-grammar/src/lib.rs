@@ -61,12 +61,23 @@ pub const IMPLICIT: &'static str = "IMPLICIT";
 pub const TAGS: &'static str = "TAGS";
 pub const EXTENSIBILITY_IMPLIED: &'static str = "EXTENSIBILITY IMPLIED";
 
+// Subtyping tokens
 pub const SIZE: &'static str = "SIZE";
 pub const DEFAULT: &'static str = "DEFAULT";
 pub const OPTIONAL: &'static str = "OPTIONAL";
+pub const WITH_COMPONENTS: &'static str = "WITH COMPONENTS";
+pub const UNION: &'static str = "UNION";
+pub const PIPE: &'static str = "|";
+pub const EXCEPT: &'static str = "EXCEPT";
+pub const INTERSECTION: &'static str = "INTERSECTION";
+pub const CARET: &'static str = "^";
+pub const ABSENT: &'static str = "ABSENT";
+pub const PRESENT: &'static str = "PRESENT";
+
+
 pub const ASSIGN: &'static str = "::=";
 pub const RANGE: &'static str = "..";
-pub const EXTENSION: &'static str = "...";
+pub const ELLIPSIS: &'static str = "...";
 pub const COMMA: char = ',';
 pub const SINGLE_QUOTE: char = '\'';
 
@@ -303,7 +314,7 @@ impl Quote for ASN1Value {
 /// with corresponding constraints and distinguished values
 #[derive(Debug, Clone, PartialEq)]
 pub struct AsnInteger {
-    pub constraint: Option<Constraint>,
+    pub constraint: Option<SizeConstraint>,
     pub distinguished_values: Option<Vec<DistinguishedValue>>,
 }
 
@@ -335,8 +346,8 @@ impl Default for AsnInteger {
     }
 }
 
-impl From<Constraint> for AsnInteger {
-    fn from(value: Constraint) -> Self {
+impl From<SizeConstraint> for AsnInteger {
+    fn from(value: SizeConstraint) -> Self {
         Self {
             constraint: Some(value),
             distinguished_values: None,
@@ -347,7 +358,7 @@ impl From<Constraint> for AsnInteger {
 impl From<(Option<i128>, Option<i128>, bool)> for AsnInteger {
     fn from(value: (Option<i128>, Option<i128>, bool)) -> Self {
         Self {
-            constraint: Some(Constraint {
+            constraint: Some(SizeConstraint {
                 min_value: value.0,
                 max_value: value.1,
                 extensible: value.2,
@@ -357,8 +368,8 @@ impl From<(Option<i128>, Option<i128>, bool)> for AsnInteger {
     }
 }
 
-impl From<(&str, Option<Vec<DistinguishedValue>>, Option<Constraint>)> for AsnInteger {
-    fn from(value: (&str, Option<Vec<DistinguishedValue>>, Option<Constraint>)) -> Self {
+impl From<(&str, Option<Vec<DistinguishedValue>>, Option<SizeConstraint>)> for AsnInteger {
+    fn from(value: (&str, Option<Vec<DistinguishedValue>>, Option<SizeConstraint>)) -> Self {
         Self {
             constraint: value.2,
             distinguished_values: value.1,
@@ -371,12 +382,12 @@ impl From<(&str, Option<Vec<DistinguishedValue>>, Option<Constraint>)> for AsnIn
 /// defining the individual bits
 #[derive(Debug, Clone, PartialEq)]
 pub struct AsnBitString {
-    pub constraint: Option<Constraint>,
+    pub constraint: Option<SizeConstraint>,
     pub distinguished_values: Option<Vec<DistinguishedValue>>,
 }
 
-impl From<(Option<Vec<DistinguishedValue>>, Option<Constraint>)> for AsnBitString {
-    fn from(value: (Option<Vec<DistinguishedValue>>, Option<Constraint>)) -> Self {
+impl From<(Option<Vec<DistinguishedValue>>, Option<SizeConstraint>)> for AsnBitString {
+    fn from(value: (Option<Vec<DistinguishedValue>>, Option<SizeConstraint>)) -> Self {
         AsnBitString {
             constraint: value.1,
             distinguished_values: value.0,
@@ -409,12 +420,12 @@ impl Quote for AsnBitString {
 /// OCTET STRING, which is treated like a String and not a buffer.
 #[derive(Debug, Clone, PartialEq)]
 pub struct AsnCharacterString {
-    pub constraint: Option<Constraint>,
+    pub constraint: Option<SizeConstraint>,
     pub r#type: CharacterStringType,
 }
 
-impl From<(&str, Option<Constraint>)> for AsnCharacterString {
-    fn from(value: (&str, Option<Constraint>)) -> Self {
+impl From<(&str, Option<SizeConstraint>)> for AsnCharacterString {
+    fn from(value: (&str, Option<SizeConstraint>)) -> Self {
         AsnCharacterString {
             constraint: value.1,
             r#type: value.0.into(),
@@ -438,7 +449,7 @@ impl Quote for AsnCharacterString {
 /// with corresponding constraints and element type info
 #[derive(Debug, Clone, PartialEq)]
 pub struct AsnSequenceOf {
-    pub constraint: Option<Constraint>,
+    pub constraint: Option<SizeConstraint>,
     pub r#type: Box<ASN1Type>,
 }
 
@@ -454,8 +465,8 @@ impl Quote for AsnSequenceOf {
     }
 }
 
-impl From<(Option<Constraint>, ASN1Type)> for AsnSequenceOf {
-    fn from(value: (Option<Constraint>, ASN1Type)) -> Self {
+impl From<(Option<SizeConstraint>, ASN1Type)> for AsnSequenceOf {
+    fn from(value: (Option<SizeConstraint>, ASN1Type)) -> Self {
         Self {
             constraint: value.0,
             r#type: Box::new(value.1),
@@ -519,13 +530,13 @@ pub struct SequenceMember {
     pub is_optional: bool,
 }
 
-impl From<(&str, ASN1Type, Option<OptionalMarker>, Option<ASN1Value>)> for SequenceMember {
-    fn from(value: (&str, ASN1Type, Option<OptionalMarker>, Option<ASN1Value>)) -> Self {
+impl From<(&str, ASN1Type, Option<()>, Option<OptionalMarker>, Option<ASN1Value>)> for SequenceMember {
+    fn from(value: (&str, ASN1Type, Option<()>, Option<OptionalMarker>, Option<ASN1Value>)) -> Self {
         SequenceMember {
             name: value.0.into(),
             r#type: value.1,
-            is_optional: value.2.is_some() || value.3.is_some(),
-            default_value: value.3,
+            is_optional: value.3.is_some() || value.4.is_some(),
+            default_value: value.4,
         }
     }
 }
@@ -752,13 +763,13 @@ pub struct ExtensionMarker();
 /// Representation of a constraint used for subtyping
 /// in ASN1 specifications
 #[derive(Debug, Clone, PartialEq)]
-pub struct Constraint {
+pub struct SizeConstraint {
     pub min_value: Option<i128>,
     pub max_value: Option<i128>,
     pub extensible: bool,
 }
 
-impl Quote for Constraint {
+impl Quote for SizeConstraint {
     fn quote(&self) -> String {
         format!(
             "Constraint {{ min_value: {}, max_value: {}, extensible: {} }}",
@@ -775,7 +786,7 @@ impl Quote for Constraint {
     }
 }
 
-impl Constraint {
+impl SizeConstraint {
     pub fn int_type_token<'a>(&self) -> &'a str {
         match self.min_value.zip(self.max_value) {
             Some((min, max)) => match max - min {
@@ -794,7 +805,7 @@ impl Constraint {
     }
 }
 
-impl<'a> From<i128> for Constraint {
+impl<'a> From<i128> for SizeConstraint {
     fn from(value: i128) -> Self {
         Self {
             min_value: Some(value),
@@ -804,7 +815,7 @@ impl<'a> From<i128> for Constraint {
     }
 }
 
-impl<'a> From<(i128, RangeMarker, i128)> for Constraint {
+impl<'a> From<(i128, RangeMarker, i128)> for SizeConstraint {
     fn from(value: (i128, RangeMarker, i128)) -> Self {
         Self {
             min_value: Some(value.0),
@@ -814,7 +825,7 @@ impl<'a> From<(i128, RangeMarker, i128)> for Constraint {
     }
 }
 
-impl<'a> From<(i128, ExtensionMarker)> for Constraint {
+impl<'a> From<(i128, ExtensionMarker)> for SizeConstraint {
     fn from(value: (i128, ExtensionMarker)) -> Self {
         Self {
             min_value: Some(value.0),
@@ -824,7 +835,7 @@ impl<'a> From<(i128, ExtensionMarker)> for Constraint {
     }
 }
 
-impl<'a> From<(i128, RangeMarker, i128, ExtensionMarker)> for Constraint {
+impl<'a> From<(i128, RangeMarker, i128, ExtensionMarker)> for SizeConstraint {
     fn from(value: (i128, RangeMarker, i128, ExtensionMarker)) -> Self {
         Self {
             min_value: Some(value.0),

@@ -51,7 +51,7 @@ pub fn bit_string<'a>(input: &'a str) -> IResult<&'a str, ASN1Type> {
 
 #[cfg(test)]
 mod tests {
-    use asnr_grammar::{ASN1Type, AsnBitString, Constraint, DistinguishedValue};
+    use asnr_grammar::{ASN1Type, AsnBitString, SizeConstraint, DistinguishedValue};
 
     use super::bit_string;
 
@@ -74,7 +74,7 @@ mod tests {
             bit_string(sample).unwrap().1,
             ASN1Type::BitString(AsnBitString {
                 distinguished_values: None,
-                constraint: Some(Constraint {
+                constraint: Some(SizeConstraint {
                     max_value: Some(8),
                     min_value: Some(8),
                     extensible: false
@@ -90,7 +90,7 @@ mod tests {
             bit_string(sample).unwrap().1,
             ASN1Type::BitString(AsnBitString {
                 distinguished_values: None,
-                constraint: Some(Constraint {
+                constraint: Some(SizeConstraint {
                     max_value: Some(18),
                     min_value: Some(8),
                     extensible: false
@@ -106,7 +106,7 @@ mod tests {
             bit_string(sample).unwrap().1,
             ASN1Type::BitString(AsnBitString {
                 distinguished_values: None,
-                constraint: Some(Constraint {
+                constraint: Some(SizeConstraint {
                     max_value: Some(2),
                     min_value: Some(2),
                     extensible: true
@@ -122,7 +122,7 @@ mod tests {
             bit_string(sample).unwrap().1,
             ASN1Type::BitString(AsnBitString {
                 distinguished_values: None,
-                constraint: Some(Constraint {
+                constraint: Some(SizeConstraint {
                     max_value: Some(18),
                     min_value: Some(8),
                     extensible: true
@@ -160,7 +160,7 @@ mod tests {
                         value: 3
                     },
                 ]),
-                constraint: Some(Constraint {
+                constraint: Some(SizeConstraint {
                     max_value: Some(4),
                     min_value: Some(4),
                     extensible: false

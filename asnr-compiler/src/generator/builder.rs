@@ -242,7 +242,7 @@ pub fn generate_sequence_of<'a>(
 #[cfg(test)]
 mod tests {
     use asnr_grammar::{
-        ASN1Type, ASN1Value, AsnBitString, AsnEnumerated, AsnInteger, AsnSequence, Constraint,
+        ASN1Type, ASN1Value, AsnBitString, AsnEnumerated, AsnInteger, AsnSequence, SizeConstraint,
         DeclarationElsewhere, DistinguishedValue, Enumeral, SequenceMember, ToplevelDeclaration,
     };
 
@@ -285,7 +285,7 @@ mod tests {
             name: "BitString".into(),
             comments: "".into(),
             r#type: ASN1Type::BitString(AsnBitString {
-                constraint: Some(Constraint {
+                constraint: Some(SizeConstraint {
                     max_value: Some(8),
                     min_value: Some(8),
                     extensible: true,
@@ -315,7 +315,7 @@ mod tests {
             name: "TestInt".into(),
             comments: "".into(),
             r#type: ASN1Type::Integer(AsnInteger {
-                constraint: Some(Constraint {
+                constraint: Some(SizeConstraint {
                     max_value: Some(1),
                     min_value: Some(8),
                     extensible: false,
@@ -372,7 +372,7 @@ mod tests {
                                     members: vec![SequenceMember {
                                         name: "inner".into(),
                                         r#type: ASN1Type::BitString(AsnBitString {
-                                            constraint: Some(Constraint {
+                                            constraint: Some(SizeConstraint {
                                                 min_value: Some(1),
                                                 max_value: Some(1),
                                                 extensible: true,
