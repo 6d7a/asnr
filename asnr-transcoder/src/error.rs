@@ -1,5 +1,6 @@
-use core::fmt::{Display, Formatter, Result};
-use std::error::Error;
+use core::{fmt::{Display, Formatter, Result}};
+
+use alloc::string::{String, ToString};
 
 #[derive(Debug, Clone)]
 pub struct DecodingError {
@@ -21,8 +22,6 @@ pub enum DecodingErrorType {
     InvalidSequenceMemberIndex,
     GenericParsingError,
 }
-
-impl Error for DecodingError {}
 
 impl From<nom::Err<nom::error::Error<&[u8]>>> for DecodingError {
     fn from(value: nom::Err<nom::error::Error<&[u8]>>) -> Self {

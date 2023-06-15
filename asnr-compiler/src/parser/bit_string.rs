@@ -1,15 +1,15 @@
 use nom::{
     bytes::complete::tag,
-    character::complete::{one_of, char},
+    character::complete::{char, one_of},
     combinator::{map, opt},
     multi::fold_many0,
     sequence::{delimited, pair, preceded, terminated},
     IResult,
 };
 
-use asnr_grammar::{ASN1Type, ASN1Value, BIT_STRING, SINGLE_QUOTE, SIZE};
+use asnr_grammar::{subtyping::RangeConstraint, *};
 
-use super::common::*;
+use super::{common::*, constraint::value_constraint};
 
 pub fn bit_string_value<'a>(input: &'a str) -> IResult<&'a str, ASN1Value> {
     map(
@@ -29,9 +29,9 @@ pub fn bit_string_value<'a>(input: &'a str) -> IResult<&'a str, ASN1Value> {
 }
 
 /// Tries to parse an ASN1 BIT STRING
-/// 
+///
 /// *`input` - string slice to be matched against
-/// 
+///
 /// `bit_string` will try to match an BIT STRING declaration in the `input` string.
 /// If the match succeeds, the parser will consume the match and return the remaining string
 /// and a wrapped `AsnBitString` value representing the ASN1 declaration.
@@ -42,16 +42,16 @@ pub fn bit_string<'a>(input: &'a str) -> IResult<&'a str, ASN1Type> {
             skip_ws_and_comments(tag(BIT_STRING)),
             pair(
                 opt(distinguished_values),
-                opt(in_parentheses(preceded(tag(SIZE), constraint))),
+                opt(in_parentheses(preceded(tag(SIZE), value_constraint))),
             ),
         ),
-        |m| ASN1Type::BitString(m.into()),
+        |m: (Option<Vec<_>>, Option<RangeConstraint>)| ASN1Type::BitString(m.into()),
     )(input)
 }
 
 #[cfg(test)]
 mod tests {
-    use asnr_grammar::{ASN1Type, AsnBitString, SizeConstraint, DistinguishedValue};
+    use asnr_grammar::{subtyping::*, types::*, *};
 
     use super::bit_string;
 
@@ -62,7 +62,7 @@ mod tests {
             bit_string(sample).unwrap().1,
             ASN1Type::BitString(AsnBitString {
                 distinguished_values: None,
-                constraint: None
+                constraints: vec![]
             })
         )
     }
@@ -74,11 +74,11 @@ mod tests {
             bit_string(sample).unwrap().1,
             ASN1Type::BitString(AsnBitString {
                 distinguished_values: None,
-                constraint: Some(SizeConstraint {
-                    max_value: Some(8),
-                    min_value: Some(8),
+                constraints: vec![RangeConstraint {
+                    max_value: Some(ASN1Value::Integer(8)),
+                    min_value: Some(ASN1Value::Integer(8)),
                     extensible: false
-                })
+                }]
             })
         )
     }
@@ -90,11 +90,11 @@ mod tests {
             bit_string(sample).unwrap().1,
             ASN1Type::BitString(AsnBitString {
                 distinguished_values: None,
-                constraint: Some(SizeConstraint {
-                    max_value: Some(18),
-                    min_value: Some(8),
+                constraints: vec![RangeConstraint {
+                    max_value: Some(ASN1Value::Integer(18)),
+                    min_value: Some(ASN1Value::Integer(8)),
                     extensible: false
-                })
+                }]
             })
         )
     }
@@ -106,11 +106,11 @@ mod tests {
             bit_string(sample).unwrap().1,
             ASN1Type::BitString(AsnBitString {
                 distinguished_values: None,
-                constraint: Some(SizeConstraint {
-                    max_value: Some(2),
-                    min_value: Some(2),
+                constraints: vec![RangeConstraint {
+                    max_value: Some(ASN1Value::Integer(2)),
+                    min_value: Some(ASN1Value::Integer(2)),
                     extensible: true
-                })
+                }]
             })
         )
     }
@@ -122,11 +122,11 @@ mod tests {
             bit_string(sample).unwrap().1,
             ASN1Type::BitString(AsnBitString {
                 distinguished_values: None,
-                constraint: Some(SizeConstraint {
-                    max_value: Some(18),
-                    min_value: Some(8),
+                constraints: vec![RangeConstraint {
+                    max_value: Some(ASN1Value::Integer(18)),
+                    min_value: Some(ASN1Value::Integer(8)),
                     extensible: true
-                })
+                }]
             })
         )
     }
@@ -160,11 +160,11 @@ mod tests {
                         value: 3
                     },
                 ]),
-                constraint: Some(SizeConstraint {
-                    max_value: Some(4),
-                    min_value: Some(4),
+                constraints: vec![RangeConstraint {
+                    max_value: Some(ASN1Value::Integer(4)),
+                    min_value: Some(ASN1Value::Integer(4)),
                     extensible: false
-                })
+                }]
             })
         )
     }

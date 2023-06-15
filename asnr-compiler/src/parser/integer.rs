@@ -7,7 +7,7 @@ use nom::{
 
 use asnr_grammar::{ASN1Type, INTEGER, ASN1Value};
 
-use super::*;
+use super::{*, constraint::value_constraint};
 
 pub fn integer_value<'a>(input: &'a str) -> IResult<&'a str, ASN1Value> {
   map(skip_ws_and_comments(i128), |m| ASN1Value::Integer(m))(input)
@@ -26,7 +26,7 @@ pub fn integer<'a>(input: &'a str) -> IResult<&'a str, ASN1Type> {
         tuple((
             skip_ws_and_comments(tag(INTEGER)),
             opt(skip_ws_and_comments(distinguished_values)),
-            opt(skip_ws_and_comments(constraint)),
+            opt(skip_ws_and_comments(value_constraint)),
         )),
         |m| ASN1Type::Integer(m.into()),
     )(input)
@@ -35,7 +35,8 @@ pub fn integer<'a>(input: &'a str) -> IResult<&'a str, ASN1Type> {
 #[cfg(test)]
 mod tests {
 
-    use asnr_grammar::{AsnInteger, SizeConstraint};
+  use asnr_grammar::{*, subtyping::*, types::*};
+
 
     use super::*;
 
@@ -50,9 +51,9 @@ mod tests {
             Ok((
                 "",
                 ASN1Type::Integer(
-                    SizeConstraint {
-                        min_value: Some(-9),
-                        max_value: Some(-4),
+                    RangeConstraint {
+                        min_value: Some(ASN1Value::Integer(-9)),
+                        max_value: Some(ASN1Value::Integer(-4)),
                         extensible: true
                     }
                     .into()
@@ -64,9 +65,9 @@ mod tests {
             Ok((
                 "",
                 ASN1Type::Integer(
-                    SizeConstraint {
-                        min_value: Some(-9),
-                        max_value: Some(-4),
+                    RangeConstraint {
+                        min_value: Some(ASN1Value::Integer(-9)),
+                        max_value: Some(ASN1Value::Integer(-4)),
                         extensible: false
                     }
                     .into()

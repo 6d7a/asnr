@@ -5,11 +5,15 @@
 //! For a start, the asnr transcoder will provide support for UPER encoding rules,
 //! but you can inject your own custom transcoder by implementing the `Decoder` and `Encoder` traits.
 //!
+#![no_std]
+extern crate alloc;
+
 pub mod error;
 //#[cfg(feature = "uper")]
 pub mod uper;
 
-use asnr_grammar::*;
+use alloc::{string::String, vec::Vec};
+use asnr_grammar::types::*;
 use error::DecodingError;
 use nom::IResult;
 use num::{FromPrimitive, Integer};
@@ -33,6 +37,15 @@ pub trait DecodeMember {
         Self: Sized;
 }
 
+pub trait DecoderForIndex {
+    fn decoder_for_index<'a, D>(
+        v: i128,
+    ) -> Result<fn(&D, &'a [u8]) -> IResult<&'a [u8], Self>, DecodingError>
+    where
+        D: Decoder,
+        Self: Sized;
+}
+
 pub trait Decoder {
     fn decode_integer<'a, O: Integer + FromPrimitive>(
         &self,
@@ -42,10 +55,10 @@ pub trait Decoder {
         &self,
         enumerated: AsnEnumerated,
     ) -> fn(&'a [u8]) -> IResult<&'a [u8], O>;
-    fn decode_choice<'a, O: TryFrom<i128>>(
-      &self,
-      enumerated: AsnEnumerated,
-  ) -> fn(&'a [u8]) -> IResult<&'a [u8], O>;
+    fn decode_choice<'a, O: DecoderForIndex>(
+        &self,
+        choice: AsnChoice,
+    ) -> fn(&'a [u8]) -> IResult<&'a [u8], O>;
     fn decode_boolean<'a>(&self, input: &'a [u8]) -> IResult<&'a [u8], bool>;
     fn decode_bit_string<'a>(
         &self,

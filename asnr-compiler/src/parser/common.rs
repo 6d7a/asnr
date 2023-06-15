@@ -6,15 +6,11 @@ use nom::{
     },
     combinator::{opt, recognize},
     multi::many0,
-    sequence::{delimited, pair, preceded, terminated, tuple},
+    sequence::{delimited, pair, preceded, terminated},
     IResult,
 };
 
-use asnr_grammar::{
-    SizeConstraint, DistinguishedValue, ExtensionMarker, RangeMarker, ASN1_COMMENT, ASSIGN, COMMA,
-    C_STYLE_BLOCK_COMMENT_BEGIN, C_STYLE_BLOCK_COMMENT_END, C_STYLE_LINE_COMMENT, ELLIPSIS,
-    LEFT_BRACE, LEFT_PARENTHESIS, RANGE, RIGHT_BRACE, RIGHT_PARENTHESIS,
-};
+use asnr_grammar::{*, subtyping::*, types::*};
 
 use super::util::{take_until_or, map_into};
 
@@ -89,15 +85,6 @@ where
     )
 }
 
-pub fn constraint<'a>(input: &'a str) -> IResult<&'a str, SizeConstraint> {
-    in_parentheses(alt((
-        extensible_range_constraint, // The most elaborate match first
-        strict_extensible_constraint,
-        range_constraint,
-        strict_constraint, // The most simple match last
-    )))(input)
-}
-
 pub fn range_marker<'a>(input: &'a str) -> IResult<&'a str, RangeMarker> {
     skip_ws_and_comments(tag(RANGE))(input).map(|(remaining, _)| (remaining, RangeMarker()))
 }
@@ -106,26 +93,6 @@ pub fn extension_marker<'a>(input: &'a str) -> IResult<&'a str, ExtensionMarker>
     skip_ws_and_comments(tag(ELLIPSIS))(input).map(|(remaining, _)| (remaining, ExtensionMarker()))
 }
 
-pub fn strict_constraint<'a>(input: &'a str) -> IResult<&'a str, SizeConstraint> {
-    map_into(i128)(input)
-}
-
-pub fn strict_extensible_constraint<'a>(input: &'a str) -> IResult<&'a str, SizeConstraint> {
-    map_into(pair(i128, preceded(char(','), extension_marker)))(input)
-}
-
-pub fn range_constraint<'a>(input: &'a str) -> IResult<&'a str, SizeConstraint> {
-    map_into(tuple((i128, range_marker, skip_ws_and_comments(i128))))(input)
-}
-
-pub fn extensible_range_constraint<'a>(input: &'a str) -> IResult<&'a str, SizeConstraint> {
-    map_into(tuple((
-        i128,
-        range_marker,
-        skip_ws_and_comments(i128),
-        preceded(skip_ws_and_comments(char(COMMA)), extension_marker),
-    )))(input)
-}
 
 pub fn assignment<'a>(input: &'a str) -> IResult<&'a str, &'a str> {
     skip_ws_and_comments(tag(ASSIGN))(input)
@@ -148,6 +115,8 @@ pub fn distinguished_val<'a>(input: &'a str) -> IResult<&'a str, DistinguishedVa
 
 #[cfg(test)]
 mod tests {
+
+    use crate::parser::constraint::value_constraint;
 
     use super::*;
 
@@ -247,80 +216,6 @@ and one */"#
         assert_eq!(
             skip_ws_and_comments(identifier)(" -- comment --EEE-DDD"),
             Ok(("", "EEE-DDD"))
-        );
-    }
-
-    #[test]
-    fn parses_constraint() {
-        assert_eq!(
-            constraint("(5)"),
-            Ok((
-                "",
-                SizeConstraint {
-                    min_value: Some(5),
-                    max_value: Some(5),
-                    extensible: false
-                }
-            ))
-        );
-        assert_eq!(
-            constraint("(5..9)"),
-            Ok((
-                "",
-                SizeConstraint {
-                    min_value: Some(5),
-                    max_value: Some(9),
-                    extensible: false
-                }
-            ))
-        );
-        assert_eq!(
-            constraint("(-5..9)"),
-            Ok((
-                "",
-                SizeConstraint {
-                    min_value: Some(-5),
-                    max_value: Some(9),
-                    extensible: false
-                }
-            ))
-        );
-        assert_eq!(
-            constraint("(-9..-4, ...)"),
-            Ok((
-                "",
-                SizeConstraint {
-                    min_value: Some(-9),
-                    max_value: Some(-4),
-                    extensible: true
-                }
-            ))
-        );
-    }
-
-    #[test]
-    fn parses_constraint_with_inserted_comment() {
-        assert_eq!(
-            constraint("(-9..-4, -- Very annoying! -- ...)"),
-            Ok((
-                "",
-                SizeConstraint {
-                    min_value: Some(-9),
-                    max_value: Some(-4),
-                    extensible: true
-                }
-            ))
-        );
-        assert_eq!(
-            constraint("(-9-- Very annoying! --..-4,  ...)"),
-            Ok((
-                "",
-                SizeConstraint {
-                    min_value: Some(-9),
-                    max_value: Some(-4),
-                    extensible: true
-                }
-            ))
         );
     }
 

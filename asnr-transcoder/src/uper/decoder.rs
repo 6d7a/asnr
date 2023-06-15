@@ -1,11 +1,13 @@
-use crate::Decoder;
+use alloc::{string::String, vec::Vec};
+
+use crate::{Decoder, DecoderForIndex};
 
 use super::Uper;
 
 impl Decoder for Uper {
     fn decode_integer<'a, O: num::Integer + num::FromPrimitive>(
         &self,
-        _integer: asnr_grammar::AsnInteger,
+        _integer: asnr_grammar::types::AsnInteger,
     ) -> fn(&'a [u8]) -> nom::IResult<&'a [u8], O> {
         move |input: &[u8]| {
             nom::bytes::complete::take(1_u8)(input)
@@ -15,7 +17,7 @@ impl Decoder for Uper {
 
     fn decode_enumerated<'a, O: TryFrom<i128>>(
         &self,
-        _enumerated: asnr_grammar::AsnEnumerated,
+        _enumerated: asnr_grammar::types::AsnEnumerated,
     ) -> fn(&'a [u8]) -> nom::IResult<&'a [u8], O> {
         todo!()
     }
@@ -26,28 +28,28 @@ impl Decoder for Uper {
 
     fn decode_bit_string<'a>(
         &self,
-        _bit_string: asnr_grammar::AsnBitString,
+        _bit_string: asnr_grammar::types::AsnBitString,
     ) -> fn(&'a [u8]) -> nom::IResult<&'a [u8], Vec<bool>> {
         todo!()
     }
 
     fn decode_character_string<'a>(
         &self,
-        _bit_string: asnr_grammar::AsnCharacterString,
+        _bit_string: asnr_grammar::types::AsnCharacterString,
     ) -> fn(&'a [u8]) -> nom::IResult<&'a [u8], String> {
         todo!()
     }
 
     fn decode_sequence<'a, T: crate::DecodeMember>(
         &self,
-        _sequence: asnr_grammar::AsnSequence,
+        _sequence: asnr_grammar::types::AsnSequence,
     ) -> fn(&'a [u8]) -> nom::IResult<&'a [u8], T> {
         todo!()
     }
 
     fn decode_sequence_of<'a, T: crate::Decode>(
         &self,
-        sequence_of: asnr_grammar::AsnSequenceOf,
+        sequence_of: asnr_grammar::types::AsnSequenceOf,
         member_decoder: impl FnMut(&Self, &'a [u8]) -> nom::IResult<&'a [u8], T>,
     ) -> fn(&'a [u8]) -> nom::IResult<&'a [u8], Vec<T>> {
         todo!()
@@ -57,9 +59,9 @@ impl Decoder for Uper {
         todo!()
     }
 
-    fn decode_choice<'a, O: TryFrom<i128>>(
+    fn decode_choice<'a, O: DecoderForIndex>(
       &self,
-      enumerated: asnr_grammar::AsnEnumerated,
+      choice: asnr_grammar::types::AsnChoice,
       ) -> fn(&'a [u8]) -> nom::IResult<&'a [u8], O> {
         todo!()
     }

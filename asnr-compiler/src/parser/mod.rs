@@ -36,6 +36,7 @@ mod bit_string;
 mod boolean;
 mod choice;
 mod common;
+mod constraint;
 mod enumerated;
 mod error;
 mod header;
@@ -93,7 +94,7 @@ pub fn elsewhere_declared_type<'a>(input: &'a str) -> IResult<&'a str, ASN1Type>
 mod tests {
     use core::panic;
 
-    use asnr_grammar::{ASN1Type, DistinguishedValue, Enumeral};
+    use asnr_grammar::{*, types::*};
 
     use super::top_level_declaration;
 
@@ -113,10 +114,10 @@ mod tests {
         assert_eq!(tld.name, String::from("CardinalNumber3b"));
         assert!(tld.comments.contains("@revision: Created in V2.1.1"));
         if let ASN1Type::Integer(int) = tld.r#type {
-            assert!(int.constraint.is_some());
-            assert_eq!(int.constraint.as_ref().unwrap().min_value, Some(1));
-            assert_eq!(int.constraint.as_ref().unwrap().max_value, Some(8));
-            assert_eq!(int.constraint.as_ref().unwrap().extensible, false);
+            assert!(!int.constraints.is_empty());
+            assert_eq!(int.constraints.first().unwrap().min_value, Some(ASN1Value::Integer(1)));
+            assert_eq!(int.constraints.first().unwrap().max_value, Some(ASN1Value::Integer(8)));
+            assert_eq!(int.constraints.first().unwrap().extensible, false);
         } else {
             panic!("Top-level declaration contains other type than integer.")
         }
@@ -144,9 +145,9 @@ mod tests {
         assert_eq!(tld.name, String::from("AccelerationMagnitudeValue"));
         assert!(tld.comments.contains("@unit 0,1 m/s^2"));
         if let ASN1Type::Integer(int) = tld.r#type {
-            assert_eq!(int.constraint.as_ref().unwrap().min_value, Some(0));
-            assert_eq!(int.constraint.as_ref().unwrap().max_value, Some(161));
-            assert_eq!(int.constraint.as_ref().unwrap().extensible, true);
+            assert_eq!(int.constraints.first().unwrap().min_value, Some(ASN1Value::Integer(0)));
+            assert_eq!(int.constraints.first().unwrap().max_value, Some(ASN1Value::Integer(161)));
+            assert_eq!(int.constraints.first().unwrap().extensible, true);
             assert_eq!(int.distinguished_values.as_ref().unwrap().len(), 2);
             assert_eq!(
                 int.distinguished_values.as_ref().unwrap()[0],

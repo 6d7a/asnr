@@ -1,8 +1,20 @@
-use asnr_grammar::{
-    ASN1Type, ChoiceOption, DistinguishedValue, Enumeral, SequenceMember, ToplevelDeclaration,
-};
+use asnr_grammar::{ types::*, *};
 
 use super::{builder::StringifiedNameType, error::GeneratorError, generate};
+
+pub fn int_type_token<'a>(min: i128, max: i128) -> &'a str {
+    match max - min {
+        r if r <= u8::MAX.into() && min >= 0 => "u8",
+        r if r <= u8::MAX.into() => "i8",
+        r if r <= u16::MAX.into() && min >= 0 => "u16",
+        r if r <= u16::MAX.into() => "i16",
+        r if r <= u32::MAX.into() && min >= 0 => "u32",
+        r if r <= u32::MAX.into() => "i32",
+        r if r <= u64::MAX.into() && min >= 0 => "u64",
+        r if r <= u64::MAX.into() => "i64",
+        _ => "i128",
+    }
+}
 
 pub fn format_comments(comments: &String) -> String {
     if comments.is_empty() {
@@ -24,9 +36,14 @@ pub fn format_enumeral(enumeral: &Enumeral) -> String {
 }
 
 pub fn format_option_from_int(args: (usize, &StringifiedNameType)) -> String {
-  format!(r#"x if x == {index} => Ok(|decoder, input| {{
+    format!(
+        r#"x if x == {index} => Ok(|decoder, input| {{
     {t}::decode(decoder, input).map(|(r, v)|(r, Self::{name}(v)))
-  }}),"#, index = args.0, name = args.1.name, t = args.1.r#type)
+  }}),"#,
+        index = args.0,
+        name = args.1.name,
+        t = args.1.r#type
+    )
 }
 
 pub fn format_enumeral_from_int(enumeral: &Enumeral) -> String {
@@ -127,11 +144,11 @@ pub fn extract_choice_options(options: &Vec<ChoiceOption>) -> Vec<StringifiedNam
 }
 
 pub fn format_option_declaration(members: &Vec<StringifiedNameType>) -> String {
-  members
-      .iter()
-      .map(|m| format!("{}({}),", m.name, m.r#type))
-      .collect::<Vec<String>>()
-      .join("\n  ")
+    members
+        .iter()
+        .map(|m| format!("{}({}),", m.name, m.r#type))
+        .collect::<Vec<String>>()
+        .join("\n  ")
 }
 
 pub fn extract_sequence_members(members: &Vec<SequenceMember>) -> Vec<StringifiedNameType> {
@@ -227,9 +244,9 @@ pub fn rustify_name(name: &String) -> String {
 
 #[cfg(test)]
 mod tests {
-    use asnr_grammar::Enumeral;
+    use asnr_grammar::types::*;
 
-    use crate::generator::util::format_enumeral;
+    use crate::generator::util::{format_enumeral};
 
     #[test]
     fn formats_enumeral() {

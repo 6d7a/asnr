@@ -2,16 +2,14 @@ use nom::{
     bytes::complete::tag,
     character::complete::char,
     combinator::{into, opt, value},
-    multi::{many0, many1},
+    multi::{many0},
     sequence::{terminated, tuple},
     IResult,
 };
 
-use asnr_grammar::{
-    OptionalMarker, SequenceMember, COMMA, DEFAULT, ELLIPSIS, OPTIONAL, SEQUENCE, WITH_COMPONENTS, PRESENT, ABSENT,
-};
+use asnr_grammar::{*, subtyping::*, types::*};
 
-use super::*;
+use super::{*, constraint::component_constraint};
 
 /// Tries to parse an ASN1 SEQUENCE
 ///
@@ -47,7 +45,7 @@ fn sequence_member<'a>(input: &'a str) -> IResult<&'a str, SequenceMember> {
     into(tuple((
         skip_ws_and_comments(identifier),
         skip_ws_and_comments(asn1_type),
-        opt(with_components),
+        opt(component_constraint),
         optional_marker,
         default,
     )))(input)
@@ -68,39 +66,11 @@ fn default<'a>(input: &'a str) -> IResult<&'a str, Option<ASN1Value>> {
     ))(input)
 }
 
-fn with_components<'a>(input: &'a str) -> IResult<&'a str, ()> {
-    value(
-        (),
-        in_parentheses(tuple((
-            skip_ws_and_comments(tag(WITH_COMPONENTS)),
-            skip_ws_and_comments(in_braces(pair(
-                opt(skip_ws_and_comments(terminated(
-                    tag(ELLIPSIS),
-                    skip_ws_and_comments(char(COMMA)),
-                ))),
-                many1(terminated(
-                    subset_member,
-                    opt(skip_ws_and_comments(char(COMMA))),
-                )),
-            ))),
-        ))),
-    )(input)
-}
 
-fn subset_member<'a>(input: &'a str) -> IResult<&'a str, (&str, Option<()>, Option<&str>)> {
-  skip_ws_and_comments(tuple((
-    identifier,
-    opt(skip_ws_and_comments(with_components)),
-    opt(skip_ws_and_comments(alt((tag(PRESENT), tag(ABSENT)))))
-  )))(input)
-}
 
 #[cfg(test)]
 mod tests {
-    use asnr_grammar::{
-        AsnBitString, AsnCharacterString, AsnInteger, AsnSequence, DeclarationElsewhere,
-        SizeConstraint,
-    };
+    use asnr_grammar::{*, subtyping::*, types::*};
 
     use super::*;
 
@@ -166,6 +136,7 @@ mod tests {
         .1,
         ASN1Type::Sequence(AsnSequence {
             extensible: Some(1),
+            constraints: vec![],
             members: vec![
                 SequenceMember {
                     name: "clusterBoundingBoxShape".into(),
@@ -173,7 +144,8 @@ mod tests {
                         "Shape".into()
                     )),
                     default_value: None,
-                    is_optional: true
+                    is_optional: true,
+                    constraints: vec![],
                 }
             ]
         })
@@ -193,6 +165,7 @@ mod tests {
             .1,
             ASN1Type::Sequence(AsnSequence {
                 extensible: None,
+                constraints: vec![],
                 members: vec![
                     SequenceMember {
                         name: "value".into(),
@@ -200,7 +173,8 @@ mod tests {
                             "AccelerationValue".into()
                         )),
                         default_value: None,
-                        is_optional: false
+                        is_optional: false,
+                        constraints: vec![]
                     },
                     SequenceMember {
                         name: "confidence".into(),
@@ -208,7 +182,8 @@ mod tests {
                             "AccelerationConfidence".into()
                         )),
                         default_value: None,
-                        is_optional: false
+                        is_optional: false,
+                        constraints: vec![],
                     }
                 ]
             })
@@ -230,6 +205,7 @@ mod tests {
             .1,
             ASN1Type::Sequence(AsnSequence {
                 extensible: None,
+                constraints: vec![],
                 members: vec![
                     SequenceMember {
                         name: "xCoordinate".into(),
@@ -237,7 +213,8 @@ mod tests {
                             "CartesianCoordinateWithConfidence".into()
                         )),
                         default_value: None,
-                        is_optional: false
+                        is_optional: false,
+                        constraints: vec![],
                     },
                     SequenceMember {
                         name: "yCoordinate".into(),
@@ -245,7 +222,8 @@ mod tests {
                             "CartesianCoordinateWithConfidence".into()
                         )),
                         default_value: None,
-                        is_optional: false
+                        is_optional: false,
+                        constraints: vec![],
                     },
                     SequenceMember {
                         name: "zCoordinate".into(),
@@ -253,7 +231,8 @@ mod tests {
                             "CartesianCoordinateWithConfidence".into()
                         )),
                         default_value: None,
-                        is_optional: true
+                        is_optional: true,
+                        constraints: vec![],
                     }
                 ]
             })
@@ -276,6 +255,7 @@ mod tests {
             .1,
             ASN1Type::Sequence(AsnSequence {
                 extensible: Some(3),
+                constraints: vec![],
                 members: vec![
                     SequenceMember {
                         name: "horizontalPositionConfidence".into(),
@@ -283,7 +263,8 @@ mod tests {
                             "PosConfidenceEllipse".into()
                         )),
                         default_value: None,
-                        is_optional: true
+                        is_optional: true,
+                        constraints: vec![],
                     },
                     SequenceMember {
                         name: "deltaAltitude".into(),
@@ -291,7 +272,8 @@ mod tests {
                             "DeltaAltitude".into()
                         )),
                         default_value: Some(ASN1Value::String("unavailable".into())),
-                        is_optional: true
+                        is_optional: true,
+                        constraints: vec![],
                     },
                     SequenceMember {
                         name: "altitudeConfidence".into(),
@@ -299,7 +281,8 @@ mod tests {
                             "AltitudeConfidence".into()
                         )),
                         default_value: Some(ASN1Value::String("unavailable".into())),
-                        is_optional: true
+                        is_optional: true,
+                        constraints: vec![],
                     }
                 ]
             })
@@ -321,38 +304,42 @@ mod tests {
             .1,
             ASN1Type::Sequence(AsnSequence {
                 extensible: Some(3),
+                constraints: vec![],
                 members: vec![
                     SequenceMember {
                         name: "unNumber".into(),
                         r#type: ASN1Type::Integer(AsnInteger {
-                            constraint: Some(SizeConstraint {
-                                min_value: Some(0),
-                                max_value: Some(9999),
+                            constraints: vec![RangeConstraint {
+                                min_value: Some(ASN1Value::Integer(0)),
+                                max_value: Some(ASN1Value::Integer(9999)),
                                 extensible: false
-                            }),
+                            }],
                             distinguished_values: None
                         }),
                         default_value: None,
-                        is_optional: false
+                        is_optional: false,
+                        constraints: vec![],
                     },
                     SequenceMember {
                         name: "limitedQuantity".into(),
                         r#type: ASN1Type::Boolean,
                         default_value: Some(ASN1Value::Boolean(false)),
-                        is_optional: true
+                        is_optional: true,
+                        constraints: vec![],
                     },
                     SequenceMember {
                         name: "emergencyActionCode".into(),
                         r#type: ASN1Type::CharacterString(AsnCharacterString {
-                            constraint: Some(SizeConstraint {
-                                min_value: Some(1),
-                                max_value: Some(24),
+                            constraints: vec![Constraint::RangeConstraint(RangeConstraint {
+                                min_value: Some(ASN1Value::Integer(1)),
+                                max_value: Some(ASN1Value::Integer(24)),
                                 extensible: false
-                            }),
+                            })],
                             r#type: asnr_grammar::CharacterStringType::OctetString
                         }),
                         default_value: None,
-                        is_optional: true
+                        is_optional: true,
+                        constraints: vec![],
                     }
                 ]
             })
@@ -381,10 +368,12 @@ mod tests {
             .1,
             ASN1Type::Sequence(AsnSequence {
                 extensible: Some(1),
+                constraints: vec![],
                 members: vec![SequenceMember {
                     name: "nested".into(),
                     r#type: ASN1Type::Sequence(AsnSequence {
                         extensible: Some(3),
+                        constraints: vec![],
                         members: vec![
                             SequenceMember {
                                 name: "wow".into(),
@@ -392,39 +381,45 @@ mod tests {
                                     "Wow".into()
                                 )),
                                 default_value: None,
-                                is_optional: false
+                                is_optional: false,
+                                constraints: vec![],
                             },
                             SequenceMember {
                                 name: "this-is-annoying".into(),
                                 r#type: ASN1Type::Boolean,
                                 default_value: Some(ASN1Value::Boolean(true)),
-                                is_optional: true
+                                is_optional: true,
+                                constraints: vec![],
                             },
                             SequenceMember {
                                 name: "another".into(),
                                 r#type: ASN1Type::Sequence(AsnSequence {
                                     extensible: None,
+                                    constraints: vec![],
                                     members: vec![SequenceMember {
                                         name: "inner".into(),
                                         r#type: ASN1Type::BitString(AsnBitString {
-                                            constraint: Some(SizeConstraint {
-                                                min_value: Some(1),
-                                                max_value: Some(1),
+                                            constraints: vec![RangeConstraint {
+                                                min_value: Some(ASN1Value::Integer(1)),
+                                                max_value: Some(ASN1Value::Integer(1)),
                                                 extensible: true
-                                            }),
+                                            }],
                                             distinguished_values: None
                                         }),
                                         default_value: Some(ASN1Value::String("0".into())),
-                                        is_optional: true
+                                        is_optional: true,
+                                        constraints: vec![],
                                     }]
                                 }),
                                 default_value: None,
-                                is_optional: true
+                                is_optional: true,
+                                constraints: vec![],
                             }
                         ]
                     }),
                     default_value: None,
-                    is_optional: false
+                    is_optional: false,
+                    constraints: vec![],
                 }]
             })
         )

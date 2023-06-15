@@ -8,9 +8,10 @@ pub const RUST_IMPORTS_TEMPLATE: &str = r#"// This file has been auto-generated 
 #![allow(unused_mut)]
 #![allow(unused_variables)]
 
-use asnr_grammar::*;
+use alloc::{format, vec, vec::Vec, string::String, boxed::Box};
+use asnr_grammar::{*, types::*, subtyping::*};
+use asnr_transcoder::{error::{DecodingError, DecodingErrorType}, Decode, Decoder, DecodeMember, DecoderForIndex};
 use nom::IResult;
-use asnr_transcoder::{error::{DecodingError, DecodingErrorType}, Decode, Decoder, DecodeMember};
 
 "#;
 
@@ -256,9 +257,9 @@ pub enum {name} {{
   {options}
 }}
 
-impl {name} {{
-  pub fn decoder_for_index<'a>(v: i128) -> Result<fn(dyn Decoder, &'a [u8]) -> IResult<&'a [u8], Self>, DecodingError> {{
-    match v.0 {{
+impl DecoderForIndex for {name} {{
+  fn decoder_for_index<'a, D>(v: i128) -> Result<fn(&D, &'a [u8]) -> IResult<&'a [u8], Self>, DecodingError> where D: Decoder, Self: Sized {{
+    match v {{
         {options_from_int}
         _ => Err(
           DecodingError::new(

@@ -7,7 +7,7 @@ use nom::{
     IResult,
 };
 
-use asnr_grammar::{ASN1Type, ASN1Value, Enumeral, ExtensionMarker, COMMA, ENUMERATED};
+use asnr_grammar::{subtyping::*, types::*, *};
 
 use super::common::*;
 
@@ -77,7 +77,7 @@ fn enumerated_body<'a>(
 
 #[cfg(test)]
 mod tests {
-    use asnr_grammar::AsnEnumerated;
+    use asnr_grammar::types::*;
 
     use super::*;
 
@@ -124,6 +124,7 @@ mod tests {
             .unwrap()
             .1,
             ASN1Type::Enumerated(AsnEnumerated {
+                constraints: vec![],
                 members: vec![
                     Enumeral {
                         name: "onePerMeter-0-1".into(),
@@ -153,6 +154,7 @@ mod tests {
                 .unwrap()
                 .1,
             ASN1Type::Enumerated(AsnEnumerated {
+                constraints: vec![],
                 members: vec![
                     Enumeral {
                         name: "m1".into(),
@@ -188,6 +190,7 @@ mod tests {
             .unwrap()
             .1,
             ASN1Type::Enumerated(AsnEnumerated {
+                constraints: vec![],
                 members: vec![
                     Enumeral {
                         name: "permanentCenDsrcTolling".into(),
@@ -219,6 +222,7 @@ mod tests {
             .unwrap()
             .1,
             ASN1Type::Enumerated(AsnEnumerated {
+                constraints: vec![],
                 members: vec![
                     Enumeral {
                         name: "forward".into(),
@@ -253,6 +257,7 @@ mod tests {
             .unwrap()
             .1,
             ASN1Type::Enumerated(AsnEnumerated {
+                constraints: vec![],
                 members: vec![Enumeral {
                     name: "forward".into(),
                     description: Some(

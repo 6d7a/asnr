@@ -1,3 +1,4 @@
 /target
 *.asn
 /.vscode
+generated.rs

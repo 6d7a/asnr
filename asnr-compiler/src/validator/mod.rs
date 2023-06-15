@@ -7,9 +7,7 @@
 //! constraints and value definitions.
 pub(crate) mod error;
 
-use asnr_grammar::{
-    ASN1Type, AsnBitString, AsnInteger, AsnCharacterString, SizeConstraint, ToplevelDeclaration,
-};
+use asnr_grammar::{subtyping::*, types::*, *};
 
 use self::error::{ValidatorError, ValidatorErrorType};
 
@@ -18,13 +16,13 @@ pub trait Validate {
 }
 
 impl Validate for ToplevelDeclaration {
-  fn validate(&self) -> Result<(), ValidatorError> {
-      if let Err(mut e) = self.r#type.validate() {
-        e.specify_data_element(self.name.clone());
-        return Err(e)
-      }
-      Ok(())
-  }
+    fn validate(&self) -> Result<(), ValidatorError> {
+        if let Err(mut e) = self.r#type.validate() {
+            e.specify_data_element(self.name.clone());
+            return Err(e);
+        }
+        Ok(())
+    }
 }
 
 impl Validate for ASN1Type {
@@ -40,25 +38,36 @@ impl Validate for ASN1Type {
 
 impl Validate for AsnInteger {
     fn validate(&self) -> Result<(), ValidatorError> {
-        self.constraint.as_ref().map_or(Ok(()), |c| c.validate())
+        for c in &self.constraints {
+            c.validate()?;
+        }
+        Ok(())
     }
 }
 
 impl Validate for AsnBitString {
     fn validate(&self) -> Result<(), ValidatorError> {
-        self.constraint.as_ref().map_or(Ok(()), |c| c.validate())
+        for c in &self.constraints {
+            c.validate()?;
+        }
+        Ok(())
     }
 }
 
 impl Validate for AsnCharacterString {
     fn validate(&self) -> Result<(), ValidatorError> {
-        self.constraint.as_ref().map_or(Ok(()), |c| c.validate())
+        for c in &self.constraints {
+            if let Constraint::RangeConstraint(r) = c {
+                r.validate()?;
+            }
+        }
+        Ok(())
     }
 }
 
-impl Validate for SizeConstraint {
+impl Validate for RangeConstraint {
     fn validate(&self) -> Result<(), ValidatorError> {
-        if let Some((min, max)) = self.min_value.zip(self.max_value) {
+        if let Some((ASN1Value::Integer(min), ASN1Value::Integer(max))) = self.min_value.as_ref().zip(self.max_value.as_ref()) {
             if min > max {
                 return Err(ValidatorError::new(
                     None,

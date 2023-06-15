@@ -1,4 +1,4 @@
-use asnr_grammar::{ASN1Type, LEFT_PARENTHESIS, OF, RIGHT_PARENTHESIS, SEQUENCE, SIZE};
+use asnr_grammar::*;
 use nom::{
     bytes::complete::tag,
     character::complete::char,
@@ -9,7 +9,8 @@ use nom::{
 
 use super::{
     asn1_type,
-    common::{constraint, skip_ws_and_comments},
+    common::skip_ws_and_comments,
+    constraint::{constraint}
 };
 
 /// Tries to parse an ASN1 SEQUENCE OF
@@ -27,10 +28,7 @@ pub fn sequence_of<'a>(input: &'a str) -> IResult<&'a str, ASN1Type> {
                 skip_ws_and_comments(tag(SEQUENCE)),
                 opt(delimited(
                     opt(skip_ws_and_comments(char(LEFT_PARENTHESIS))),
-                    preceded(
-                        skip_ws_and_comments(tag(SIZE)),
-                        skip_ws_and_comments(constraint),
-                    ),
+                    constraint,
                     opt(skip_ws_and_comments(char(RIGHT_PARENTHESIS))),
                 )),
             ),
@@ -42,9 +40,7 @@ pub fn sequence_of<'a>(input: &'a str) -> IResult<&'a str, ASN1Type> {
 
 #[cfg(test)]
 mod tests {
-    use asnr_grammar::{
-        ASN1Type, AsnInteger, AsnSequenceOf, SizeConstraint, DeclarationElsewhere, DistinguishedValue,
-    };
+    use asnr_grammar::{subtyping::*, types::*, *};
 
     use crate::parser::sequence_of;
 
@@ -53,7 +49,7 @@ mod tests {
         assert_eq!(
             sequence_of("SEQUENCE OF BOOLEAN").unwrap().1,
             ASN1Type::SequenceOf(AsnSequenceOf {
-                constraint: None,
+                constraints: vec![],
                 r#type: Box::new(ASN1Type::Boolean)
             })
         );
@@ -64,7 +60,7 @@ mod tests {
         assert_eq!(
             sequence_of("SEQUENCE OF Things").unwrap().1,
             ASN1Type::SequenceOf(AsnSequenceOf {
-                constraint: None,
+              constraints: vec![],
                 r#type: Box::new(ASN1Type::ElsewhereDeclaredType(DeclarationElsewhere(
                     "Things".into()
                 )))
@@ -79,11 +75,11 @@ mod tests {
                 .unwrap()
                 .1,
             ASN1Type::SequenceOf(AsnSequenceOf {
-                constraint: Some(SizeConstraint {
-                    min_value: Some(1),
-                    max_value: Some(13),
+                constraints: vec![Constraint::RangeConstraint(RangeConstraint {
+                    min_value: Some(ASN1Value::Integer(1)),
+                    max_value: Some(ASN1Value::Integer(13)),
                     extensible: true
-                }),
+                })],
                 r#type: Box::new(ASN1Type::ElsewhereDeclaredType(DeclarationElsewhere(
                     "CorrelationCellValue".into()
                 )))
@@ -98,11 +94,11 @@ mod tests {
                 .unwrap()
                 .1,
             ASN1Type::SequenceOf(AsnSequenceOf {
-                constraint: Some(SizeConstraint {
-                    min_value: Some(1),
-                    max_value: Some(13),
+                constraints: vec![Constraint::RangeConstraint(RangeConstraint {
+                    min_value: Some(ASN1Value::Integer(1)),
+                    max_value: Some(ASN1Value::Integer(13)),
                     extensible: true
-                }),
+                })],
                 r#type: Box::new(ASN1Type::ElsewhereDeclaredType(DeclarationElsewhere(
                     "CorrelationCellValue".into()
                 )))
@@ -121,17 +117,17 @@ mod tests {
             .unwrap()
             .1,
             ASN1Type::SequenceOf(AsnSequenceOf {
-                constraint: Some(SizeConstraint {
-                    min_value: Some(1),
-                    max_value: Some(13),
+                constraints: vec![Constraint::RangeConstraint(RangeConstraint {
+                    min_value: Some(ASN1Value::Integer(1)),
+                    max_value: Some(ASN1Value::Integer(13)),
                     extensible: true
-                }),
+                })],
                 r#type: Box::new(ASN1Type::Integer(AsnInteger {
-                    constraint: Some(SizeConstraint {
-                        min_value: Some(1),
-                        max_value: Some(13),
+                    constraints: vec![RangeConstraint {
+                        min_value: Some(ASN1Value::Integer(1)),
+                        max_value: Some(ASN1Value::Integer(13)),
                         extensible: true
-                    }),
+                    }],
                     distinguished_values: Some(vec![DistinguishedValue {
                         name: "one-distinguished-value".into(),
                         value: 12

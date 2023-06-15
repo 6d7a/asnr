@@ -1,4 +1,4 @@
-use asnr_grammar::{ASN1Type, Quote, ToplevelDeclaration};
+use asnr_grammar::*;
 
 use super::{
     error::{GeneratorError, GeneratorErrorType},
@@ -17,10 +17,18 @@ pub fn generate_integer<'a>(
     custom_derive: Option<&'a str>,
 ) -> Result<String, GeneratorError> {
     if let ASN1Type::Integer(ref int) = tld.r#type {
-        let integer_type = int
-            .constraint
-            .as_ref()
-            .map_or("i128", |c| c.int_type_token());
+        let integer_min_max = int
+            .constraints
+            .iter()
+            .fold((0i128, 0i128), |acc, c| {
+              if let Some((ASN1Value::Integer(min), ASN1Value::Integer(max))) = c.min_value.as_ref().zip(c.max_value.as_ref()) {
+                (acc.0.min(*min), acc.1.max(*max))
+              } else {
+                acc
+              }
+              
+        });
+        let integer_type = int_type_token(integer_min_max.0, integer_min_max.1);
         Ok(integer_template(
             format_comments(&tld.comments),
             custom_derive.unwrap_or(DERIVE_DEFAULT),
@@ -142,8 +150,14 @@ pub fn generate_choice<'a>(
         let options = extract_choice_options(&choice.options);
         let options_declaration = format_option_declaration(&options);
         let default_option = match options.first() {
-          Some(o) => default_choice(o),
-          None => { return Err(GeneratorError { top_level_declaration: tld, details: "Empty CHOICE types are not yet supported!".into(), kind: GeneratorErrorType::EmptyChoiceType })}
+            Some(o) => default_choice(o),
+            None => {
+                return Err(GeneratorError {
+                    top_level_declaration: tld,
+                    details: "Empty CHOICE types are not yet supported!".into(),
+                    kind: GeneratorErrorType::EmptyChoiceType,
+                })
+            }
         };
         let options_from_int: String = options
             .iter()
@@ -152,7 +166,7 @@ pub fn generate_choice<'a>(
             .collect::<Vec<String>>()
             .join("\n\t\t  ");
         Ok(choice_template(
-          format_comments(&tld.comments),
+            format_comments(&tld.comments),
             custom_derive.unwrap_or("#[derive(Debug, Clone, PartialEq)]"),
             name,
             inner_options,
@@ -241,10 +255,7 @@ pub fn generate_sequence_of<'a>(
 
 #[cfg(test)]
 mod tests {
-    use asnr_grammar::{
-        ASN1Type, ASN1Value, AsnBitString, AsnEnumerated, AsnInteger, AsnSequence, SizeConstraint,
-        DeclarationElsewhere, DistinguishedValue, Enumeral, SequenceMember, ToplevelDeclaration,
-    };
+    use asnr_grammar::{subtyping::*, types::*, *};
 
     use crate::generator::builder::{
         generate_bit_string, generate_enumerated, generate_integer, generate_sequence,
@@ -256,6 +267,7 @@ mod tests {
             name: "TestEnum".into(),
             comments: "".into(),
             r#type: ASN1Type::Enumerated(AsnEnumerated {
+                constraints: vec![],
                 members: vec![
                     Enumeral {
                         name: "forward".into(),
@@ -285,11 +297,11 @@ mod tests {
             name: "BitString".into(),
             comments: "".into(),
             r#type: ASN1Type::BitString(AsnBitString {
-                constraint: Some(SizeConstraint {
-                    max_value: Some(8),
-                    min_value: Some(8),
+                constraints: vec![RangeConstraint {
+                    max_value: Some(ASN1Value::Integer(8)),
+                    min_value: Some(ASN1Value::Integer(8)),
                     extensible: true,
-                }),
+                }],
                 distinguished_values: Some(vec![
                     DistinguishedValue {
                         name: "firstBit".into(),
@@ -315,11 +327,11 @@ mod tests {
             name: "TestInt".into(),
             comments: "".into(),
             r#type: ASN1Type::Integer(AsnInteger {
-                constraint: Some(SizeConstraint {
-                    max_value: Some(1),
-                    min_value: Some(8),
+                constraints: vec![RangeConstraint {
+                    max_value: Some(ASN1Value::Integer(1)),
+                    min_value: Some(ASN1Value::Integer(8)),
                     extensible: false,
-                }),
+                }],
                 distinguished_values: Some(vec![
                     DistinguishedValue {
                         name: "negativeOutOfRange".into(),
@@ -345,11 +357,13 @@ mod tests {
             name: "Sequence".into(),
             comments: "".into(),
             r#type: ASN1Type::Sequence(AsnSequence {
+                constraints: vec![],
                 extensible: Some(1),
                 members: vec![SequenceMember {
                     name: "nested".into(),
                     r#type: ASN1Type::Sequence(AsnSequence {
                         extensible: Some(3),
+                        constraints: vec![],
                         members: vec![
                             SequenceMember {
                                 name: "wow".into(),
@@ -358,38 +372,44 @@ mod tests {
                                 )),
                                 default_value: None,
                                 is_optional: false,
+                                constraints: vec![],
                             },
                             SequenceMember {
                                 name: "this-is-annoying".into(),
                                 r#type: ASN1Type::Boolean,
                                 default_value: Some(ASN1Value::Boolean(true)),
                                 is_optional: true,
+                                constraints: vec![],
                             },
                             SequenceMember {
                                 name: "another".into(),
                                 r#type: ASN1Type::Sequence(AsnSequence {
                                     extensible: None,
+                                    constraints: vec![],
                                     members: vec![SequenceMember {
                                         name: "inner".into(),
                                         r#type: ASN1Type::BitString(AsnBitString {
-                                            constraint: Some(SizeConstraint {
-                                                min_value: Some(1),
-                                                max_value: Some(1),
+                                            constraints: vec![RangeConstraint {
+                                                min_value: Some(ASN1Value::Integer(1)),
+                                                max_value: Some(ASN1Value::Integer(1)),
                                                 extensible: true,
-                                            }),
+                                            }],
                                             distinguished_values: None,
                                         }),
                                         default_value: Some(ASN1Value::String("0".into())),
                                         is_optional: true,
+                                        constraints: vec![],
                                     }],
                                 }),
                                 default_value: None,
                                 is_optional: true,
+                                constraints: vec![],
                             },
                         ],
                     }),
                     default_value: None,
                     is_optional: false,
+                    constraints: vec![],
                 }],
             }),
         };
