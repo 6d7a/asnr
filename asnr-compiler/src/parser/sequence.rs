@@ -1,15 +1,20 @@
+use std::thread::park_timeout;
+
 use nom::{
     bytes::complete::tag,
     character::complete::char,
     combinator::{into, opt, value},
-    multi::{many0},
+    multi::many0,
     sequence::{terminated, tuple},
     IResult,
 };
 
-use asnr_grammar::{*, subtyping::*, types::*};
+use asnr_grammar::{subtyping::*, types::*, *};
 
-use super::{*, constraint::component_constraint};
+use super::{
+    constraint::{component_constraint, constraint},
+    *,
+};
 
 /// Tries to parse an ASN1 SEQUENCE
 ///
@@ -25,17 +30,20 @@ pub fn sequence<'a>(input: &'a str) -> IResult<&'a str, ASN1Type> {
     map(
         preceded(
             skip_ws_and_comments(tag(SEQUENCE)),
-            in_braces(tuple((
-                many0(terminated(
-                    skip_ws_and_comments(sequence_member),
-                    skip_ws_and_comments(opt(char(COMMA))),
-                )),
-                opt(terminated(extension_marker, opt(char(COMMA)))),
-                opt(many0(terminated(
-                    skip_ws_and_comments(sequence_member),
-                    skip_ws_and_comments(opt(char(COMMA))),
+            pair(
+                in_braces(tuple((
+                    many0(terminated(
+                        skip_ws_and_comments(sequence_member),
+                        skip_ws_and_comments(opt(char(COMMA))),
+                    )),
+                    opt(terminated(extension_marker, opt(char(COMMA)))),
+                    opt(many0(terminated(
+                        skip_ws_and_comments(sequence_member),
+                        skip_ws_and_comments(opt(char(COMMA))),
+                    ))),
                 ))),
-            ))),
+                opt(constraint),
+            ),
         ),
         |m| ASN1Type::Sequence(m.into()),
     )(input)
@@ -66,11 +74,9 @@ fn default<'a>(input: &'a str) -> IResult<&'a str, Option<ASN1Value>> {
     ))(input)
 }
 
-
-
 #[cfg(test)]
 mod tests {
-    use asnr_grammar::{*, subtyping::*, types::*};
+    use asnr_grammar::{subtyping::*, types::*, *};
 
     use super::*;
 
@@ -125,7 +131,7 @@ mod tests {
 
     #[test]
     fn parses_subtyped_sequence() {
-      assert_eq!(
+        assert_eq!(
         sequence(
             r#"SEQUENCE { 
               clusterBoundingBoxShape    Shape (WITH COMPONENTS{..., elliptical ABSENT, radial ABSENT, radialShapes ABSENT}) OPTIONAL,

@@ -4,7 +4,7 @@ use asnr_grammar::{
         RangeConstraint,
     },
     ABSENT, CARET, COMMA, ELLIPSIS, EXCEPT, INTERSECTION, PIPE, PRESENT, SIZE, UNION,
-    WITH_COMPONENTS, WITH_COMPONENT,
+    WITH_COMPONENT, WITH_COMPONENTS,
 };
 use nom::{
     branch::alt,
@@ -151,10 +151,13 @@ fn subset_member<'a>(
 
 #[cfg(test)]
 mod tests {
-    use asnr_grammar::{subtyping::{
-        ArithmeticOperator, ComponentConstraint, ComponentPresence, ConstrainedComponent,
-        Constraint, RangeConstraint,
-    }, ASN1Value};
+    use asnr_grammar::{
+        subtyping::{
+            ArithmeticOperator, ComponentConstraint, ComponentPresence, ConstrainedComponent,
+            Constraint, RangeConstraint,
+        },
+        ASN1Value,
+    };
 
     use crate::parser::constraint::{component_constraint, constraint, value_constraint};
 
@@ -334,4 +337,81 @@ mod tests {
             ]
         );
     }
+
+    #[test]
+    fn parses_composite_component_constraint() {
+        assert_eq!(
+            constraint(
+                "((WITH COMPONENTS {..., laneId PRESENT, connectionId ABSENT }) |
+                (WITH COMPONENTS {..., laneId ABSENT, connectionId PRESENT }))
+            "
+            )
+            .unwrap()
+            .1,
+            vec![
+                Constraint::ComponentConstraint(ComponentConstraint {
+                    is_partial: true,
+                    constraints: vec![
+                        ConstrainedComponent {
+                            identifier: "laneId".into(),
+                            constraints: vec![],
+                            presence: ComponentPresence::Present
+                        },
+                        ConstrainedComponent {
+                            identifier: "connectionId".into(),
+                            constraints: vec![],
+                            presence: ComponentPresence::Absent
+                        }
+                    ]
+                }),
+                Constraint::Arithmetic(ArithmeticOperator::Union),
+                Constraint::ComponentConstraint(ComponentConstraint {
+                    is_partial: true,
+                    constraints: vec![
+                        ConstrainedComponent {
+                            identifier: "laneId".into(),
+                            constraints: vec![],
+                            presence: ComponentPresence::Absent
+                        },
+                        ConstrainedComponent {
+                            identifier: "connectionId".into(),
+                            constraints: vec![],
+                            presence: ComponentPresence::Present
+                        }
+                    ]
+                })
+            ]
+        );
+    }
+
+    // #[test]
+    // fn parses_composite_range_constraint() {
+    //     assert_eq!(
+    //         constraint(
+    //             "(0..3|5..8|10)
+    //         "
+    //         )
+    //         .unwrap()
+    //         .1,
+    //         vec![
+    //             Constraint::ComponentConstraint(ComponentConstraint {
+    //                 is_partial: true,
+    //                 constraints: vec![ConstrainedComponent {
+    //                     identifier: "eventDeltaTime".into(),
+    //                     constraints: vec![],
+    //                     presence: ComponentPresence::Present
+    //                 }]
+    //             }),
+    //             Constraint::Arithmetic(ArithmeticOperator::Union),
+    //             Constraint::ComponentConstraint(ComponentConstraint {
+    //                 is_partial: true,
+    //                 constraints: vec![ConstrainedComponent {
+    //                     identifier: "eventDeltaTime".into(),
+    //                     constraints: vec![],
+    //                     presence: ComponentPresence::Absent
+    //                 }]
+    //             })
+    //         ]
+    //     );
+    // }
 }

@@ -9,7 +9,7 @@ use nom::{
 
 use asnr_grammar::{*, types::*};
 
-use super::*;
+use super::{*, constraint::constraint};
 
 /// Tries to parse an ASN1 CHOICE
 ///
@@ -45,5 +45,6 @@ fn choice_option<'a>(input: &'a str) -> IResult<&'a str, ChoiceOption> {
   into(tuple((
       skip_ws_and_comments(identifier),
       skip_ws_and_comments(asn1_type),
+      opt(skip_ws_and_comments(constraint))
   )))(input)
 }

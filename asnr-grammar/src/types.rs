@@ -199,24 +199,30 @@ pub struct AsnSequence {
 
 impl
     From<(
-        Vec<SequenceMember>,
-        Option<ExtensionMarker>,
-        Option<Vec<SequenceMember>>,
-    )> for AsnSequence
-{
-    fn from(
-        mut value: (
+        (
             Vec<SequenceMember>,
             Option<ExtensionMarker>,
             Option<Vec<SequenceMember>>,
         ),
+        Option<Vec<Constraint>>,
+    )> for AsnSequence
+{
+    fn from(
+        mut value: (
+            (
+                Vec<SequenceMember>,
+                Option<ExtensionMarker>,
+                Option<Vec<SequenceMember>>,
+            ),
+            Option<Vec<Constraint>>,
+        ),
     ) -> Self {
-        let index_of_first_extension = value.0.len();
-        value.0.append(&mut value.2.unwrap_or(vec![]));
+        let index_of_first_extension = value.0 .0.len();
+        value.0 .0.append(&mut value.0 .2.unwrap_or(vec![]));
         AsnSequence {
-            constraints: vec![],
-            extensible: value.1.map(|_| index_of_first_extension),
-            members: value.0,
+            constraints: value.1.unwrap_or(vec![]),
+            extensible: value.0 .1.map(|_| index_of_first_extension),
+            members: value.0 .0,
         }
     }
 }
@@ -361,12 +367,12 @@ pub struct ChoiceOption {
     pub constraints: Vec<Constraint>,
 }
 
-impl From<(&str, ASN1Type)> for ChoiceOption {
-    fn from(value: (&str, ASN1Type)) -> Self {
+impl From<(&str, ASN1Type, Option<Vec<Constraint>>)> for ChoiceOption {
+    fn from(value: (&str, ASN1Type, Option<Vec<Constraint>>)) -> Self {
         ChoiceOption {
             name: value.0.into(),
             r#type: value.1,
-            constraints: vec![],
+            constraints: value.2.unwrap_or(vec![]),
         }
     }
 }
