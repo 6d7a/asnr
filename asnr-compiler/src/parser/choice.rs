@@ -44,6 +44,7 @@ pub fn choice<'a>(input: &'a str) -> IResult<&'a str, ASN1Type> {
 fn choice_option<'a>(input: &'a str) -> IResult<&'a str, ChoiceOption> {
   into(tuple((
       skip_ws_and_comments(identifier),
+      opt(asn_tag),
       skip_ws_and_comments(asn1_type),
       opt(skip_ws_and_comments(constraint))
   )))(input)

@@ -117,6 +117,26 @@ impl Decode for {name} {{
 )
 }
 
+pub fn null_template(
+  comments: String,
+  derive: &str,
+  name: String,
+) -> String {
+  format!(
+    r#"
+{comments}{derive}
+pub struct {name};
+
+impl Decode for {name} {{
+  {DECODE_SIGNATURE}
+  {{
+    decoder.decode_null(input)
+  }}
+}}
+"#
+)
+}
+
 pub fn enumerated_template(
     comments: String,
     derive: &str,
@@ -163,8 +183,8 @@ pub fn enumerated_template(
 pub fn sequence_template(
     comments: String,
     derive: &str,
-    name: String,
     inner_members: String,
+    name: String,
     member_declaration: String,
     extension_decl: String,
     decode_member_body: String,

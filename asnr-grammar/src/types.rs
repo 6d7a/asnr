@@ -6,7 +6,7 @@ use crate::{subtyping::*, *};
 /// with corresponding constraints and distinguished values
 #[derive(Debug, Clone, PartialEq)]
 pub struct AsnInteger {
-    pub constraints: Vec<RangeConstraint>,
+    pub constraints: Vec<ValueConstraint>,
     pub distinguished_values: Option<Vec<DistinguishedValue>>,
 }
 
@@ -40,8 +40,8 @@ impl Default for AsnInteger {
     }
 }
 
-impl From<RangeConstraint> for AsnInteger {
-    fn from(value: RangeConstraint) -> Self {
+impl From<ValueConstraint> for AsnInteger {
+    fn from(value: ValueConstraint) -> Self {
         Self {
             constraints: vec![value],
             distinguished_values: None,
@@ -52,7 +52,7 @@ impl From<RangeConstraint> for AsnInteger {
 impl From<(Option<i128>, Option<i128>, bool)> for AsnInteger {
     fn from(value: (Option<i128>, Option<i128>, bool)) -> Self {
         Self {
-            constraints: vec![RangeConstraint {
+            constraints: vec![ValueConstraint {
                 min_value: value.0.map(|v| ASN1Value::Integer(v)),
                 max_value: value.1.map(|v| ASN1Value::Integer(v)),
                 extensible: value.2,
@@ -66,14 +66,14 @@ impl
     From<(
         &str,
         Option<Vec<DistinguishedValue>>,
-        Option<RangeConstraint>,
+        Option<ValueConstraint>,
     )> for AsnInteger
 {
     fn from(
         value: (
             &str,
             Option<Vec<DistinguishedValue>>,
-            Option<RangeConstraint>,
+            Option<ValueConstraint>,
         ),
     ) -> Self {
         Self {
@@ -88,12 +88,12 @@ impl
 /// defining the individual bits
 #[derive(Debug, Clone, PartialEq)]
 pub struct AsnBitString {
-    pub constraints: Vec<RangeConstraint>,
+    pub constraints: Vec<ValueConstraint>,
     pub distinguished_values: Option<Vec<DistinguishedValue>>,
 }
 
-impl From<(Option<Vec<DistinguishedValue>>, Option<RangeConstraint>)> for AsnBitString {
-    fn from(value: (Option<Vec<DistinguishedValue>>, Option<RangeConstraint>)) -> Self {
+impl From<(Option<Vec<DistinguishedValue>>, Option<ValueConstraint>)> for AsnBitString {
+    fn from(value: (Option<Vec<DistinguishedValue>>, Option<ValueConstraint>)) -> Self {
         AsnBitString {
             constraints: value.1.map_or(vec![], |r| vec![r]),
             distinguished_values: value.0,
@@ -132,12 +132,12 @@ pub struct AsnCharacterString {
     pub r#type: CharacterStringType,
 }
 
-impl From<(&str, Option<RangeConstraint>)> for AsnCharacterString {
-    fn from(value: (&str, Option<RangeConstraint>)) -> Self {
+impl From<(&str, Option<ValueConstraint>)> for AsnCharacterString {
+    fn from(value: (&str, Option<ValueConstraint>)) -> Self {
         AsnCharacterString {
             constraints: value
                 .1
-                .map_or(vec![], |r| vec![Constraint::RangeConstraint(r)]),
+                .map_or(vec![], |r| vec![Constraint::ValueConstraint(r)]),
             r#type: value.0.into(),
         }
     }
@@ -252,6 +252,7 @@ impl Quote for AsnSequence {
 #[derive(Debug, Clone, PartialEq)]
 pub struct SequenceMember {
     pub name: String,
+    pub tag: Option<AsnTag>,
     pub r#type: ASN1Type,
     pub default_value: Option<ASN1Value>,
     pub is_optional: bool,
@@ -261,8 +262,9 @@ pub struct SequenceMember {
 impl
     From<(
         &str,
+        Option<AsnTag>,
         ASN1Type,
-        Option<ComponentConstraint>,
+        Option<Vec<Constraint>>,
         Option<OptionalMarker>,
         Option<ASN1Value>,
     )> for SequenceMember
@@ -270,18 +272,20 @@ impl
     fn from(
         value: (
             &str,
+            Option<AsnTag>,
             ASN1Type,
-            Option<ComponentConstraint>,
+            Option<Vec<Constraint>>,
             Option<OptionalMarker>,
             Option<ASN1Value>,
         ),
     ) -> Self {
         SequenceMember {
             name: value.0.into(),
-            r#type: value.1,
-            is_optional: value.3.is_some() || value.4.is_some(),
-            default_value: value.4,
-            constraints: vec![],
+            tag: value.1,
+            r#type: value.2,
+            is_optional: value.4.is_some() || value.5.is_some(),
+            default_value: value.5,
+            constraints: value.3.unwrap_or(vec![]),
         }
     }
 }
@@ -289,8 +293,11 @@ impl
 impl Quote for SequenceMember {
     fn quote(&self) -> String {
         format!(
-          "SequenceMember {{ name: \"{}\".into(), is_optional: {}, r#type: {}, default_value: {}, constraints: vec![{}] }}",
+          "SequenceMember {{ name: \"{}\".into(), tag: {}, is_optional: {}, r#type: {}, default_value: {}, constraints: vec![{}] }}",
           self.name,
+          self.tag.as_ref().map_or(String::from("None"), |t| {
+            String::from("Some(") + &t.quote() + ")"
+          }),
           self.is_optional,
           self.r#type.quote(),
           self.default_value.as_ref().map_or("None".to_string(), |d| "Some(".to_owned()
@@ -363,16 +370,18 @@ impl Quote for AsnChoice {
 #[derive(Debug, Clone, PartialEq)]
 pub struct ChoiceOption {
     pub name: String,
+    pub tag: Option<AsnTag>,
     pub r#type: ASN1Type,
     pub constraints: Vec<Constraint>,
 }
 
-impl From<(&str, ASN1Type, Option<Vec<Constraint>>)> for ChoiceOption {
-    fn from(value: (&str, ASN1Type, Option<Vec<Constraint>>)) -> Self {
+impl From<(&str, Option<AsnTag>, ASN1Type, Option<Vec<Constraint>>)> for ChoiceOption {
+    fn from(value: (&str, Option<AsnTag>, ASN1Type, Option<Vec<Constraint>>)) -> Self {
         ChoiceOption {
             name: value.0.into(),
-            r#type: value.1,
-            constraints: value.2.unwrap_or(vec![]),
+            tag: value.1,
+            r#type: value.2,
+            constraints: value.3.unwrap_or(vec![]),
         }
     }
 }
@@ -380,8 +389,11 @@ impl From<(&str, ASN1Type, Option<Vec<Constraint>>)> for ChoiceOption {
 impl Quote for ChoiceOption {
     fn quote(&self) -> String {
         format!(
-            "ChoiceOption {{ name: \"{}\".into(), r#type: {}, constraints: vec![{}] }}",
+            "ChoiceOption {{ name: \"{}\".into(), tag: {}, r#type: {}, constraints: vec![{}] }}",
             self.name,
+            self.tag.as_ref().map_or(String::from("None"), |t| {
+              String::from("Some(") + &t.quote() + ")"
+            }),
             self.r#type.quote(),
             self.constraints
                 .iter()

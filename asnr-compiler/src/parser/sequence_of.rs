@@ -72,7 +72,7 @@ mod tests {
                 .unwrap()
                 .1,
             ASN1Type::SequenceOf(AsnSequenceOf {
-                constraints: vec![Constraint::RangeConstraint(RangeConstraint {
+                constraints: vec![Constraint::SizeConstraint(ValueConstraint {
                     min_value: Some(ASN1Value::Integer(1)),
                     max_value: Some(ASN1Value::Integer(13)),
                     extensible: true
@@ -92,7 +92,7 @@ mod tests {
                 .unwrap()
                 .1,
             ASN1Type::SequenceOf(AsnSequenceOf {
-                constraints: vec![Constraint::RangeConstraint(RangeConstraint {
+                constraints: vec![Constraint::SizeConstraint(ValueConstraint {
                     min_value: Some(ASN1Value::Integer(1)),
                     max_value: Some(ASN1Value::Integer(13)),
                     extensible: true
@@ -116,13 +116,13 @@ mod tests {
             .unwrap()
             .1,
             ASN1Type::SequenceOf(AsnSequenceOf {
-                constraints: vec![Constraint::RangeConstraint(RangeConstraint {
+                constraints: vec![Constraint::SizeConstraint(ValueConstraint {
                     min_value: Some(ASN1Value::Integer(1)),
                     max_value: Some(ASN1Value::Integer(13)),
                     extensible: true
                 })],
                 r#type: Box::new(ASN1Type::Integer(AsnInteger {
-                    constraints: vec![RangeConstraint {
+                    constraints: vec![ValueConstraint {
                         min_value: Some(ASN1Value::Integer(1)),
                         max_value: Some(ASN1Value::Integer(13)),
                         extensible: true

@@ -25,7 +25,8 @@ pub struct ExtensionMarker();
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Constraint {
-    RangeConstraint(RangeConstraint),
+    ValueConstraint(ValueConstraint),
+    SizeConstraint(ValueConstraint),
     ComponentConstraint(ComponentConstraint),
     Arithmetic(ArithmeticOperator),
     ArrayComponentConstraint(ComponentConstraint),
@@ -35,7 +36,8 @@ pub enum Constraint {
 impl Quote for Constraint {
     fn quote(&self) -> String {
         match self {
-            Constraint::RangeConstraint(r) => format!("Constraint::RangeConstraint({})", r.quote()),
+            Constraint::ValueConstraint(r) => format!("Constraint::ValueConstraint({})", r.quote()),
+            Constraint::SizeConstraint(r) => format!("Constraint::SizeConstraint({})", r.quote()),
             Constraint::ComponentConstraint(c) => {
                 format!("Constraint::ComponentConstraint({})", c.quote())
             }
@@ -124,7 +126,7 @@ pub struct ConstrainedComponent {
 impl Quote for ConstrainedComponent {
     fn quote(&self) -> String {
         format!(
-          "ConstrainedComponent {{ identifier: \"{}\".into(), constraint: vec![{}], presence: ComponentPresence::{:?} }}",
+          "ConstrainedComponent {{ identifier: \"{}\".into(), constraints: vec![{}], presence: ComponentPresence::{:?} }}",
           self.identifier,
           self.constraints
               .iter()
@@ -139,16 +141,16 @@ impl Quote for ConstrainedComponent {
 /// Representation of a range constraint used for subtyping
 /// in ASN1 specifications
 #[derive(Debug, Clone, PartialEq)]
-pub struct RangeConstraint {
+pub struct ValueConstraint {
     pub min_value: Option<ASN1Value>,
     pub max_value: Option<ASN1Value>,
     pub extensible: bool,
 }
 
-impl Quote for RangeConstraint {
+impl Quote for ValueConstraint {
     fn quote(&self) -> String {
         format!(
-            "RangeConstraint {{ min_value: {}, max_value: {}, extensible: {} }}",
+            "ValueConstraint {{ min_value: {}, max_value: {}, extensible: {} }}",
             self.min_value.as_ref()
                 .map_or("None".to_owned(), |m| "Some(".to_owned()
                     + &m.quote()
@@ -162,41 +164,41 @@ impl Quote for RangeConstraint {
     }
 }
 
-impl<'a> From<i128> for RangeConstraint {
-    fn from(value: i128) -> Self {
+impl<'a> From<ASN1Value> for ValueConstraint {
+    fn from(value: ASN1Value) -> Self {
         Self {
-            min_value: Some(ASN1Value::Integer(value)),
-            max_value: Some(ASN1Value::Integer(value)),
+            min_value: Some(value.clone()),
+            max_value: Some(value),
             extensible: false,
         }
     }
 }
 
-impl<'a> From<(i128, RangeMarker, i128)> for RangeConstraint {
-    fn from(value: (i128, RangeMarker, i128)) -> Self {
+impl<'a> From<(ASN1Value, RangeMarker, ASN1Value)> for ValueConstraint {
+    fn from(value: (ASN1Value, RangeMarker, ASN1Value)) -> Self {
         Self {
-            min_value: Some(ASN1Value::Integer(value.0)),
-            max_value: Some(ASN1Value::Integer(value.2)),
+            min_value: Some(value.0),
+            max_value: Some(value.2),
             extensible: false,
         }
     }
 }
 
-impl<'a> From<(i128, ExtensionMarker)> for RangeConstraint {
-    fn from(value: (i128, ExtensionMarker)) -> Self {
+impl<'a> From<(ASN1Value, ExtensionMarker)> for ValueConstraint {
+    fn from(value: (ASN1Value, ExtensionMarker)) -> Self {
         Self {
-            min_value: Some(ASN1Value::Integer(value.0)),
-            max_value: Some(ASN1Value::Integer(value.0)),
+            min_value: Some(value.0.clone()),
+            max_value: Some(value.0),
             extensible: true,
         }
     }
 }
 
-impl<'a> From<(i128, RangeMarker, i128, ExtensionMarker)> for RangeConstraint {
-    fn from(value: (i128, RangeMarker, i128, ExtensionMarker)) -> Self {
+impl<'a> From<(ASN1Value, RangeMarker, ASN1Value, ExtensionMarker)> for ValueConstraint {
+    fn from(value: (ASN1Value, RangeMarker, ASN1Value, ExtensionMarker)) -> Self {
         Self {
-            min_value: Some(ASN1Value::Integer(value.0)),
-            max_value: Some(ASN1Value::Integer(value.2)),
+            min_value: Some(value.0),
+            max_value: Some(value.2),
             extensible: true,
         }
     }

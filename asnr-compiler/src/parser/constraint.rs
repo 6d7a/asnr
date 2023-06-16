@@ -1,7 +1,7 @@
 use asnr_grammar::{
     subtyping::{
         ArithmeticOperator, ComponentConstraint, ComponentPresence, Constraint, ExtensionMarker,
-        RangeConstraint,
+        ValueConstraint,
     },
     ABSENT, CARET, COMMA, ELLIPSIS, EXCEPT, INTERSECTION, PIPE, PRESENT, SIZE, UNION,
     WITH_COMPONENT, WITH_COMPONENTS,
@@ -9,7 +9,7 @@ use asnr_grammar::{
 use nom::{
     branch::alt,
     bytes::complete::tag,
-    character::complete::{char, i128},
+    character::complete::char,
     combinator::{into, map, opt, value},
     multi::many1,
     sequence::{pair, preceded, terminated, tuple},
@@ -17,10 +17,11 @@ use nom::{
 };
 
 use super::{
+    asn1_value,
     common::{
-        extension_marker, identifier, in_braces, in_parentheses, range_marker, skip_ws_and_comments,
+        extension_marker, identifier, in_braces, in_parentheses, opt_parentheses, range_marker,
+        skip_ws_and_comments,
     },
-    util::map_into,
 };
 
 pub fn constraint<'a>(input: &'a str) -> IResult<&'a str, Vec<Constraint>> {
@@ -40,17 +41,18 @@ pub fn constraint<'a>(input: &'a str) -> IResult<&'a str, Vec<Constraint>> {
                 first
             },
         ),
+        composed_value_constraint,
     ))(input)
 }
 
 pub fn single_constraint<'a>(input: &'a str) -> IResult<&'a str, Constraint> {
     skip_ws_and_comments(alt((
-        map(value_constraint, |v| Constraint::RangeConstraint(v)),
+        map(size_constraint, |c| Constraint::SizeConstraint(c)),
+        map(simple_value_constraint, |v| Constraint::ValueConstraint(v)),
         map(array_component_constraint, |c| {
             Constraint::ComponentConstraint(c)
         }),
         map(component_constraint, |c| Constraint::ComponentConstraint(c)),
-        map(size_constraint, |c| Constraint::RangeConstraint(c)),
     )))(input)
 }
 
@@ -76,39 +78,64 @@ pub fn arithmetic_operator<'a>(input: &'a str) -> IResult<&'a str, Constraint> {
     )))(input)
 }
 
-pub fn size_constraint<'a>(input: &'a str) -> IResult<&'a str, RangeConstraint> {
-    preceded(
+pub fn size_constraint<'a>(input: &'a str) -> IResult<&'a str, ValueConstraint> {
+    opt_parentheses(preceded(
         skip_ws_and_comments(tag(SIZE)),
-        skip_ws_and_comments(value_constraint),
-    )(input)
+        skip_ws_and_comments(simple_value_constraint),
+    ))(input)
 }
 
-pub fn value_constraint<'a>(input: &'a str) -> IResult<&'a str, RangeConstraint> {
-    in_parentheses(alt((
+pub fn simple_value_constraint<'a>(input: &'a str) -> IResult<&'a str, ValueConstraint> {
+    in_parentheses(value_constraint)(input)
+}
+
+fn value_constraint<'a>(input: &'a str) -> IResult<&'a str, ValueConstraint> {
+    alt((
         extensible_range_constraint, // The most elaborate match first
         strict_extensible_constraint,
         range_constraint,
         strict_constraint, // The most simple match last
+    ))(input)
+}
+
+pub fn composed_value_constraint<'a>(input: &'a str) -> IResult<&'a str, Vec<Constraint>> {
+    map(
+        in_parentheses(pair(
+            value_constraint,
+            many1(pair(arithmetic_operator, value_constraint)),
+        )),
+        |(f, ac)| {
+            let mut first = vec![Constraint::ValueConstraint(f)];
+            for (a, c) in ac {
+                first.push(a);
+                first.push(Constraint::ValueConstraint(c));
+            }
+            first
+        },
+    )(input)
+}
+
+pub fn strict_constraint<'a>(input: &'a str) -> IResult<&'a str, ValueConstraint> {
+    into(asn1_value)(input)
+}
+
+pub fn strict_extensible_constraint<'a>(input: &'a str) -> IResult<&'a str, ValueConstraint> {
+    into(pair(asn1_value, preceded(char(','), extension_marker)))(input)
+}
+
+pub fn range_constraint<'a>(input: &'a str) -> IResult<&'a str, ValueConstraint> {
+    into(tuple((
+        asn1_value,
+        range_marker,
+        skip_ws_and_comments(asn1_value),
     )))(input)
 }
 
-pub fn strict_constraint<'a>(input: &'a str) -> IResult<&'a str, RangeConstraint> {
-    map_into(i128)(input)
-}
-
-pub fn strict_extensible_constraint<'a>(input: &'a str) -> IResult<&'a str, RangeConstraint> {
-    into(pair(i128, preceded(char(','), extension_marker)))(input)
-}
-
-pub fn range_constraint<'a>(input: &'a str) -> IResult<&'a str, RangeConstraint> {
-    into(tuple((i128, range_marker, skip_ws_and_comments(i128))))(input)
-}
-
-pub fn extensible_range_constraint<'a>(input: &'a str) -> IResult<&'a str, RangeConstraint> {
+pub fn extensible_range_constraint<'a>(input: &'a str) -> IResult<&'a str, ValueConstraint> {
     into(tuple((
-        i128,
+        asn1_value,
         range_marker,
-        skip_ws_and_comments(i128),
+        skip_ws_and_comments(asn1_value),
         preceded(skip_ws_and_comments(char(COMMA)), extension_marker),
     )))(input)
 }
@@ -154,20 +181,20 @@ mod tests {
     use asnr_grammar::{
         subtyping::{
             ArithmeticOperator, ComponentConstraint, ComponentPresence, ConstrainedComponent,
-            Constraint, RangeConstraint,
+            Constraint, ValueConstraint,
         },
         ASN1Value,
     };
 
-    use crate::parser::constraint::{component_constraint, constraint, value_constraint};
+    use crate::parser::constraint::{component_constraint, constraint, simple_value_constraint};
 
     #[test]
     fn parses_value_constraint() {
         assert_eq!(
-            value_constraint("(5)"),
+            simple_value_constraint("(5)"),
             Ok((
                 "",
-                RangeConstraint {
+                ValueConstraint {
                     min_value: Some(ASN1Value::Integer(5)),
                     max_value: Some(ASN1Value::Integer(5)),
                     extensible: false
@@ -175,10 +202,10 @@ mod tests {
             ))
         );
         assert_eq!(
-            value_constraint("(5..9)"),
+            simple_value_constraint("(5..9)"),
             Ok((
                 "",
-                RangeConstraint {
+                ValueConstraint {
                     min_value: Some(ASN1Value::Integer(5)),
                     max_value: Some(ASN1Value::Integer(9)),
                     extensible: false
@@ -186,10 +213,10 @@ mod tests {
             ))
         );
         assert_eq!(
-            value_constraint("(-5..9)"),
+            simple_value_constraint("(-5..9)"),
             Ok((
                 "",
-                RangeConstraint {
+                ValueConstraint {
                     min_value: Some(ASN1Value::Integer(-5)),
                     max_value: Some(ASN1Value::Integer(9)),
                     extensible: false
@@ -197,10 +224,10 @@ mod tests {
             ))
         );
         assert_eq!(
-            value_constraint("(-9..-4, ...)"),
+            simple_value_constraint("(-9..-4, ...)"),
             Ok((
                 "",
-                RangeConstraint {
+                ValueConstraint {
                     min_value: Some(ASN1Value::Integer(-9)),
                     max_value: Some(ASN1Value::Integer(-4)),
                     extensible: true
@@ -212,10 +239,10 @@ mod tests {
     #[test]
     fn parses_value_constraint_with_inserted_comment() {
         assert_eq!(
-            value_constraint("(-9..-4, -- Very annoying! -- ...)"),
+            simple_value_constraint("(-9..-4, -- Very annoying! -- ...)"),
             Ok((
                 "",
-                RangeConstraint {
+                ValueConstraint {
                     min_value: Some(ASN1Value::Integer(-9)),
                     max_value: Some(ASN1Value::Integer(-4)),
                     extensible: true
@@ -223,16 +250,28 @@ mod tests {
             ))
         );
         assert_eq!(
-            value_constraint("(-9-- Very annoying! --..-4,  ...)"),
+            simple_value_constraint("(-9-- Very annoying! --..-4,  ...)"),
             Ok((
                 "",
-                RangeConstraint {
+                ValueConstraint {
                     min_value: Some(ASN1Value::Integer(-9)),
                     max_value: Some(ASN1Value::Integer(-4)),
                     extensible: true
                 }
             ))
         );
+    }
+
+    #[test]
+    fn parses_size_constraint() {
+        assert_eq!(
+            constraint("(SIZE(3..16,...))").unwrap().1,
+            vec![Constraint::SizeConstraint(ValueConstraint {
+                min_value: Some(ASN1Value::Integer(3)),
+                max_value: Some(ASN1Value::Integer(16)),
+                extensible: true
+            })]
+        )
     }
 
     #[test]
@@ -256,7 +295,7 @@ mod tests {
                     },
                     ConstrainedComponent {
                         identifier: "sales".into(),
-                        constraints: vec![Constraint::RangeConstraint(RangeConstraint {
+                        constraints: vec![Constraint::ValueConstraint(ValueConstraint {
                             min_value: Some(ASN1Value::Integer(0)),
                             max_value: Some(ASN1Value::Integer(5)),
                             extensible: false
@@ -294,7 +333,7 @@ mod tests {
                     },
                     ConstrainedComponent {
                         identifier: "sales".into(),
-                        constraints: vec![Constraint::RangeConstraint(RangeConstraint {
+                        constraints: vec![Constraint::ValueConstraint(ValueConstraint {
                             min_value: Some(ASN1Value::Integer(0)),
                             max_value: Some(ASN1Value::Integer(5)),
                             extensible: false
@@ -384,34 +423,65 @@ mod tests {
         );
     }
 
-    // #[test]
-    // fn parses_composite_range_constraint() {
-    //     assert_eq!(
-    //         constraint(
-    //             "(0..3|5..8|10)
-    //         "
-    //         )
-    //         .unwrap()
-    //         .1,
-    //         vec![
-    //             Constraint::ComponentConstraint(ComponentConstraint {
-    //                 is_partial: true,
-    //                 constraints: vec![ConstrainedComponent {
-    //                     identifier: "eventDeltaTime".into(),
-    //                     constraints: vec![],
-    //                     presence: ComponentPresence::Present
-    //                 }]
-    //             }),
-    //             Constraint::Arithmetic(ArithmeticOperator::Union),
-    //             Constraint::ComponentConstraint(ComponentConstraint {
-    //                 is_partial: true,
-    //                 constraints: vec![ConstrainedComponent {
-    //                     identifier: "eventDeltaTime".into(),
-    //                     constraints: vec![],
-    //                     presence: ComponentPresence::Absent
-    //                 }]
-    //             })
-    //         ]
-    //     );
-    // }
+    #[test]
+    fn parses_composite_range_constraint() {
+        assert_eq!(
+            constraint(
+                "(0..3|5..8|10)
+            "
+            )
+            .unwrap()
+            .1,
+            vec![
+                Constraint::ValueConstraint(ValueConstraint {
+                    min_value: Some(ASN1Value::Integer(0)),
+                    max_value: Some(ASN1Value::Integer(3)),
+                    extensible: false
+                }),
+                Constraint::Arithmetic(ArithmeticOperator::Union),
+                Constraint::ValueConstraint(ValueConstraint {
+                    min_value: Some(ASN1Value::Integer(5)),
+                    max_value: Some(ASN1Value::Integer(8)),
+                    extensible: false
+                }),
+                Constraint::Arithmetic(ArithmeticOperator::Union),
+                Constraint::ValueConstraint(ValueConstraint {
+                    min_value: Some(ASN1Value::Integer(10)),
+                    max_value: Some(ASN1Value::Integer(10)),
+                    extensible: false
+                })
+            ]
+        );
+    }
+
+    #[test]
+    fn parses_composite_range_constraint_with_elsewhere_declared_values() {
+        assert_eq!(
+            constraint(
+                "(unknown   | passengerCar..tram
+              | agricultural)"
+            )
+            .unwrap()
+            .1,
+            vec![
+                Constraint::ValueConstraint(ValueConstraint {
+                    min_value: Some(ASN1Value::ElsewhereDeclaredValue("unknown".into())),
+                    max_value: Some(ASN1Value::ElsewhereDeclaredValue("unknown".into())),
+                    extensible: false
+                }),
+                Constraint::Arithmetic(ArithmeticOperator::Union),
+                Constraint::ValueConstraint(ValueConstraint {
+                    min_value: Some(ASN1Value::ElsewhereDeclaredValue("passengerCar".into())),
+                    max_value: Some(ASN1Value::ElsewhereDeclaredValue("tram".into())),
+                    extensible: false
+                }),
+                Constraint::Arithmetic(ArithmeticOperator::Union),
+                Constraint::ValueConstraint(ValueConstraint {
+                    min_value: Some(ASN1Value::ElsewhereDeclaredValue("agricultural".into())),
+                    max_value: Some(ASN1Value::ElsewhereDeclaredValue("agricultural".into())),
+                    extensible: false
+                })
+            ]
+        );
+    }
 }

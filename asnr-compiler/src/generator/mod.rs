@@ -5,7 +5,7 @@
 
 use asnr_grammar::ToplevelDeclaration;
 
-use self::{error::GeneratorError, builder::{generate_boolean, generate_integer, generate_enumerated, generate_bit_string, character_string_template, generate_sequence, generate_sequence_of, generate_choice}};
+use self::{error::GeneratorError, builder::{generate_boolean, generate_integer, generate_enumerated, generate_bit_string, character_string_template, generate_sequence, generate_sequence_of, generate_choice, generate_null}};
 pub(crate) mod error;
 mod builder;
 pub(crate) mod template;
@@ -16,6 +16,7 @@ pub fn generate<'a>(
     custom_derive: Option<&str>,
 ) -> Result<std::string::String, GeneratorError> {
     match tld.r#type {
+        asnr_grammar::ASN1Type::Null => generate_null(tld, custom_derive),
         asnr_grammar::ASN1Type::Boolean => generate_boolean(tld, custom_derive),
         asnr_grammar::ASN1Type::Integer(_) => generate_integer(tld, custom_derive),
         asnr_grammar::ASN1Type::Enumerated(_) => generate_enumerated(tld, custom_derive),

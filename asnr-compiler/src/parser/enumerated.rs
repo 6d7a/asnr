@@ -11,12 +11,6 @@ use asnr_grammar::{subtyping::*, types::*, *};
 
 use super::common::*;
 
-pub fn enumerated_value<'a>(input: &'a str) -> IResult<&'a str, ASN1Value> {
-    map(skip_ws_and_comments(identifier), |m| {
-        ASN1Value::String(m.into())
-    })(input)
-}
-
 /// Tries to parse an ASN1 ENUMERATED
 ///
 /// *`input` - string slice to be matched against

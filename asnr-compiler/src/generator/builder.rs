@@ -17,16 +17,14 @@ pub fn generate_integer<'a>(
     custom_derive: Option<&'a str>,
 ) -> Result<String, GeneratorError> {
     if let ASN1Type::Integer(ref int) = tld.r#type {
-        let integer_min_max = int
-            .constraints
-            .iter()
-            .fold((0i128, 0i128), |acc, c| {
-              if let Some((ASN1Value::Integer(min), ASN1Value::Integer(max))) = c.min_value.as_ref().zip(c.max_value.as_ref()) {
+        let integer_min_max = int.constraints.iter().fold((0i128, 0i128), |acc, c| {
+            if let Some((ASN1Value::Integer(min), ASN1Value::Integer(max))) =
+                c.min_value.as_ref().zip(c.max_value.as_ref())
+            {
                 (acc.0.min(*min), acc.1.max(*max))
-              } else {
+            } else {
                 acc
-              }
-              
+            }
         });
         let integer_type = int_type_token(integer_min_max.0, integer_min_max.1);
         Ok(integer_template(
@@ -106,6 +104,25 @@ pub fn generate_boolean<'a>(
     }
 }
 
+pub fn generate_null<'a>(
+  tld: ToplevelDeclaration,
+  custom_derive: Option<&'a str>,
+) -> Result<String, GeneratorError> {
+  if let ASN1Type::Null = tld.r#type {
+      Ok(null_template(
+          format_comments(&tld.comments),
+          custom_derive.unwrap_or(DERIVE_DEFAULT),
+          rustify_name(&tld.name),
+      ))
+  } else {
+      Err(GeneratorError::new(
+          tld,
+          "Expected NULL top-level declaration",
+          GeneratorErrorType::Asn1TypeMismatch,
+      ))
+  }
+}
+
 pub fn generate_enumerated<'a>(
     tld: ToplevelDeclaration,
     custom_derive: Option<&'a str>,
@@ -146,8 +163,8 @@ pub fn generate_choice<'a>(
 ) -> Result<String, GeneratorError> {
     if let ASN1Type::Choice(ref choice) = tld.r#type {
         let name = rustify_name(&tld.name);
-        let inner_options = flatten_nested_choice_options(&choice.options).join("\n");
-        let options = extract_choice_options(&choice.options);
+        let inner_options = flatten_nested_choice_options(&choice.options, &name).join("\n");
+        let options = extract_choice_options(&choice.options, &name);
         let options_declaration = format_option_declaration(&options);
         let default_option = match options.first() {
             Some(o) => default_choice(o),
@@ -190,15 +207,15 @@ pub fn generate_sequence<'a>(
 ) -> Result<String, GeneratorError> {
     if let ASN1Type::Sequence(ref seq) = tld.r#type {
         let name = rustify_name(&tld.name);
-        let members = extract_sequence_members(&seq.members);
+        let members = extract_sequence_members(&seq.members, &name);
         let (extension_decl, extension_decoder) =
             format_extensible_sequence(&name, seq.extensible.is_some());
 
         Ok(sequence_template(
             format_comments(&tld.comments),
             custom_derive.unwrap_or(DERIVE_DEFAULT),
+            flatten_nested_sequence_members(&seq.members, &name).join("\n"),
             name,
-            flatten_nested_sequence_members(&seq.members).join("\n"),
             format_member_declaration(&members),
             extension_decl,
             format_decode_member_body(&members),
@@ -297,7 +314,7 @@ mod tests {
             name: "BitString".into(),
             comments: "".into(),
             r#type: ASN1Type::BitString(AsnBitString {
-                constraints: vec![RangeConstraint {
+                constraints: vec![ValueConstraint {
                     max_value: Some(ASN1Value::Integer(8)),
                     min_value: Some(ASN1Value::Integer(8)),
                     extensible: true,
@@ -327,7 +344,7 @@ mod tests {
             name: "TestInt".into(),
             comments: "".into(),
             r#type: ASN1Type::Integer(AsnInteger {
-                constraints: vec![RangeConstraint {
+                constraints: vec![ValueConstraint {
                     max_value: Some(ASN1Value::Integer(1)),
                     min_value: Some(ASN1Value::Integer(8)),
                     extensible: false,
@@ -361,22 +378,25 @@ mod tests {
                 extensible: Some(1),
                 members: vec![SequenceMember {
                     name: "nested".into(),
+                    tag: None,
                     r#type: ASN1Type::Sequence(AsnSequence {
                         extensible: Some(3),
                         constraints: vec![],
                         members: vec![
                             SequenceMember {
                                 name: "wow".into(),
-                                r#type: ASN1Type::ElsewhereDeclaredType(DeclarationElsewhere{
-                                  identifier: "Wow".into(),
-                                  constraints: vec![]
-                            }),
+                                tag: None,
+                                r#type: ASN1Type::ElsewhereDeclaredType(DeclarationElsewhere {
+                                    identifier: "Wow".into(),
+                                    constraints: vec![],
+                                }),
                                 default_value: None,
                                 is_optional: false,
                                 constraints: vec![],
                             },
                             SequenceMember {
                                 name: "this-is-annoying".into(),
+                                tag: None,
                                 r#type: ASN1Type::Boolean,
                                 default_value: Some(ASN1Value::Boolean(true)),
                                 is_optional: true,
@@ -384,13 +404,16 @@ mod tests {
                             },
                             SequenceMember {
                                 name: "another".into(),
+                                tag: None,
                                 r#type: ASN1Type::Sequence(AsnSequence {
                                     extensible: None,
                                     constraints: vec![],
                                     members: vec![SequenceMember {
                                         name: "inner".into(),
+
+                                        tag: None,
                                         r#type: ASN1Type::BitString(AsnBitString {
-                                            constraints: vec![RangeConstraint {
+                                            constraints: vec![ValueConstraint {
                                                 min_value: Some(ASN1Value::Integer(1)),
                                                 max_value: Some(ASN1Value::Integer(1)),
                                                 extensible: true,

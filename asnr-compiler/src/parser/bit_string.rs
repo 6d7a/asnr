@@ -3,17 +3,19 @@ use nom::{
     character::complete::{char, one_of},
     combinator::{map, opt},
     multi::fold_many0,
-    sequence::{delimited, pair, preceded, terminated},
+    sequence::{delimited, pair, preceded},
     IResult,
 };
 
-use asnr_grammar::{subtyping::RangeConstraint, *};
+use asnr_grammar::{subtyping::*, *};
 
-use super::{common::*, constraint::value_constraint};
+use super::{common::*, constraint::simple_value_constraint, util::hex_to_bools};
 
+/// Parses a BIT STRING value. Currently, the parser only supports parsing binary and
+/// hexadecimal values, but not the named bit notation in curly braces.
 pub fn bit_string_value<'a>(input: &'a str) -> IResult<&'a str, ASN1Value> {
     map(
-        skip_ws_and_comments(terminated(
+        skip_ws_and_comments(pair(
             delimited(
                 char(SINGLE_QUOTE),
                 fold_many0(one_of("0123456789ABCDEF"), String::new, |mut acc, curr| {
@@ -24,7 +26,13 @@ pub fn bit_string_value<'a>(input: &'a str) -> IResult<&'a str, ASN1Value> {
             ),
             one_of("HB"),
         )),
-        |m| ASN1Value::String(m),
+        |(value, encoding)| {
+          if encoding == 'B' {
+            ASN1Value::BitString(value.chars().into_iter().map(|c| c == '1').collect())
+          } else {
+            ASN1Value::BitString(value.chars().flat_map(hex_to_bools).collect())
+          }
+        },
     )(input)
 }
 
@@ -42,10 +50,10 @@ pub fn bit_string<'a>(input: &'a str) -> IResult<&'a str, ASN1Type> {
             skip_ws_and_comments(tag(BIT_STRING)),
             pair(
                 opt(distinguished_values),
-                opt(in_parentheses(preceded(tag(SIZE), value_constraint))),
+                opt(in_parentheses(preceded(tag(SIZE), simple_value_constraint))),
             ),
         ),
-        |m: (Option<Vec<_>>, Option<RangeConstraint>)| ASN1Type::BitString(m.into()),
+        |m: (Option<Vec<_>>, Option<ValueConstraint>)| ASN1Type::BitString(m.into()),
     )(input)
 }
 
@@ -74,7 +82,7 @@ mod tests {
             bit_string(sample).unwrap().1,
             ASN1Type::BitString(AsnBitString {
                 distinguished_values: None,
-                constraints: vec![RangeConstraint {
+                constraints: vec![ValueConstraint {
                     max_value: Some(ASN1Value::Integer(8)),
                     min_value: Some(ASN1Value::Integer(8)),
                     extensible: false
@@ -90,7 +98,7 @@ mod tests {
             bit_string(sample).unwrap().1,
             ASN1Type::BitString(AsnBitString {
                 distinguished_values: None,
-                constraints: vec![RangeConstraint {
+                constraints: vec![ValueConstraint {
                     max_value: Some(ASN1Value::Integer(18)),
                     min_value: Some(ASN1Value::Integer(8)),
                     extensible: false
@@ -106,7 +114,7 @@ mod tests {
             bit_string(sample).unwrap().1,
             ASN1Type::BitString(AsnBitString {
                 distinguished_values: None,
-                constraints: vec![RangeConstraint {
+                constraints: vec![ValueConstraint {
                     max_value: Some(ASN1Value::Integer(2)),
                     min_value: Some(ASN1Value::Integer(2)),
                     extensible: true
@@ -122,7 +130,7 @@ mod tests {
             bit_string(sample).unwrap().1,
             ASN1Type::BitString(AsnBitString {
                 distinguished_values: None,
-                constraints: vec![RangeConstraint {
+                constraints: vec![ValueConstraint {
                     max_value: Some(ASN1Value::Integer(18)),
                     min_value: Some(ASN1Value::Integer(8)),
                     extensible: true
@@ -160,7 +168,7 @@ mod tests {
                         value: 3
                     },
                 ]),
-                constraints: vec![RangeConstraint {
+                constraints: vec![ValueConstraint {
                     max_value: Some(ASN1Value::Integer(4)),
                     min_value: Some(ASN1Value::Integer(4)),
                     extensible: false

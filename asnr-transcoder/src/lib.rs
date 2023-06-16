@@ -11,6 +11,7 @@ extern crate alloc;
 pub mod error;
 //#[cfg(feature = "uper")]
 pub mod uper;
+mod generated;
 
 use alloc::{string::String, vec::Vec};
 use asnr_grammar::types::*;
@@ -59,6 +60,7 @@ pub trait Decoder {
         &self,
         choice: AsnChoice,
     ) -> fn(&'a [u8]) -> IResult<&'a [u8], O>;
+    fn decode_null<'a, N>(&self, input: &'a [u8]) -> IResult<&'a [u8], N>;
     fn decode_boolean<'a>(&self, input: &'a [u8]) -> IResult<&'a [u8], bool>;
     fn decode_bit_string<'a>(
         &self,

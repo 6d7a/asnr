@@ -2,17 +2,17 @@ use nom::{
     branch::alt,
     bytes::complete::{tag, take_until},
     character::complete::{
-        alpha1, alphanumeric1, char, i128, multispace0, multispace1, not_line_ending,
+        alpha1, alphanumeric1, char, i128, multispace0, multispace1, not_line_ending, u64,
     },
-    combinator::{opt, recognize},
+    combinator::{into, opt, recognize},
     multi::many0,
     sequence::{delimited, pair, preceded, terminated},
     IResult,
 };
 
-use asnr_grammar::{*, subtyping::*, types::*};
+use asnr_grammar::{subtyping::*, types::*, *};
 
-use super::util::{take_until_or, map_into};
+use super::util::{map_into, take_until_or};
 
 /// This matches both spec-conform ASN1 comments ("--")
 /// as well as C-style comments commonly seen ("//", "/* */")
@@ -74,6 +74,28 @@ where
     )
 }
 
+pub fn in_brackets<'a, F, O>(inner: F) -> impl FnMut(&'a str) -> IResult<&'a str, O>
+where
+    F: FnMut(&'a str) -> IResult<&'a str, O>,
+{
+    delimited(
+        skip_ws_and_comments(char(LEFT_BRACKET)),
+        skip_ws_and_comments(inner),
+        skip_ws_and_comments(char(RIGHT_BRACKET)),
+    )
+}
+
+pub fn opt_parentheses<'a, F, O>(inner: F) -> impl FnMut(&'a str) -> IResult<&'a str, O>
+where
+    F: FnMut(&'a str) -> IResult<&'a str, O>,
+{
+    delimited(
+        opt(skip_ws_and_comments(char(LEFT_PARENTHESIS))),
+        skip_ws_and_comments(inner),
+        opt(skip_ws_and_comments(char(RIGHT_PARENTHESIS))),
+    )
+}
+
 pub fn in_braces<'a, F, O>(inner: F) -> impl FnMut(&'a str) -> IResult<&'a str, O>
 where
     F: FnMut(&'a str) -> IResult<&'a str, O>,
@@ -85,6 +107,17 @@ where
     )
 }
 
+pub fn asn_tag<'a>(input: &'a str) -> IResult<&'a str, AsnTag> {
+    into(in_brackets(pair(
+        opt(skip_ws_and_comments(alt((
+            tag(PRIVATE),
+            tag(APPLICATION),
+            tag(UNIVERSAL),
+        )))),
+        skip_ws_and_comments(u64),
+    )))(input)
+}
+
 pub fn range_marker<'a>(input: &'a str) -> IResult<&'a str, RangeMarker> {
     skip_ws_and_comments(tag(RANGE))(input).map(|(remaining, _)| (remaining, RangeMarker()))
 }
@@ -92,7 +125,6 @@ pub fn range_marker<'a>(input: &'a str) -> IResult<&'a str, RangeMarker> {
 pub fn extension_marker<'a>(input: &'a str) -> IResult<&'a str, ExtensionMarker> {
     skip_ws_and_comments(tag(ELLIPSIS))(input).map(|(remaining, _)| (remaining, ExtensionMarker()))
 }
-
 
 pub fn assignment<'a>(input: &'a str) -> IResult<&'a str, &'a str> {
     skip_ws_and_comments(tag(ASSIGN))(input)
@@ -116,8 +148,6 @@ pub fn distinguished_val<'a>(input: &'a str) -> IResult<&'a str, DistinguishedVa
 #[cfg(test)]
 mod tests {
 
-    use crate::parser::constraint::value_constraint;
-
     use super::*;
 
     #[test]
@@ -126,7 +156,7 @@ mod tests {
 "#;
         assert_eq!(" Test, one, two, three/", comment(line).unwrap().1);
     }
-    
+
     #[test]
     fn parses_block_comment() {
         assert_eq!(

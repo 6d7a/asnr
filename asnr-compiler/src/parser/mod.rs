@@ -29,6 +29,7 @@ use self::{
     error::ParserError,
     header::header,
     integer::*,
+    null::*,
     sequence::sequence,
     sequence_of::*,
 };
@@ -43,6 +44,7 @@ mod enumerated;
 mod error;
 mod header;
 mod integer;
+mod null;
 mod object_identifier;
 mod sequence;
 mod sequence_of;
@@ -64,6 +66,7 @@ pub fn top_level_declaration<'a>(input: &'a str) -> IResult<&'a str, ToplevelDec
 
 pub fn asn1_type<'a>(input: &'a str) -> IResult<&'a str, ASN1Type> {
     alt((
+        null,
         sequence_of,
         sequence,
         choice,
@@ -78,11 +81,18 @@ pub fn asn1_type<'a>(input: &'a str) -> IResult<&'a str, ASN1Type> {
 
 pub fn asn1_value<'a>(input: &'a str) -> IResult<&'a str, ASN1Value> {
     alt((
+        null_value,
         bit_string_value,
         boolean_value,
         integer_value,
-        enumerated_value,
+        elsewhere_declared_value
     ))(input)
+}
+
+pub fn elsewhere_declared_value<'a>(input: &'a str) -> IResult<&'a str, ASN1Value> {
+  map(skip_ws_and_comments(identifier), |m| {
+      ASN1Value::ElsewhereDeclaredValue(m.into())
+  })(input)
 }
 
 pub fn elsewhere_declared_type<'a>(input: &'a str) -> IResult<&'a str, ASN1Type> {

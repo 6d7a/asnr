@@ -7,7 +7,7 @@ use nom::{
 
 use asnr_grammar::{ASN1Type, INTEGER, ASN1Value};
 
-use super::{*, constraint::value_constraint};
+use super::{*, constraint::simple_value_constraint};
 
 pub fn integer_value<'a>(input: &'a str) -> IResult<&'a str, ASN1Value> {
   map(skip_ws_and_comments(i128), |m| ASN1Value::Integer(m))(input)
@@ -26,7 +26,7 @@ pub fn integer<'a>(input: &'a str) -> IResult<&'a str, ASN1Type> {
         tuple((
             skip_ws_and_comments(tag(INTEGER)),
             opt(skip_ws_and_comments(distinguished_values)),
-            opt(skip_ws_and_comments(value_constraint)),
+            opt(skip_ws_and_comments(simple_value_constraint)),
         )),
         |m| ASN1Type::Integer(m.into()),
     )(input)
@@ -51,7 +51,7 @@ mod tests {
             Ok((
                 "",
                 ASN1Type::Integer(
-                    RangeConstraint {
+                    ValueConstraint {
                         min_value: Some(ASN1Value::Integer(-9)),
                         max_value: Some(ASN1Value::Integer(-4)),
                         extensible: true
@@ -65,7 +65,7 @@ mod tests {
             Ok((
                 "",
                 ASN1Type::Integer(
-                    RangeConstraint {
+                    ValueConstraint {
                         min_value: Some(ASN1Value::Integer(-9)),
                         max_value: Some(ASN1Value::Integer(-4)),
                         extensible: false

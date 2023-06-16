@@ -58,6 +58,11 @@ pub const SET: &'static str = "SET";
 pub const SET_OF: &'static str = "SET OF";
 pub const OBJECT_IDENTIFIER: &'static str = "OBJECT IDENTIFIER";
 
+// Tagging tokens
+pub const UNIVERSAL: &'static str = "UNIVERSAL";
+pub const PRIVATE: &'static str = "PRIVATE";
+pub const APPLICATION: &'static str = "APPLICATION";
+
 // Value tokens
 pub const TRUE: &'static str = "TRUE";
 pub const FALSE: &'static str = "FALSE";
@@ -233,7 +238,7 @@ impl From<(Vec<&str>, &str, ASN1Type)> for ToplevelDeclaration {
 /// specified in the same or an imported ASN1 specification.
 #[derive(Debug, Clone, PartialEq)]
 pub enum ASN1Type {
-    // Null,
+    Null,
     Boolean,
     Integer(AsnInteger),
     // Real,
@@ -287,6 +292,7 @@ impl From<&str> for CharacterStringType {
 impl Quote for ASN1Type {
     fn quote(&self) -> String {
         match self {
+            ASN1Type::Null => "ASN1Type::Null".into(),
             ASN1Type::Boolean => "ASN1Type::Boolean".into(),
             ASN1Type::Integer(i) => format!("ASN1Type::Integer({})", i.quote()),
             ASN1Type::BitString(b) => format!("ASN1Type::BitString({})", b.quote()),
@@ -305,17 +311,41 @@ impl Quote for ASN1Type {
 /// The possible types of an ASN1 value.
 #[derive(Debug, Clone, PartialEq)]
 pub enum ASN1Value {
+    Null,
     Boolean(bool),
     Integer(i128),
     String(String),
+    BitString(Vec<bool>),
+    EnumeratedValue(String),
+    ElsewhereDeclaredValue(String),
 }
 
 impl Quote for ASN1Value {
     fn quote(&self) -> String {
         match self {
+            ASN1Value::Null => String::from("ASN1Value::Null"),
             ASN1Value::Boolean(b) => format!("ASN1Value::Boolean({})", b),
             ASN1Value::Integer(i) => format!("ASN1Value::Integer({})", i),
             ASN1Value::String(s) => format!("ASN1Value::String(\"{}\".into())", s),
+            ASN1Value::BitString(s) => format!(
+                "ASN1Value::BitString(vec![{}])",
+                s.iter()
+                    .map(|b| {
+                        if *b {
+                            String::from("true")
+                        } else {
+                            String::from("false")
+                        }
+                    })
+                    .collect::<Vec<String>>()
+                    .join(", ")
+            ),
+            ASN1Value::EnumeratedValue(s) => {
+                format!("ASN1Value::EnumeratedValue(\"{}\".into())", s)
+            }
+            ASN1Value::ElsewhereDeclaredValue(s) => {
+                format!("ASN1Value::ElsewhereDeclaredValue(\"{}\".into())", s)
+            }
         }
     }
 }
@@ -349,5 +379,45 @@ impl Quote for DeclarationElsewhere {
                 .collect::<Vec<String>>()
                 .join(", ")
         )
+    }
+}
+
+/// Tag classes
+#[derive(Debug, Clone, PartialEq)]
+pub enum TagClass {
+    Universal,
+    Application,
+    Private,
+    ContextSpecific,
+}
+
+/// Representation of a tag
+#[derive(Debug, Clone, PartialEq)]
+pub struct AsnTag {
+    pub tag_class: TagClass,
+    pub id: u64,
+}
+
+impl Quote for AsnTag {
+    fn quote(&self) -> String {
+        format!(
+            "AsnTag {{ tag_class: TagClass::{:?}, id: {} }}",
+            self.tag_class, self.id
+        )
+    }
+}
+
+impl From<(Option<&str>, u64)> for AsnTag {
+    fn from(value: (Option<&str>, u64)) -> Self {
+        let tag_class = match value.0 {
+            Some("APPLICATION") => TagClass::Application,
+            Some("UNIVERSAL") => TagClass::Universal,
+            Some("PRIVATE") => TagClass::Private,
+            _ => TagClass::ContextSpecific,
+        };
+        AsnTag {
+            tag_class,
+            id: value.1,
+        }
     }
 }

@@ -20,7 +20,7 @@ pub fn format_comments(comments: &String) -> String {
     if comments.is_empty() {
         String::from("")
     } else {
-        String::from("/* ") + comments + "*/\n"
+        String::from("///") + &comments.replace("\n", "\n ///") + "\n"
     }
 }
 
@@ -104,36 +104,36 @@ pub fn format_distinguished_int_value(value: &DistinguishedValue) -> String {
     format!("pub fn is_{name}(&self) -> bool {{ self.0 as i128 == {i} }}")
 }
 
-pub fn flatten_nested_sequence_members(members: &Vec<SequenceMember>) -> Vec<String> {
+pub fn flatten_nested_sequence_members(members: &Vec<SequenceMember>, parent_name: &String) -> Vec<String> {
     members
         .iter()
         .filter(|m| match m.r#type {
             ASN1Type::ElsewhereDeclaredType(_) => false,
             _ => true,
         })
-        .map(|i| declare_inner_sequence_member(i).unwrap())
+        .map(|i| declare_inner_sequence_member(i, parent_name).unwrap())
         .collect::<Vec<String>>()
 }
 
-pub fn flatten_nested_choice_options(options: &Vec<ChoiceOption>) -> Vec<String> {
+pub fn flatten_nested_choice_options(options: &Vec<ChoiceOption>, parent_name: &String) -> Vec<String> {
     options
         .iter()
         .filter(|m| match m.r#type {
             ASN1Type::ElsewhereDeclaredType(_) => false,
             _ => true,
         })
-        .map(|i| declare_inner_choice_option(i).unwrap())
+        .map(|i| declare_inner_choice_option(i, parent_name).unwrap())
         .collect::<Vec<String>>()
 }
 
-pub fn extract_choice_options(options: &Vec<ChoiceOption>) -> Vec<StringifiedNameType> {
+pub fn extract_choice_options(options: &Vec<ChoiceOption>, parent_name: &String) -> Vec<StringifiedNameType> {
     options
         .iter()
         .map(|m| {
             let name = rustify_name(&m.name);
             let rtype = match &m.r#type {
                 ASN1Type::ElsewhereDeclaredType(d) => rustify_name(&d.identifier),
-                _ => inner_name(&m.name),
+                _ => inner_name(&m.name, parent_name),
             };
             StringifiedNameType {
                 name,
@@ -151,14 +151,14 @@ pub fn format_option_declaration(members: &Vec<StringifiedNameType>) -> String {
         .join("\n  ")
 }
 
-pub fn extract_sequence_members(members: &Vec<SequenceMember>) -> Vec<StringifiedNameType> {
+pub fn extract_sequence_members(members: &Vec<SequenceMember>, parent_name: &String) -> Vec<StringifiedNameType> {
     members
         .iter()
         .map(|m| {
             let name = rustify_name(&m.name);
             let rtype = match &m.r#type {
                 ASN1Type::ElsewhereDeclaredType(d) => rustify_name(&d.identifier),
-                _ => inner_name(&m.name),
+                _ => inner_name(&m.name, parent_name),
             };
             StringifiedNameType {
                 name,
@@ -212,30 +212,30 @@ pub fn format_decode_member_body(members: &Vec<StringifiedNameType>) -> String {
         .join("\n      ")
 }
 
-fn declare_inner_sequence_member(member: &SequenceMember) -> Result<String, GeneratorError> {
+fn declare_inner_sequence_member(member: &SequenceMember, parent_name: &String) -> Result<String, GeneratorError> {
     generate(
         ToplevelDeclaration {
             comments: " Inner type ".into(),
-            name: inner_name(&member.name),
+            name: inner_name(&member.name, parent_name),
             r#type: member.r#type.clone(),
         },
         None,
     )
 }
 
-fn declare_inner_choice_option(option: &ChoiceOption) -> Result<String, GeneratorError> {
+fn declare_inner_choice_option(option: &ChoiceOption, parent_name: &String) -> Result<String, GeneratorError> {
     generate(
         ToplevelDeclaration {
             comments: " Inner type ".into(),
-            name: inner_name(&option.name),
+            name: inner_name(&option.name, parent_name),
             r#type: option.r#type.clone(),
         },
         None,
     )
 }
 
-fn inner_name(name: &String) -> String {
-    format!("Inner_{}", rustify_name(&name))
+fn inner_name(name: &String, parent_name: &String) -> String {
+    format!("{}_inner_{}", parent_name, rustify_name(&name))
 }
 
 pub fn rustify_name(name: &String) -> String {

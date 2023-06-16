@@ -65,4 +65,8 @@ impl Decoder for Uper {
       ) -> fn(&'a [u8]) -> nom::IResult<&'a [u8], O> {
         todo!()
     }
+
+    fn decode_null<'a, N>(&self, input: &'a [u8]) -> nom::IResult<&'a [u8], N> {
+        todo!()
+    }
 }

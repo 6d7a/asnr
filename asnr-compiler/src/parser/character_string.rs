@@ -8,7 +8,7 @@ use nom::{
 
 use asnr_grammar::*;
 
-use super::{common::*, constraint::value_constraint};
+use super::{common::*, constraint::simple_value_constraint};
 
 /// Tries to parse an ASN1 Character String type
 ///
@@ -37,7 +37,7 @@ pub fn character_string<'a>(input: &'a str) -> IResult<&'a str, ASN1Type> {
                 tag(BMP_STRING),
                 tag(PRINTABLE_STRING),
             ))),
-            opt(in_parentheses(preceded(tag(SIZE), value_constraint))),
+            opt(in_parentheses(preceded(tag(SIZE), simple_value_constraint))),
         ),
         |m| ASN1Type::CharacterString(m.into()),
     )(input)
@@ -67,7 +67,7 @@ mod tests {
         assert_eq!(
             character_string(sample).unwrap().1,
             ASN1Type::CharacterString(AsnCharacterString {
-                constraints: vec![Constraint::RangeConstraint(RangeConstraint {
+                constraints: vec![Constraint::ValueConstraint(ValueConstraint {
                     max_value: Some(ASN1Value::Integer(8)),
                     min_value: Some(ASN1Value::Integer(8)),
                     extensible: false
@@ -83,7 +83,7 @@ mod tests {
         assert_eq!(
             character_string(sample).unwrap().1,
             ASN1Type::CharacterString(AsnCharacterString {
-                constraints: vec![Constraint::RangeConstraint(RangeConstraint {
+                constraints: vec![Constraint::ValueConstraint(ValueConstraint {
                     max_value: Some(ASN1Value::Integer(18)),
                     min_value: Some(ASN1Value::Integer(8)),
                     extensible: false
@@ -100,7 +100,7 @@ mod tests {
         assert_eq!(
             character_string(sample).unwrap().1,
             ASN1Type::CharacterString(AsnCharacterString {
-                constraints: vec![Constraint::RangeConstraint(RangeConstraint {
+                constraints: vec![Constraint::ValueConstraint(ValueConstraint {
                     max_value: Some(ASN1Value::Integer(2)),
                     min_value: Some(ASN1Value::Integer(2)),
                     extensible: true
@@ -116,7 +116,7 @@ mod tests {
         assert_eq!(
             character_string(sample).unwrap().1,
             ASN1Type::CharacterString(AsnCharacterString {
-                constraints: vec![Constraint::RangeConstraint(RangeConstraint {
+                constraints: vec![Constraint::ValueConstraint(ValueConstraint {
                     max_value: Some(ASN1Value::Integer(18)),
                     min_value: Some(ASN1Value::Integer(8)),
                     extensible: true

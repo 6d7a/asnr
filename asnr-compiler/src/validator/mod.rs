@@ -57,7 +57,7 @@ impl Validate for AsnBitString {
 impl Validate for AsnCharacterString {
     fn validate(&self) -> Result<(), ValidatorError> {
         for c in &self.constraints {
-            if let Constraint::RangeConstraint(r) = c {
+            if let Constraint::ValueConstraint(r) = c {
                 r.validate()?;
             }
         }
@@ -65,7 +65,7 @@ impl Validate for AsnCharacterString {
     }
 }
 
-impl Validate for RangeConstraint {
+impl Validate for ValueConstraint {
     fn validate(&self) -> Result<(), ValidatorError> {
         if let Some((ASN1Value::Integer(min), ASN1Value::Integer(max))) = self.min_value.as_ref().zip(self.max_value.as_ref()) {
             if min > max {
