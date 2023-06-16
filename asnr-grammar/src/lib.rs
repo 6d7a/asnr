@@ -4,14 +4,15 @@
 //! and types to represent the single ASN1 data elements
 //! from which the generator module produces de-/encodable
 //! types.
-//! 
+//!
 #![no_std]
 extern crate alloc;
 
-pub mod types;
 pub mod subtyping;
+pub mod types;
 
-use alloc::{vec::Vec, string::String, format};
+use alloc::{format, string::String, vec, vec::Vec};
+use subtyping::Constraint;
 use types::*;
 
 // Comment tokens
@@ -83,7 +84,6 @@ pub const INTERSECTION: &'static str = "INTERSECTION";
 pub const CARET: &'static str = "^";
 pub const ABSENT: &'static str = "ABSENT";
 pub const PRESENT: &'static str = "PRESENT";
-
 
 pub const ASSIGN: &'static str = "::=";
 pub const RANGE: &'static str = "..";
@@ -324,16 +324,30 @@ impl Quote for ASN1Value {
 /// some other part of the ASN1 specification that is
 /// being parsed or in one of its imports.
 #[derive(Debug, Clone, PartialEq)]
-pub struct DeclarationElsewhere(pub String);
+pub struct DeclarationElsewhere {
+    pub identifier: String,
+    pub constraints: Vec<Constraint>,
+}
 
-impl From<&str> for DeclarationElsewhere {
-    fn from(value: &str) -> Self {
-        DeclarationElsewhere(value.into())
+impl From<(&str, Option<Vec<Constraint>>)> for DeclarationElsewhere {
+    fn from(value: (&str, Option<Vec<Constraint>>)) -> Self {
+        DeclarationElsewhere {
+            identifier: value.0.into(),
+            constraints: value.1.unwrap_or(vec![]),
+        }
     }
 }
 
 impl Quote for DeclarationElsewhere {
     fn quote(&self) -> String {
-        format!("DeclarationElsewhere::from(\"{}\")", self.0)
+        format!(
+            "DeclarationElsewhere {{ identifier: \"{}\".into(), constraints: vec![{}] }}",
+            self.identifier,
+            self.constraints
+                .iter()
+                .map(|c| c.quote())
+                .collect::<Vec<String>>()
+                .join(", ")
+        )
     }
 }

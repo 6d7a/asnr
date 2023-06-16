@@ -1,4 +1,4 @@
-use asnr_grammar::{ types::*, *};
+use asnr_grammar::{types::*, *};
 
 use super::{builder::StringifiedNameType, error::GeneratorError, generate};
 
@@ -132,7 +132,7 @@ pub fn extract_choice_options(options: &Vec<ChoiceOption>) -> Vec<StringifiedNam
         .map(|m| {
             let name = rustify_name(&m.name);
             let rtype = match &m.r#type {
-                ASN1Type::ElsewhereDeclaredType(d) => rustify_name(&d.0),
+                ASN1Type::ElsewhereDeclaredType(d) => rustify_name(&d.identifier),
                 _ => inner_name(&m.name),
             };
             StringifiedNameType {
@@ -157,7 +157,7 @@ pub fn extract_sequence_members(members: &Vec<SequenceMember>) -> Vec<Stringifie
         .map(|m| {
             let name = rustify_name(&m.name);
             let rtype = match &m.r#type {
-                ASN1Type::ElsewhereDeclaredType(d) => rustify_name(&d.0),
+                ASN1Type::ElsewhereDeclaredType(d) => rustify_name(&d.identifier),
                 _ => inner_name(&m.name),
             };
             StringifiedNameType {
@@ -246,7 +246,7 @@ pub fn rustify_name(name: &String) -> String {
 mod tests {
     use asnr_grammar::types::*;
 
-    use crate::generator::util::{format_enumeral};
+    use crate::generator::util::format_enumeral;
 
     #[test]
     fn formats_enumeral() {

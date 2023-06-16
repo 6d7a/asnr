@@ -1,5 +1,3 @@
-use std::thread::park_timeout;
-
 use nom::{
     bytes::complete::tag,
     character::complete::char,
@@ -76,6 +74,8 @@ fn default<'a>(input: &'a str) -> IResult<&'a str, Option<ASN1Value>> {
 
 #[cfg(test)]
 mod tests {
+    use std::vec;
+
     use asnr_grammar::{subtyping::*, types::*, *};
 
     use super::*;
@@ -146,9 +146,11 @@ mod tests {
             members: vec![
                 SequenceMember {
                     name: "clusterBoundingBoxShape".into(),
-                    r#type: ASN1Type::ElsewhereDeclaredType(DeclarationElsewhere(
-                        "Shape".into()
-                    )),
+                    r#type: ASN1Type::ElsewhereDeclaredType(DeclarationElsewhere {
+                      identifier:
+                        "Shape".into(),
+                        constraints: vec![]
+                }),
                     default_value: None,
                     is_optional: true,
                     constraints: vec![],
@@ -175,18 +177,20 @@ mod tests {
                 members: vec![
                     SequenceMember {
                         name: "value".into(),
-                        r#type: ASN1Type::ElsewhereDeclaredType(DeclarationElsewhere(
-                            "AccelerationValue".into()
-                        )),
+                        r#type: ASN1Type::ElsewhereDeclaredType(DeclarationElsewhere {
+                            identifier: "AccelerationValue".into(),
+                            constraints: vec![]
+                        }),
                         default_value: None,
                         is_optional: false,
                         constraints: vec![]
                     },
                     SequenceMember {
                         name: "confidence".into(),
-                        r#type: ASN1Type::ElsewhereDeclaredType(DeclarationElsewhere(
-                            "AccelerationConfidence".into()
-                        )),
+                        r#type: ASN1Type::ElsewhereDeclaredType(DeclarationElsewhere {
+                            identifier: "AccelerationConfidence".into(),
+                            constraints: vec![]
+                        }),
                         default_value: None,
                         is_optional: false,
                         constraints: vec![],
@@ -215,27 +219,30 @@ mod tests {
                 members: vec![
                     SequenceMember {
                         name: "xCoordinate".into(),
-                        r#type: ASN1Type::ElsewhereDeclaredType(DeclarationElsewhere(
-                            "CartesianCoordinateWithConfidence".into()
-                        )),
+                        r#type: ASN1Type::ElsewhereDeclaredType(DeclarationElsewhere {
+                            identifier: "CartesianCoordinateWithConfidence".into(),
+                            constraints: vec![]
+                        }),
                         default_value: None,
                         is_optional: false,
                         constraints: vec![],
                     },
                     SequenceMember {
                         name: "yCoordinate".into(),
-                        r#type: ASN1Type::ElsewhereDeclaredType(DeclarationElsewhere(
-                            "CartesianCoordinateWithConfidence".into()
-                        )),
+                        r#type: ASN1Type::ElsewhereDeclaredType(DeclarationElsewhere {
+                            identifier: "CartesianCoordinateWithConfidence".into(),
+                            constraints: vec![]
+                        }),
                         default_value: None,
                         is_optional: false,
                         constraints: vec![],
                     },
                     SequenceMember {
                         name: "zCoordinate".into(),
-                        r#type: ASN1Type::ElsewhereDeclaredType(DeclarationElsewhere(
-                            "CartesianCoordinateWithConfidence".into()
-                        )),
+                        r#type: ASN1Type::ElsewhereDeclaredType(DeclarationElsewhere {
+                            identifier: "CartesianCoordinateWithConfidence".into(),
+                            constraints: vec![]
+                        }),
                         default_value: None,
                         is_optional: true,
                         constraints: vec![],
@@ -265,27 +272,30 @@ mod tests {
                 members: vec![
                     SequenceMember {
                         name: "horizontalPositionConfidence".into(),
-                        r#type: ASN1Type::ElsewhereDeclaredType(DeclarationElsewhere(
-                            "PosConfidenceEllipse".into()
-                        )),
+                        r#type: ASN1Type::ElsewhereDeclaredType(DeclarationElsewhere {
+                            identifier: "PosConfidenceEllipse".into(),
+                            constraints: vec![]
+                        }),
                         default_value: None,
                         is_optional: true,
                         constraints: vec![],
                     },
                     SequenceMember {
                         name: "deltaAltitude".into(),
-                        r#type: ASN1Type::ElsewhereDeclaredType(DeclarationElsewhere(
-                            "DeltaAltitude".into()
-                        )),
+                        r#type: ASN1Type::ElsewhereDeclaredType(DeclarationElsewhere {
+                            identifier: "DeltaAltitude".into(),
+                            constraints: vec![]
+                        }),
                         default_value: Some(ASN1Value::String("unavailable".into())),
                         is_optional: true,
                         constraints: vec![],
                     },
                     SequenceMember {
                         name: "altitudeConfidence".into(),
-                        r#type: ASN1Type::ElsewhereDeclaredType(DeclarationElsewhere(
-                            "AltitudeConfidence".into()
-                        )),
+                        r#type: ASN1Type::ElsewhereDeclaredType(DeclarationElsewhere {
+                            identifier: "AltitudeConfidence".into(),
+                            constraints: vec![]
+                        }),
                         default_value: Some(ASN1Value::String("unavailable".into())),
                         is_optional: true,
                         constraints: vec![],
@@ -383,9 +393,10 @@ mod tests {
                         members: vec![
                             SequenceMember {
                                 name: "wow".into(),
-                                r#type: ASN1Type::ElsewhereDeclaredType(DeclarationElsewhere(
-                                    "Wow".into()
-                                )),
+                                r#type: ASN1Type::ElsewhereDeclaredType(DeclarationElsewhere {
+                                    identifier: "Wow".into(),
+                                    constraints: vec![]
+                                }),
                                 default_value: None,
                                 is_optional: false,
                                 constraints: vec![],

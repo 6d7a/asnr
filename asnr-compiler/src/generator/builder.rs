@@ -233,7 +233,7 @@ pub fn generate_sequence_of<'a>(
         }
         .unwrap_or(String::new());
         let member_type = match seq_of.r#type.as_ref() {
-            ASN1Type::ElsewhereDeclaredType(d) => rustify_name(&d.0),
+            ASN1Type::ElsewhereDeclaredType(d) => rustify_name(&d.identifier),
             _ => String::from("Anonymous_") + &name,
         };
         Ok(sequence_of_template(
@@ -367,9 +367,10 @@ mod tests {
                         members: vec![
                             SequenceMember {
                                 name: "wow".into(),
-                                r#type: ASN1Type::ElsewhereDeclaredType(DeclarationElsewhere(
-                                    "Wow".into(),
-                                )),
+                                r#type: ASN1Type::ElsewhereDeclaredType(DeclarationElsewhere{
+                                  identifier: "Wow".into(),
+                                  constraints: vec![]
+                            }),
                                 default_value: None,
                                 is_optional: false,
                                 constraints: vec![],

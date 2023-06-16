@@ -7,11 +7,7 @@ use nom::{
     IResult,
 };
 
-use super::{
-    asn1_type,
-    common::skip_ws_and_comments,
-    constraint::{constraint}
-};
+use super::{asn1_type, common::skip_ws_and_comments, constraint::constraint};
 
 /// Tries to parse an ASN1 SEQUENCE OF
 ///
@@ -60,10 +56,11 @@ mod tests {
         assert_eq!(
             sequence_of("SEQUENCE OF Things").unwrap().1,
             ASN1Type::SequenceOf(AsnSequenceOf {
-              constraints: vec![],
-                r#type: Box::new(ASN1Type::ElsewhereDeclaredType(DeclarationElsewhere(
-                    "Things".into()
-                )))
+                constraints: vec![],
+                r#type: Box::new(ASN1Type::ElsewhereDeclaredType(DeclarationElsewhere {
+                    identifier: "Things".into(),
+                    constraints: vec![]
+                }))
             })
         );
     }
@@ -80,9 +77,10 @@ mod tests {
                     max_value: Some(ASN1Value::Integer(13)),
                     extensible: true
                 })],
-                r#type: Box::new(ASN1Type::ElsewhereDeclaredType(DeclarationElsewhere(
-                    "CorrelationCellValue".into()
-                )))
+                r#type: Box::new(ASN1Type::ElsewhereDeclaredType(DeclarationElsewhere {
+                    identifier: "CorrelationCellValue".into(),
+                    constraints: vec![]
+                }))
             })
         );
     }
@@ -99,9 +97,10 @@ mod tests {
                     max_value: Some(ASN1Value::Integer(13)),
                     extensible: true
                 })],
-                r#type: Box::new(ASN1Type::ElsewhereDeclaredType(DeclarationElsewhere(
-                    "CorrelationCellValue".into()
-                )))
+                r#type: Box::new(ASN1Type::ElsewhereDeclaredType(DeclarationElsewhere {
+                    identifier: "CorrelationCellValue".into(),
+                    constraints: vec![]
+                }))
             })
         );
     }
