@@ -85,14 +85,14 @@ pub fn asn1_value<'a>(input: &'a str) -> IResult<&'a str, ASN1Value> {
         bit_string_value,
         boolean_value,
         integer_value,
-        elsewhere_declared_value
+        elsewhere_declared_value,
     ))(input)
 }
 
 pub fn elsewhere_declared_value<'a>(input: &'a str) -> IResult<&'a str, ASN1Value> {
-  map(skip_ws_and_comments(identifier), |m| {
-      ASN1Value::ElsewhereDeclaredValue(m.into())
-  })(input)
+    map(skip_ws_and_comments(identifier), |m| {
+        ASN1Value::ElsewhereDeclaredValue(m.into())
+    })(input)
 }
 
 pub fn elsewhere_declared_type<'a>(input: &'a str) -> IResult<&'a str, ASN1Type> {
@@ -108,8 +108,9 @@ pub fn elsewhere_declared_type<'a>(input: &'a str) -> IResult<&'a str, ASN1Type>
 #[cfg(test)]
 mod tests {
     use core::panic;
+    use std::vec;
 
-    use asnr_grammar::{types::*, *};
+    use asnr_grammar::{subtyping::*, types::*, *};
 
     use super::top_level_declaration;
 
@@ -239,5 +240,47 @@ mod tests {
             .comments
             .contains("@revision: editorial update in V2.1.1"));
         assert_eq!(tld.r#type, ASN1Type::Boolean);
+    }
+
+    #[test]
+    fn parses_toplevel_crossrefering_declaration() {
+        let tld = top_level_declaration(
+            r#"// Comments go here
+        EventZone::= EventHistory
+        ((WITH COMPONENT (WITH COMPONENTS {..., eventDeltaTime PRESENT})) |
+         (WITH COMPONENT (WITH COMPONENTS {..., eventDeltaTime ABSENT})))
+         }"#,
+        )
+        .unwrap()
+        .1;
+        assert_eq!(
+            tld,
+            ToplevelDeclaration {
+                comments: " Comments go here".into(),
+                name: "EventZone".into(),
+                r#type: ASN1Type::ElsewhereDeclaredType(DeclarationElsewhere {
+                    identifier: "EventHistory".into(),
+                    constraints: vec![
+                        Constraint::ArrayComponentConstraint(ComponentConstraint {
+                            is_partial: true,
+                            constraints: vec![ConstrainedComponent {
+                                identifier: "eventDeltaTime".into(),
+                                constraints: vec![],
+                                presence: ComponentPresence::Present
+                            }]
+                        }),
+                        Constraint::Arithmetic(ArithmeticOperator::Union),
+                        Constraint::ArrayComponentConstraint(ComponentConstraint {
+                            is_partial: true,
+                            constraints: vec![ConstrainedComponent {
+                                identifier: "eventDeltaTime".into(),
+                                constraints: vec![],
+                                presence: ComponentPresence::Absent
+                            }]
+                        })
+                    ]
+                })
+            }
+        );
     }
 }

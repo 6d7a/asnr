@@ -10,7 +10,7 @@ pub const RUST_IMPORTS_TEMPLATE: &str = r#"// This file has been auto-generated 
 
 use alloc::{format, vec, vec::Vec, string::String, boxed::Box};
 use asnr_grammar::{*, types::*, subtyping::*};
-use asnr_transcoder::{error::{DecodingError, DecodingErrorType}, Decode, Decoder, DecodeMember, DecoderForIndex};
+use asnr_transcoder::{error::{DecodingError, DecodingErrorType}, Decode, Decoder, DecodeMember, DecoderForIndex, Describe};
 use nom::IResult;
 
 "#;
@@ -21,6 +21,34 @@ pub const DECODE_SIGNATURE: &str = r#"fn decode<'a, D>(decoder: &D, input: &'a [
 where
     D: Decoder,
     Self: Sized,"#;
+
+pub fn typealias_template(
+    comments: String,
+    derive: &str,
+    name: String,
+    alias: String,
+    descriptor: String,
+) -> String {
+    format!(
+        r#"
+    {comments}{derive}
+    pub struct {name}(pub {alias});
+
+    impl Describe for {name} {{
+      fn describe() -> ASN1Type {{
+        {descriptor}
+      }}
+    }}
+    
+    impl Decode for {name} {{
+      {DECODE_SIGNATURE}
+      {{
+        {alias}::decode(decoder, input).map(|(r, v)|(r, Self(v)))
+      }}
+    }}
+    "#
+    )
+}
 
 pub fn integer_template(
     comments: String,
@@ -94,14 +122,9 @@ impl Decode for {name} {{
     )
 }
 
-
-pub fn boolean_template(
-  comments: String,
-  derive: &str,
-  name: String,
-) -> String {
-  format!(
-    r#"
+pub fn boolean_template(comments: String, derive: &str, name: String) -> String {
+    format!(
+        r#"
 {comments}{derive}
 pub struct {name}(pub bool);
 
@@ -114,16 +137,12 @@ impl Decode for {name} {{
   }}
 }}
 "#
-)
+    )
 }
 
-pub fn null_template(
-  comments: String,
-  derive: &str,
-  name: String,
-) -> String {
-  format!(
-    r#"
+pub fn null_template(comments: String, derive: &str, name: String) -> String {
+    format!(
+        r#"
 {comments}{derive}
 pub struct {name};
 
@@ -134,7 +153,7 @@ impl Decode for {name} {{
   }}
 }}
 "#
-)
+    )
 }
 
 pub fn enumerated_template(
@@ -228,15 +247,15 @@ pub fn sequence_template(
 }
 
 pub fn sequence_of_template(
-  comments: String,
+    comments: String,
     derive: &str,
     name: String,
     anonymous_item: String,
     member_type: String,
     seq_of_descriptor: String,
 ) -> String {
-  format!(
-    r#"{anonymous_item}
+    format!(
+        r#"{anonymous_item}
 
 {comments}{derive}
 pub struct {name}(pub Vec<{member_type}>);
@@ -250,27 +269,29 @@ impl Decode for {name} {{
   }}
 }}
 "#
-)
+    )
 }
 
-pub fn default_choice(
-  option: &StringifiedNameType
-)  -> String {
-  format!("Self::{name}({rtype}::default())", name = option.name, rtype = option.r#type)
+pub fn default_choice(option: &StringifiedNameType) -> String {
+    format!(
+        "Self::{name}({rtype}::default())",
+        name = option.name,
+        rtype = option.r#type
+    )
 }
 
 pub fn choice_template(
-  comments: String,
-  derive: &str,
-  name: String,
-  anonymous_option: String,
-  default_option: String,
-  options: String,
-  options_from_int: String,
-  choice_descriptor: String,
+    comments: String,
+    derive: &str,
+    name: String,
+    anonymous_option: String,
+    default_option: String,
+    options: String,
+    options_from_int: String,
+    choice_descriptor: String,
 ) -> String {
-  format!(
-      r#"{anonymous_option}
+    format!(
+        r#"{anonymous_option}
 
 {comments}{derive}
 pub enum {name} {{
@@ -305,5 +326,5 @@ impl Decode for {name} {{
   }}
 }}
 "#,
-  )
+    )
 }

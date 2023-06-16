@@ -50,7 +50,7 @@ pub fn single_constraint<'a>(input: &'a str) -> IResult<&'a str, Constraint> {
         map(size_constraint, |c| Constraint::SizeConstraint(c)),
         map(simple_value_constraint, |v| Constraint::ValueConstraint(v)),
         map(array_component_constraint, |c| {
-            Constraint::ComponentConstraint(c)
+            Constraint::ArrayComponentConstraint(c)
         }),
         map(component_constraint, |c| Constraint::ComponentConstraint(c)),
     )))(input)
@@ -356,7 +356,7 @@ mod tests {
             .unwrap()
             .1,
             vec![
-                Constraint::ComponentConstraint(ComponentConstraint {
+                Constraint::ArrayComponentConstraint(ComponentConstraint {
                     is_partial: true,
                     constraints: vec![ConstrainedComponent {
                         identifier: "eventDeltaTime".into(),
@@ -365,7 +365,7 @@ mod tests {
                     }]
                 }),
                 Constraint::Arithmetic(ArithmeticOperator::Union),
-                Constraint::ComponentConstraint(ComponentConstraint {
+                Constraint::ArrayComponentConstraint(ComponentConstraint {
                     is_partial: true,
                     constraints: vec![ConstrainedComponent {
                         identifier: "eventDeltaTime".into(),

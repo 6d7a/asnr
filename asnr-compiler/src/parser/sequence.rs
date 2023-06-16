@@ -1,7 +1,7 @@
 use nom::{
     bytes::complete::tag,
     character::complete::char,
-    combinator::{into, opt, value},
+    combinator::{into, opt},
     multi::many0,
     sequence::{terminated, tuple},
     IResult,
@@ -9,10 +9,7 @@ use nom::{
 
 use asnr_grammar::{subtyping::*, types::*, *};
 
-use super::{
-    constraint::{component_constraint, constraint},
-    *,
-};
+use super::{constraint::constraint, *};
 
 /// Tries to parse an ASN1 SEQUENCE
 ///
@@ -300,7 +297,9 @@ mod tests {
                             identifier: "DeltaAltitude".into(),
                             constraints: vec![]
                         }),
-                        default_value: Some(ASN1Value::ElsewhereDeclaredValue("unavailable".into())),
+                        default_value: Some(ASN1Value::ElsewhereDeclaredValue(
+                            "unavailable".into()
+                        )),
                         is_optional: true,
                         constraints: vec![],
                     },
@@ -312,7 +311,9 @@ mod tests {
                             identifier: "AltitudeConfidence".into(),
                             constraints: vec![]
                         }),
-                        default_value: Some(ASN1Value::ElsewhereDeclaredValue("unavailable".into())),
+                        default_value: Some(ASN1Value::ElsewhereDeclaredValue(
+                            "unavailable".into()
+                        )),
                         is_optional: true,
                         constraints: vec![],
                     }

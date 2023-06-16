@@ -14,7 +14,7 @@ pub mod uper;
 mod generated;
 
 use alloc::{string::String, vec::Vec};
-use asnr_grammar::types::*;
+use asnr_grammar::{types::*, ASN1Type};
 use error::DecodingError;
 use nom::IResult;
 use num::{FromPrimitive, Integer};
@@ -24,6 +24,10 @@ pub trait Decode {
     where
         D: Decoder,
         Self: Sized;
+}
+
+pub trait Describe {
+  fn describe() -> ASN1Type;
 }
 
 pub trait DecodeMember {

@@ -104,6 +104,27 @@ pub fn generate_boolean<'a>(
     }
 }
 
+pub fn generate_typealias<'a>(
+  tld: ToplevelDeclaration,
+  custom_derive: Option<&'a str>,
+) -> Result<String, GeneratorError> {
+  if let ASN1Type::ElsewhereDeclaredType(dec) = &tld.r#type {
+      Ok(typealias_template(
+          format_comments(&tld.comments),
+          custom_derive.unwrap_or(DERIVE_DEFAULT),
+          rustify_name(&tld.name),
+          rustify_name(&dec.identifier),
+          tld.r#type.quote()
+      ))
+  } else {
+      Err(GeneratorError::new(
+          tld,
+          "Expected NULL top-level declaration",
+          GeneratorErrorType::Asn1TypeMismatch,
+      ))
+  }
+}
+
 pub fn generate_null<'a>(
   tld: ToplevelDeclaration,
   custom_derive: Option<&'a str>,
