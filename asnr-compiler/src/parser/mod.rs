@@ -245,7 +245,7 @@ mod tests {
     #[test]
     fn parses_toplevel_crossrefering_declaration() {
         let tld = top_level_declaration(
-            r#"// Comments go here
+            r#"-- Comments go here
         EventZone::= EventHistory
         ((WITH COMPONENT (WITH COMPONENTS {..., eventDeltaTime PRESENT})) |
          (WITH COMPONENT (WITH COMPONENTS {..., eventDeltaTime ABSENT})))

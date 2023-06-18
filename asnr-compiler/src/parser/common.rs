@@ -14,15 +14,24 @@ use asnr_grammar::{subtyping::*, types::*, *};
 
 use super::util::{map_into, take_until_or};
 
-/// This matches both spec-conform ASN1 comments ("--")
-/// as well as C-style comments commonly seen ("//", "/* */")
+/// Parses an ASN1 comment.
+/// 
+/// * `input` string slice reference used as an input for the parser
+/// 
+/// returns a `Result` yielding a tuple containing a reference to the remaining string slice 
+/// and the parsed comment in case of sucess, or a parsing error if unsuccessful.
+/// 
+/// #### X680
+/// _The lexical item "comment" can have two forms:_
+///    * _One-line comments which begin with "--" as defined in 12.6.3;_
+///    * _Multiple-line comments which begin with "/*" as defined in 12.6.4._
 pub fn comment<'a>(input: &'a str) -> IResult<&'a str, &'a str> {
     skip_ws(alt((block_comment, line_comment)))(input)
 }
 
 pub fn line_comment<'a>(input: &'a str) -> IResult<&'a str, &'a str> {
     preceded(
-        alt((tag(C_STYLE_LINE_COMMENT), tag(ASN1_COMMENT))),
+        tag(ASN1_COMMENT),
         not_line_ending,
     )(input)
 }
@@ -42,6 +51,17 @@ pub fn block_comment<'a>(input: &'a str) -> IResult<&'a str, &'a str> {
     ))(input)
 }
 
+/// Parses an ASN1 identifier.
+/// 
+/// * `input` string slice reference used as an input for the parser
+/// 
+/// returns a `Result` yielding a tuple containing a reference to the remaining string slice 
+/// and the parsed identifier in case of sucess, or a parsing error if unsuccessful.
+/// 
+/// #### X.680
+/// _12.3 An "identifier" shall consist of an arbitrary number (one or more) of letters, digits, 
+/// and hyphens. The initial character shall be a lower-case letter. A hyphen shall not be the 
+/// last character. A hyphen shall not be immediately followed by another hyphen._
 pub fn identifier<'a>(input: &'a str) -> IResult<&'a str, &'a str> {
     recognize(pair(
         alpha1,
@@ -152,7 +172,7 @@ mod tests {
 
     #[test]
     fn parses_line_comment() {
-        let line = r#"// Test, one, two, three/
+        let line = r#"-- Test, one, two, three/
 "#;
         assert_eq!(" Test, one, two, three/", comment(line).unwrap().1);
     }
@@ -185,6 +205,18 @@ and one */"#
             " Very annoying! ",
             comment("-- Very annoying! --").unwrap().1
         )
+    }
+
+    /// 12.6.4. Whenever a "comment" begins with "/*", it shall end with a corresponding "*/", 
+    /// whether this "*/" is on the same line or not. If another "/*" is found before a "*/", 
+    /// then the comment terminates when a matching "*/" has been found for each "/*". 
+    #[test]
+    fn parses_block_comment_with_nested_comments() {
+        assert_eq!(comment(r#"/*this is a comment /*
+        this is a nested comment */ this text should be parsed*/"#).unwrap().1,
+        "this is a comment /*
+        this is a nested comment */ this text should be parsed"
+     )
     }
 
     #[test]

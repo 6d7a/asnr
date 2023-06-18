@@ -11,7 +11,6 @@ extern crate alloc;
 pub mod error;
 //#[cfg(feature = "uper")]
 pub mod uper;
-mod generated;
 
 use alloc::{string::String, vec::Vec};
 use asnr_grammar::{types::*, ASN1Type};
