@@ -16,7 +16,7 @@ use nom::{
     IResult,
 };
 
-use asnr_grammar::{ASN1Type, ASN1Value, Header, ToplevelDeclaration};
+use asnr_grammar::{ASN1Type, ASN1Value, ModuleReference, ToplevelDeclaration};
 
 use self::{
     bit_string::{bit_string, bit_string_value},
@@ -27,7 +27,7 @@ use self::{
     constraint::constraint,
     enumerated::*,
     error::ParserError,
-    header::module_reference,
+    module_reference::module_reference,
     integer::*,
     null::*,
     sequence::sequence,
@@ -42,15 +42,16 @@ mod common;
 mod constraint;
 mod enumerated;
 mod error;
-mod header;
+mod information_object_class;
 mod integer;
+mod module_reference;
 mod null;
 mod object_identifier;
 mod sequence;
 mod sequence_of;
 mod util;
 
-pub fn asn_spec<'a>(input: &'a str) -> Result<(Header, Vec<ToplevelDeclaration>), ParserError> {
+pub fn asn_spec<'a>(input: &'a str) -> Result<(ModuleReference, Vec<ToplevelDeclaration>), ParserError> {
     pair(module_reference, many0(skip_ws(top_level_declaration)))(input)
         .map(|(_, res)| res)
         .map_err(|e| e.into())
@@ -279,6 +280,34 @@ mod tests {
                             }]
                         })
                     ]
+                })
+            }
+        );
+    }
+
+    #[test]
+    fn parses_anonymous_sequence_of_declaration() {
+        let tld = top_level_declaration(
+            r#"--Comments
+        InterferenceManagementZones ::= SEQUENCE (SIZE(1..16, ...)) OF InterferenceManagementZone"#,
+        )
+        .unwrap()
+        .1;
+        assert_eq!(
+            tld,
+            ToplevelDeclaration {
+                comments: "Comments".into(),
+                name: "InterferenceManagementZones".into(),
+                r#type: ASN1Type::SequenceOf(AsnSequenceOf {
+                    constraints: vec![Constraint::SizeConstraint(ValueConstraint {
+                        min_value: Some(ASN1Value::Integer(1)),
+                        max_value: Some(ASN1Value::Integer(16)),
+                        extensible: true
+                    })],
+                    r#type: Box::new(ASN1Type::ElsewhereDeclaredType(DeclarationElsewhere {
+                        identifier: "InterferenceManagementZone".into(),
+                        constraints: vec![]
+                    }))
                 })
             }
         );

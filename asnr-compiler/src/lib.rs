@@ -227,13 +227,13 @@ mod tests {
 
     #[test]
     fn compiles_a_simple_spec() {
-        // println!(
-        //     "{:#?}",
-        //     Asnr::compiler()
-        //         .add_asn_source(PathBuf::from("test.asn"))
-        //         .set_output_path(PathBuf::from("./generated.rs"))
-        //         .compile()
-        //         .unwrap()
-        // )
+        println!(
+            "{:#?}",
+            Asnr::compiler()
+                .add_asn_source(PathBuf::from("test.asn"))
+                .set_output_path(PathBuf::from("./generated.rs"))
+                .compile()
+                .unwrap()
+        )
     }
 }

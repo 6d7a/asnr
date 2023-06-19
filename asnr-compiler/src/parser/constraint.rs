@@ -265,7 +265,7 @@ mod tests {
     #[test]
     fn parses_size_constraint() {
         assert_eq!(
-            constraint("(SIZE(3..16,...))").unwrap().1,
+            constraint("(SIZE(3..16, ...))").unwrap().1,
             vec![Constraint::SizeConstraint(ValueConstraint {
                 min_value: Some(ASN1Value::Integer(3)),
                 max_value: Some(ASN1Value::Integer(16)),

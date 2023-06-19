@@ -7,7 +7,7 @@ use nom::{
     IResult,
 };
 
-use super::{asn1_type, common::skip_ws_and_comments, constraint::constraint};
+use super::{asn1_type, common::{skip_ws_and_comments, opt_parentheses}, constraint::constraint};
 
 /// Tries to parse an ASN1 SEQUENCE OF
 ///
@@ -22,11 +22,7 @@ pub fn sequence_of<'a>(input: &'a str) -> IResult<&'a str, ASN1Type> {
         pair(
             preceded(
                 skip_ws_and_comments(tag(SEQUENCE)),
-                opt(delimited(
-                    opt(skip_ws_and_comments(char(LEFT_PARENTHESIS))),
-                    constraint,
-                    opt(skip_ws_and_comments(char(RIGHT_PARENTHESIS))),
-                )),
+                opt(opt_parentheses(constraint)),
             ),
             preceded(skip_ws_and_comments(tag(OF)), asn1_type),
         ),

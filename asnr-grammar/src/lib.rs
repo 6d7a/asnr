@@ -75,6 +75,11 @@ pub const INSTRUCTIONS: &'static str = "INSTRUCTIONS";
 pub const TAGS: &'static str = "TAGS";
 pub const EXTENSIBILITY_IMPLIED: &'static str = "EXTENSIBILITY IMPLIED";
 
+// Information Object Class tokens
+pub const AMPERSAND: char = '&';
+pub const CLASS: &'static str = "CLASS";
+pub const UNIQUE: &'static str = "UNIQUE";
+
 // Subtyping tokens
 pub const SIZE: &'static str = "SIZE";
 pub const DEFAULT: &'static str = "DEFAULT";
@@ -94,6 +99,8 @@ pub const RANGE: &'static str = "..";
 pub const ELLIPSIS: &'static str = "...";
 pub const COMMA: char = ',';
 pub const SINGLE_QUOTE: char = '\'';
+
+
 
 /// The `Quote` trait serves to convert a structure
 /// into a stringified rust representation of its initialization.
@@ -152,10 +159,10 @@ pub enum ExtensibilityEnvironment {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct Header {
+pub struct ModuleReference {
     pub name: String,
     pub module_identifier: ObjectIdentifier,
-    pub encoding_reference_default: EncodingReferenceDefault,
+    pub encoding_reference_default: Option<EncodingReferenceDefault>,
     pub tagging_environment: TaggingEnvironment,
     pub extensibility_environment: ExtensibilityEnvironment,
 }
@@ -165,18 +172,18 @@ impl
         &str,
         ObjectIdentifier,
         (
-            EncodingReferenceDefault,
+            Option<EncodingReferenceDefault>,
             TaggingEnvironment,
             ExtensibilityEnvironment,
         ),
-    )> for Header
+    )> for ModuleReference
 {
     fn from(
         value: (
             &str,
             ObjectIdentifier,
             (
-                EncodingReferenceDefault,
+                Option<EncodingReferenceDefault>,
                 TaggingEnvironment,
                 ExtensibilityEnvironment,
             ),
@@ -269,6 +276,8 @@ pub enum ASN1Type {
     // Set,
     // SetOf,
     ElsewhereDeclaredType(DeclarationElsewhere),
+    InformationObjectClass(InformationObjectClass),
+    InformationObject(InformationObject),
 }
 
 /// The types of an ASN1 character strings.

@@ -507,3 +507,22 @@ impl From<(&str, i128)> for DistinguishedValue {
         }
     }
 }
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct InformationObjectClass<'a> {
+  pub fields: Vec<InformationObjectField<'a>>
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct InformationObjectField<'a> {
+  pub identifier: ObjectFieldIdentifier<'a>,
+  pub r#type: Option<ASN1Type>,
+  pub is_optional: bool,
+  pub is_unique: bool,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum ObjectFieldIdentifier<'a> {
+  SingleValue(&'a str),
+  MultipleValue(&'a str)
+}

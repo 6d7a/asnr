@@ -12,7 +12,7 @@ use nom::{
 
 use asnr_grammar::{subtyping::*, types::*, *};
 
-use super::util::{map_into, take_until_or};
+use super::util::{map_into, take_until_or, take_until_unbalanced};
 
 /// Parses an ASN1 comment.
 ///
@@ -40,7 +40,7 @@ pub fn line_comment<'a>(input: &'a str) -> IResult<&'a str, &'a str> {
 pub fn block_comment<'a>(input: &'a str) -> IResult<&'a str, &'a str> {
     delimited(
         tag(BLOCK_COMMENT_START),
-        take_until(BLOCK_COMMENT_END),
+        take_until_unbalanced(BLOCK_COMMENT_START, BLOCK_COMMENT_END),
         tag(BLOCK_COMMENT_END),
     )(input)
 }
@@ -199,6 +199,23 @@ and one */"#
             " Very annoying! ",
             comment("-- Very annoying! --").unwrap().1
         )
+    }
+
+    #[test]
+    fn parses_multiline_block_comment() {
+      assert_eq!(comment(r#"/** 
+      * This DE indicates a change of acceleration.
+      *
+      * The value shall be set to:
+      * - 0 - `accelerate` - if the magnitude of the horizontal velocity vector increases.
+      * - 1 - `decelerate` - if the magnitude of the horizontal velocity vector decreases.
+      *
+      * @category: Kinematic information
+      * @revision: Created in V2.1.1
+     */
+    StartOfDeclaration"#).unwrap().1,
+      "* \n      * This DE indicates a change of acceleration.\n      *\n      * The value shall be set to:\n      * - 0 - `accelerate` - if the magnitude of the horizontal velocity vector increases.\n      * - 1 - `decelerate` - if the magnitude of the horizontal velocity vector decreases.\n      *\n      * @category: Kinematic information\n      * @revision: Created in V2.1.1\n     "
+    )
     }
 
     /// 12.6.4. Whenever a "comment" begins with "/*", it shall end with a corresponding "*/",
