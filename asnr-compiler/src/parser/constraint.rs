@@ -19,7 +19,7 @@ use nom::{
 use super::{
     asn1_value,
     common::{
-        extension_marker, identifier, in_braces, in_parentheses, opt_parentheses, range_marker,
+        extension_marker, identifier, in_braces, in_parentheses, opt_parentheses, range_seperator,
         skip_ws_and_comments,
     },
 };
@@ -126,7 +126,7 @@ pub fn strict_extensible_constraint<'a>(input: &'a str) -> IResult<&'a str, Valu
 pub fn range_constraint<'a>(input: &'a str) -> IResult<&'a str, ValueConstraint> {
     into(tuple((
         asn1_value,
-        range_marker,
+        range_seperator,
         skip_ws_and_comments(asn1_value),
     )))(input)
 }
@@ -134,7 +134,7 @@ pub fn range_constraint<'a>(input: &'a str) -> IResult<&'a str, ValueConstraint>
 pub fn extensible_range_constraint<'a>(input: &'a str) -> IResult<&'a str, ValueConstraint> {
     into(tuple((
         asn1_value,
-        range_marker,
+        range_seperator,
         skip_ws_and_comments(asn1_value),
         preceded(skip_ws_and_comments(char(COMMA)), extension_marker),
     )))(input)

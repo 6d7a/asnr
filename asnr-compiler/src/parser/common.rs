@@ -15,12 +15,12 @@ use asnr_grammar::{subtyping::*, types::*, *};
 use super::util::{map_into, take_until_or};
 
 /// Parses an ASN1 comment.
-/// 
+///
 /// * `input` string slice reference used as an input for the parser
-/// 
-/// returns a `Result` yielding a tuple containing a reference to the remaining string slice 
+///
+/// returns a `Result` yielding a tuple containing a reference to the remaining string slice
 /// and the parsed comment in case of sucess, or a parsing error if unsuccessful.
-/// 
+///
 /// #### X680
 /// _The lexical item "comment" can have two forms:_
 ///    * _One-line comments which begin with "--" as defined in 12.6.3;_
@@ -30,37 +30,31 @@ pub fn comment<'a>(input: &'a str) -> IResult<&'a str, &'a str> {
 }
 
 pub fn line_comment<'a>(input: &'a str) -> IResult<&'a str, &'a str> {
-    preceded(
-        tag(ASN1_COMMENT),
-        not_line_ending,
+    delimited(
+        tag(LINE_COMMENT),
+        take_until_or("\n", LINE_COMMENT),
+        opt(tag(LINE_COMMENT)),
     )(input)
 }
 
 pub fn block_comment<'a>(input: &'a str) -> IResult<&'a str, &'a str> {
-    alt((
-        delimited(
-            tag(C_STYLE_BLOCK_COMMENT_BEGIN),
-            take_until(C_STYLE_BLOCK_COMMENT_END),
-            tag(C_STYLE_BLOCK_COMMENT_END),
-        ),
-        delimited(
-            tag(ASN1_COMMENT),
-            take_until_or("\n", ASN1_COMMENT),
-            tag(ASN1_COMMENT),
-        ),
-    ))(input)
+    delimited(
+        tag(BLOCK_COMMENT_START),
+        take_until(BLOCK_COMMENT_END),
+        tag(BLOCK_COMMENT_END),
+    )(input)
 }
 
 /// Parses an ASN1 identifier.
-/// 
+///
 /// * `input` string slice reference used as an input for the parser
-/// 
-/// returns a `Result` yielding a tuple containing a reference to the remaining string slice 
+///
+/// returns a `Result` yielding a tuple containing a reference to the remaining string slice
 /// and the parsed identifier in case of sucess, or a parsing error if unsuccessful.
-/// 
+///
 /// #### X.680
-/// _12.3 An "identifier" shall consist of an arbitrary number (one or more) of letters, digits, 
-/// and hyphens. The initial character shall be a lower-case letter. A hyphen shall not be the 
+/// _12.3 An "identifier" shall consist of an arbitrary number (one or more) of letters, digits,
+/// and hyphens. The initial character shall be a lower-case letter. A hyphen shall not be the
 /// last character. A hyphen shall not be immediately followed by another hyphen._
 pub fn identifier<'a>(input: &'a str) -> IResult<&'a str, &'a str> {
     recognize(pair(
@@ -138,8 +132,8 @@ pub fn asn_tag<'a>(input: &'a str) -> IResult<&'a str, AsnTag> {
     )))(input)
 }
 
-pub fn range_marker<'a>(input: &'a str) -> IResult<&'a str, RangeMarker> {
-    skip_ws_and_comments(tag(RANGE))(input).map(|(remaining, _)| (remaining, RangeMarker()))
+pub fn range_seperator<'a>(input: &'a str) -> IResult<&'a str, RangeSeperator> {
+    skip_ws_and_comments(tag(RANGE))(input).map(|(remaining, _)| (remaining, RangeSeperator()))
 }
 
 pub fn extension_marker<'a>(input: &'a str) -> IResult<&'a str, ExtensionMarker> {
@@ -207,16 +201,21 @@ and one */"#
         )
     }
 
-    /// 12.6.4. Whenever a "comment" begins with "/*", it shall end with a corresponding "*/", 
-    /// whether this "*/" is on the same line or not. If another "/*" is found before a "*/", 
-    /// then the comment terminates when a matching "*/" has been found for each "/*". 
+    /// 12.6.4. Whenever a "comment" begins with "/*", it shall end with a corresponding "*/",
+    /// whether this "*/" is on the same line or not. If another "/*" is found before a "*/",
+    /// then the comment terminates when a matching "*/" has been found for each "/*".
     #[test]
     fn parses_block_comment_with_nested_comments() {
-        assert_eq!(comment(r#"/*this is a comment /*
-        this is a nested comment */ this text should be parsed*/"#).unwrap().1,
-        "this is a comment /*
+        assert_eq!(
+            comment(
+                r#"/*this is a comment /*
+        this is a nested comment */ this text should be parsed*/"#
+            )
+            .unwrap()
+            .1,
+            "this is a comment /*
         this is a nested comment */ this text should be parsed"
-     )
+        )
     }
 
     #[test]

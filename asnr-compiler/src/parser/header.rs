@@ -1,9 +1,9 @@
 use asnr_grammar::{
     ExtensibilityEnvironment, Header, TaggingEnvironment, ASSIGN, AUTOMATIC, BEGIN, DEFINITIONS,
-    EXPLICIT, EXTENSIBILITY_IMPLIED, IMPLICIT, TAGS,
+    EXPLICIT, EXTENSIBILITY_IMPLIED, IMPLICIT, TAGS, EncodingReferenceDefault, INSTRUCTIONS,
 };
 use nom::{
-    branch::{alt, permutation},
+    branch::{alt},
     bytes::complete::tag,
     combinator::{into, map, opt},
     sequence::{delimited, pair, terminated, tuple},
@@ -15,7 +15,7 @@ use super::{
     object_identifier::object_identifier,
 };
 
-pub fn header<'a>(input: &'a str) -> IResult<&'a str, Header> {
+pub fn module_reference<'a>(input: &'a str) -> IResult<&'a str, Header> {
     skip_ws_and_comments(into(tuple((
         identifier,
         skip_ws(object_identifier),
@@ -29,8 +29,9 @@ pub fn header<'a>(input: &'a str) -> IResult<&'a str, Header> {
 
 fn environments<'a>(
     input: &'a str,
-) -> IResult<&'a str, (TaggingEnvironment, ExtensibilityEnvironment)> {
-    permutation((
+) -> IResult<&'a str, (EncodingReferenceDefault, TaggingEnvironment, ExtensibilityEnvironment)> {
+    tuple((
+        skip_ws_and_comments(terminated(into(identifier), tag(INSTRUCTIONS))),
         skip_ws_and_comments(terminated(
             map(
                 alt((tag(AUTOMATIC), tag(IMPLICIT), tag(EXPLICIT))),

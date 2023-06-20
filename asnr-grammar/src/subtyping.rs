@@ -18,7 +18,7 @@ impl From<&str> for OptionalMarker {
 }
 
 #[derive(Debug)]
-pub struct RangeMarker();
+pub struct RangeSeperator();
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct ExtensionMarker();
@@ -174,8 +174,8 @@ impl<'a> From<ASN1Value> for ValueConstraint {
     }
 }
 
-impl<'a> From<(ASN1Value, RangeMarker, ASN1Value)> for ValueConstraint {
-    fn from(value: (ASN1Value, RangeMarker, ASN1Value)) -> Self {
+impl<'a> From<(ASN1Value, RangeSeperator, ASN1Value)> for ValueConstraint {
+    fn from(value: (ASN1Value, RangeSeperator, ASN1Value)) -> Self {
         Self {
             min_value: Some(value.0),
             max_value: Some(value.2),
@@ -194,8 +194,8 @@ impl<'a> From<(ASN1Value, ExtensionMarker)> for ValueConstraint {
     }
 }
 
-impl<'a> From<(ASN1Value, RangeMarker, ASN1Value, ExtensionMarker)> for ValueConstraint {
-    fn from(value: (ASN1Value, RangeMarker, ASN1Value, ExtensionMarker)) -> Self {
+impl<'a> From<(ASN1Value, RangeSeperator, ASN1Value, ExtensionMarker)> for ValueConstraint {
+    fn from(value: (ASN1Value, RangeSeperator, ASN1Value, ExtensionMarker)) -> Self {
         Self {
             min_value: Some(value.0),
             max_value: Some(value.2),

@@ -16,11 +16,9 @@ use subtyping::Constraint;
 use types::*;
 
 // Comment tokens
-pub const C_STYLE_BLOCK_COMMENT_BEGIN: &'static str = "/*";
-pub const C_STYLE_BLOCK_COMMENT_CONTINUED_LINE: char = '*';
-pub const C_STYLE_BLOCK_COMMENT_END: &'static str = "*/";
-pub const C_STYLE_LINE_COMMENT: &'static str = "//";
-pub const ASN1_COMMENT: &'static str = "--";
+pub const BLOCK_COMMENT_START: &'static str = "/*";
+pub const BLOCK_COMMENT_END: &'static str = "*/";
+pub const LINE_COMMENT: &'static str = "--";
 
 // Bracket tokens
 pub const LEFT_PARENTHESIS: char = '(';
@@ -73,6 +71,7 @@ pub const DEFINITIONS: &'static str = "DEFINITIONS";
 pub const AUTOMATIC: &'static str = "AUTOMATIC";
 pub const EXPLICIT: &'static str = "EXPLICIT";
 pub const IMPLICIT: &'static str = "IMPLICIT";
+pub const INSTRUCTIONS: &'static str = "INSTRUCTIONS";
 pub const TAGS: &'static str = "TAGS";
 pub const EXTENSIBILITY_IMPLIED: &'static str = "EXTENSIBILITY IMPLIED";
 
@@ -131,6 +130,15 @@ pub trait Quote {
 }
 
 #[derive(Debug, Clone, PartialEq)]
+pub struct EncodingReferenceDefault(pub String);
+
+impl From<&str> for EncodingReferenceDefault {
+    fn from(value: &str) -> Self {
+        Self(value.into())
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
 pub enum TaggingEnvironment {
     AUTOMATIC,
     IMPLICIT,
@@ -147,6 +155,7 @@ pub enum ExtensibilityEnvironment {
 pub struct Header {
     pub name: String,
     pub module_identifier: ObjectIdentifier,
+    pub encoding_reference_default: EncodingReferenceDefault,
     pub tagging_environment: TaggingEnvironment,
     pub extensibility_environment: ExtensibilityEnvironment,
 }
@@ -155,21 +164,30 @@ impl
     From<(
         &str,
         ObjectIdentifier,
-        (TaggingEnvironment, ExtensibilityEnvironment),
+        (
+            EncodingReferenceDefault,
+            TaggingEnvironment,
+            ExtensibilityEnvironment,
+        ),
     )> for Header
 {
     fn from(
         value: (
             &str,
             ObjectIdentifier,
-            (TaggingEnvironment, ExtensibilityEnvironment),
+            (
+                EncodingReferenceDefault,
+                TaggingEnvironment,
+                ExtensibilityEnvironment,
+            ),
         ),
     ) -> Self {
         Self {
             name: value.0.into(),
             module_identifier: value.1,
-            tagging_environment: value.2 .0,
-            extensibility_environment: value.2 .1,
+            encoding_reference_default: value.2 .0,
+            tagging_environment: value.2 .1,
+            extensibility_environment: value.2 .2,
         }
     }
 }

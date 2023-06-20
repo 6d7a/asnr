@@ -27,7 +27,7 @@ use self::{
     constraint::constraint,
     enumerated::*,
     error::ParserError,
-    header::header,
+    header::module_reference,
     integer::*,
     null::*,
     sequence::sequence,
@@ -51,7 +51,7 @@ mod sequence_of;
 mod util;
 
 pub fn asn_spec<'a>(input: &'a str) -> Result<(Header, Vec<ToplevelDeclaration>), ParserError> {
-    pair(header, many0(skip_ws(top_level_declaration)))(input)
+    pair(module_reference, many0(skip_ws(top_level_declaration)))(input)
         .map(|(_, res)| res)
         .map_err(|e| e.into())
 }

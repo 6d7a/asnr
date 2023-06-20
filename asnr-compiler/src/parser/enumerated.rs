@@ -33,7 +33,7 @@ fn enumeral<'a>(
         skip_ws_and_comments(identifier),
         skip_ws_and_comments(opt(in_parentheses(u64))),
         skip_ws(opt(char(COMMA))),
-        opt(comment),
+        skip_ws(opt(comment)),
     )))(input)
 }
 
@@ -81,7 +81,8 @@ mod tests {
             enumerals(
                 r#"forward     (1), -- This means forward
       backward    (2), -- This means backward
-      unavailable (3)  -- This means nothing"#
+      unavailable (3)  -- This means nothing
+      "#
             )
             .unwrap()
             .1,
