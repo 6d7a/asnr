@@ -71,9 +71,14 @@ pub const DEFINITIONS: &'static str = "DEFINITIONS";
 pub const AUTOMATIC: &'static str = "AUTOMATIC";
 pub const EXPLICIT: &'static str = "EXPLICIT";
 pub const IMPLICIT: &'static str = "IMPLICIT";
+pub const IMPORTS: &'static str = "IMPORTS";
+pub const FROM: &'static str = "FROM";
 pub const INSTRUCTIONS: &'static str = "INSTRUCTIONS";
 pub const TAGS: &'static str = "TAGS";
 pub const EXTENSIBILITY_IMPLIED: &'static str = "EXTENSIBILITY IMPLIED";
+pub const WITH_SUCCESSORS: &'static str = "WITH SUCCESSORS";
+pub const SEMICOLON: char = ';';
+
 
 // Information Object Class tokens
 pub const AMPERSAND: char = '&';
@@ -99,8 +104,6 @@ pub const RANGE: &'static str = "..";
 pub const ELLIPSIS: &'static str = "...";
 pub const COMMA: char = ',';
 pub const SINGLE_QUOTE: char = '\'';
-
-
 
 /// The `Quote` trait serves to convert a structure
 /// into a stringified rust representation of its initialization.
@@ -159,12 +162,32 @@ pub enum ExtensibilityEnvironment {
 }
 
 #[derive(Debug, Clone, PartialEq)]
+pub struct Import {
+    pub types: Vec<String>,
+    pub origin_name: String,
+    pub origin_identifier: ObjectIdentifier,
+    pub with_successors: bool,
+}
+
+impl From<(Vec<&str>, (&str, ObjectIdentifier, Option<&str>))> for Import {
+    fn from(value: (Vec<&str>, (&str, ObjectIdentifier, Option<&str>))) -> Self {
+        Self {
+            types: value.0.into_iter().map(|s| String::from(s)).collect(),
+            origin_name: value.1.0.into(),
+            origin_identifier: value.1.1,
+            with_successors: value.1.2.is_some(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
 pub struct ModuleReference {
     pub name: String,
     pub module_identifier: ObjectIdentifier,
     pub encoding_reference_default: Option<EncodingReferenceDefault>,
     pub tagging_environment: TaggingEnvironment,
     pub extensibility_environment: ExtensibilityEnvironment,
+    pub imports: Vec<Import>,
 }
 
 impl
@@ -176,6 +199,7 @@ impl
             TaggingEnvironment,
             ExtensibilityEnvironment,
         ),
+        Option<Vec<Import>>,
     )> for ModuleReference
 {
     fn from(
@@ -187,6 +211,7 @@ impl
                 TaggingEnvironment,
                 ExtensibilityEnvironment,
             ),
+            Option<Vec<Import>>,
         ),
     ) -> Self {
         Self {
@@ -195,6 +220,7 @@ impl
             encoding_reference_default: value.2 .0,
             tagging_environment: value.2 .1,
             extensibility_environment: value.2 .2,
+            imports: value.3.unwrap_or(vec![]),
         }
     }
 }
@@ -258,6 +284,19 @@ impl From<(Vec<&str>, &str, ASN1Type)> for ToplevelDeclaration {
     }
 }
 
+impl From<(Vec<&str>, &str, &str, Vec<InformationObjectField>)> for ToplevelDeclaration {
+    fn from(value: (Vec<&str>, &str, &str, Vec<InformationObjectField>)) -> Self {
+        Self {
+            comments: value.0.join("\n"),
+            name: value.1.into(),
+            r#type: ASN1Type::InformationObject(InformationObject {
+                supertype: value.2.into(),
+                fields: value.3,
+            }),
+        }
+    }
+}
+
 /// The possible types of an ASN1 data element.
 /// In addition, the `ElsewhereDeclaredType` enumeral denotes an type
 /// specified in the same or an imported ASN1 specification.
@@ -265,19 +304,20 @@ impl From<(Vec<&str>, &str, ASN1Type)> for ToplevelDeclaration {
 pub enum ASN1Type {
     Null,
     Boolean,
-    Integer(AsnInteger),
+    Integer(Integer),
     // Real,
-    BitString(AsnBitString),
-    CharacterString(AsnCharacterString),
-    Enumerated(AsnEnumerated),
-    Choice(AsnChoice),
-    Sequence(AsnSequence),
-    SequenceOf(AsnSequenceOf),
+    BitString(BitString),
+    CharacterString(CharacterString),
+    Enumerated(Enumerated),
+    Choice(Choice),
+    Sequence(Sequence),
+    SequenceOf(SequenceOf),
     // Set,
     // SetOf,
     ElsewhereDeclaredType(DeclarationElsewhere),
     InformationObjectClass(InformationObjectClass),
     InformationObject(InformationObject),
+    InformationObjectFieldReference(InformationObjectFieldReference)
 }
 
 /// The types of an ASN1 character strings.
@@ -331,6 +371,9 @@ impl Quote for ASN1Type {
             ASN1Type::ElsewhereDeclaredType(els) => {
                 format!("ASN1Type::ElsewhereDeclaredType({})", els.quote())
             }
+            ASN1Type::InformationObjectClass(_) => todo!(),
+            ASN1Type::InformationObject(_) => todo!(),
+            ASN1Type::InformationObjectFieldReference(_) => todo!(),
         }
     }
 }

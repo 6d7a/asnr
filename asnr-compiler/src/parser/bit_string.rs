@@ -42,7 +42,7 @@ pub fn bit_string_value<'a>(input: &'a str) -> IResult<&'a str, ASN1Value> {
 ///
 /// `bit_string` will try to match an BIT STRING declaration in the `input` string.
 /// If the match succeeds, the parser will consume the match and return the remaining string
-/// and a wrapped `AsnBitString` value representing the ASN1 declaration.
+/// and a wrapped `BitString` value representing the ASN1 declaration.
 /// If the match fails, the parser will not consume the input and will return an error.
 pub fn bit_string<'a>(input: &'a str) -> IResult<&'a str, ASN1Type> {
     map(
@@ -68,7 +68,7 @@ mod tests {
         let sample = "  BIT STRING";
         assert_eq!(
             bit_string(sample).unwrap().1,
-            ASN1Type::BitString(AsnBitString {
+            ASN1Type::BitString(BitString {
                 distinguished_values: None,
                 constraints: vec![]
             })
@@ -80,7 +80,7 @@ mod tests {
         let sample = "  BIT STRING(SIZE (8))";
         assert_eq!(
             bit_string(sample).unwrap().1,
-            ASN1Type::BitString(AsnBitString {
+            ASN1Type::BitString(BitString {
                 distinguished_values: None,
                 constraints: vec![ValueConstraint {
                     max_value: Some(ASN1Value::Integer(8)),
@@ -96,7 +96,7 @@ mod tests {
         let sample = "  BIT STRING -- even here?!?!? -- (SIZE (8 ..18))";
         assert_eq!(
             bit_string(sample).unwrap().1,
-            ASN1Type::BitString(AsnBitString {
+            ASN1Type::BitString(BitString {
                 distinguished_values: None,
                 constraints: vec![ValueConstraint {
                     max_value: Some(ASN1Value::Integer(18)),
@@ -112,7 +112,7 @@ mod tests {
         let sample = "  BIT STRING (SIZE (2, ...))";
         assert_eq!(
             bit_string(sample).unwrap().1,
-            ASN1Type::BitString(AsnBitString {
+            ASN1Type::BitString(BitString {
                 distinguished_values: None,
                 constraints: vec![ValueConstraint {
                     max_value: Some(ASN1Value::Integer(2)),
@@ -128,7 +128,7 @@ mod tests {
         let sample = "  BIT STRING (SIZE (8 -- comment -- .. 18, ...))";
         assert_eq!(
             bit_string(sample).unwrap().1,
-            ASN1Type::BitString(AsnBitString {
+            ASN1Type::BitString(BitString {
                 distinguished_values: None,
                 constraints: vec![ValueConstraint {
                     max_value: Some(ASN1Value::Integer(18)),
@@ -149,7 +149,7 @@ mod tests {
       } (SIZE(4))"#;
         assert_eq!(
             bit_string(sample).unwrap().1,
-            ASN1Type::BitString(AsnBitString {
+            ASN1Type::BitString(BitString {
                 distinguished_values: Some(vec![
                     DistinguishedValue {
                         name: "heavyLoad".into(),

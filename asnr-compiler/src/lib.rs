@@ -41,7 +41,7 @@ use std::{
 };
 
 use asnr_grammar::ToplevelDeclaration;
-use generator::{generate, template::RUST_IMPORTS_TEMPLATE};
+use generator::{generate, template::RUST_IMPORTS_TEMPLATE, spec_section};
 use parser::asn_spec;
 use validator::Validate;
 
@@ -120,7 +120,8 @@ impl AsnrCompiler {
         let mut result = String::from(RUST_IMPORTS_TEMPLATE);
         let mut warnings = Vec::<Box<dyn Error>>::new();
         for src in self.sources {
-            let (_header, toplevel_declarations) = asn_spec(&read_to_string(src)?)?;
+          let file_name = &spec_section(src.file_name());
+          let (_header, toplevel_declarations) = asn_spec(&read_to_string(src)?)?;
             let (valid_tlds, mut validator_errors) = toplevel_declarations.into_iter().fold(
                 (
                     Vec::<ToplevelDeclaration>::new(),
@@ -146,6 +147,7 @@ impl AsnrCompiler {
                     (rust, errors)
                 },
             );
+            result += file_name;
             result += &generated;
             warnings.append(&mut validator_errors);
             warnings.append(&mut generator_errors);
@@ -230,7 +232,12 @@ mod tests {
         println!(
             "{:#?}",
             Asnr::compiler()
-                .add_asn_source(PathBuf::from("test.asn"))
+                .add_asn_source(PathBuf::from("ETSI-ITS-CDD.asn"))
+                .add_asn_source(PathBuf::from("CPM-OriginatingStationContainers.asn"))
+                .add_asn_source(PathBuf::from("CPM-PerceivedObjectContainer.asn"))
+                .add_asn_source(PathBuf::from("CPM-PerceptionRegionContainer.asn"))
+                .add_asn_source(PathBuf::from("CPM-SensorInformationContainer.asn"))
+                .add_asn_source(PathBuf::from("CPM-PDU-Descriptions.asn"))
                 .set_output_path(PathBuf::from("./generated.rs"))
                 .compile()
                 .unwrap()

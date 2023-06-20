@@ -5,15 +5,15 @@ use crate::{subtyping::*, *};
 /// Representation of an ASN1 INTEGER data element
 /// with corresponding constraints and distinguished values
 #[derive(Debug, Clone, PartialEq)]
-pub struct AsnInteger {
+pub struct Integer {
     pub constraints: Vec<ValueConstraint>,
     pub distinguished_values: Option<Vec<DistinguishedValue>>,
 }
 
-impl Quote for AsnInteger {
+impl Quote for Integer {
     fn quote(&self) -> String {
         format!(
-            "AsnInteger {{ constraints: vec![{}], distinguished_values: {} }}",
+            "Integer {{ constraints: vec![{}], distinguished_values: {} }}",
             self.constraints
                 .iter()
                 .map(|c| c.quote())
@@ -31,7 +31,7 @@ impl Quote for AsnInteger {
     }
 }
 
-impl Default for AsnInteger {
+impl Default for Integer {
     fn default() -> Self {
         Self {
             constraints: vec![],
@@ -40,7 +40,7 @@ impl Default for AsnInteger {
     }
 }
 
-impl From<ValueConstraint> for AsnInteger {
+impl From<ValueConstraint> for Integer {
     fn from(value: ValueConstraint) -> Self {
         Self {
             constraints: vec![value],
@@ -49,7 +49,7 @@ impl From<ValueConstraint> for AsnInteger {
     }
 }
 
-impl From<(Option<i128>, Option<i128>, bool)> for AsnInteger {
+impl From<(Option<i128>, Option<i128>, bool)> for Integer {
     fn from(value: (Option<i128>, Option<i128>, bool)) -> Self {
         Self {
             constraints: vec![ValueConstraint {
@@ -67,7 +67,7 @@ impl
         &str,
         Option<Vec<DistinguishedValue>>,
         Option<ValueConstraint>,
-    )> for AsnInteger
+    )> for Integer
 {
     fn from(
         value: (
@@ -87,24 +87,24 @@ impl
 /// with corresponding constraints and distinguished values
 /// defining the individual bits
 #[derive(Debug, Clone, PartialEq)]
-pub struct AsnBitString {
+pub struct BitString {
     pub constraints: Vec<ValueConstraint>,
     pub distinguished_values: Option<Vec<DistinguishedValue>>,
 }
 
-impl From<(Option<Vec<DistinguishedValue>>, Option<ValueConstraint>)> for AsnBitString {
+impl From<(Option<Vec<DistinguishedValue>>, Option<ValueConstraint>)> for BitString {
     fn from(value: (Option<Vec<DistinguishedValue>>, Option<ValueConstraint>)) -> Self {
-        AsnBitString {
+        BitString {
             constraints: value.1.map_or(vec![], |r| vec![r]),
             distinguished_values: value.0,
         }
     }
 }
 
-impl Quote for AsnBitString {
+impl Quote for BitString {
     fn quote(&self) -> String {
         format!(
-            "AsnBitString {{ constraints: vec![{}], distinguished_values: {} }}",
+            "BitString {{ constraints: vec![{}], distinguished_values: {} }}",
             self.constraints
                 .iter()
                 .map(|c| c.quote())
@@ -127,14 +127,14 @@ impl Quote for AsnBitString {
 /// include IA5String, UTF8String, VideotexString, but also
 /// OCTET STRING, which is treated like a String and not a buffer.
 #[derive(Debug, Clone, PartialEq)]
-pub struct AsnCharacterString {
+pub struct CharacterString {
     pub constraints: Vec<Constraint>,
     pub r#type: CharacterStringType,
 }
 
-impl From<(&str, Option<ValueConstraint>)> for AsnCharacterString {
+impl From<(&str, Option<ValueConstraint>)> for CharacterString {
     fn from(value: (&str, Option<ValueConstraint>)) -> Self {
-        AsnCharacterString {
+        CharacterString {
             constraints: value
                 .1
                 .map_or(vec![], |r| vec![Constraint::ValueConstraint(r)]),
@@ -143,10 +143,10 @@ impl From<(&str, Option<ValueConstraint>)> for AsnCharacterString {
     }
 }
 
-impl Quote for AsnCharacterString {
+impl Quote for CharacterString {
     fn quote(&self) -> String {
         format!(
-            "AsnCharacterString {{ constraints: vec![{}], r#type: CharacterStringType::{:?} }}",
+            "CharacterString {{ constraints: vec![{}], r#type: CharacterStringType::{:?} }}",
             self.constraints
                 .iter()
                 .map(|c| c.quote())
@@ -160,15 +160,15 @@ impl Quote for AsnCharacterString {
 /// Representation of an ASN1 SEQUENCE OF data element
 /// with corresponding constraints and element type info
 #[derive(Debug, Clone, PartialEq)]
-pub struct AsnSequenceOf {
+pub struct SequenceOf {
     pub constraints: Vec<Constraint>,
     pub r#type: Box<ASN1Type>,
 }
 
-impl Quote for AsnSequenceOf {
+impl Quote for SequenceOf {
     fn quote(&self) -> String {
         format!(
-            "AsnSequenceOf {{ constraints: vec![{}], r#type: {} }}",
+            "SequenceOf {{ constraints: vec![{}], r#type: {} }}",
             self.constraints
                 .iter()
                 .map(|c| c.quote())
@@ -179,7 +179,7 @@ impl Quote for AsnSequenceOf {
     }
 }
 
-impl From<(Option<Vec<Constraint>>, ASN1Type)> for AsnSequenceOf {
+impl From<(Option<Vec<Constraint>>, ASN1Type)> for SequenceOf {
     fn from(value: (Option<Vec<Constraint>>, ASN1Type)) -> Self {
         Self {
             constraints: value.0.unwrap_or(vec![]),
@@ -191,7 +191,7 @@ impl From<(Option<Vec<Constraint>>, ASN1Type)> for AsnSequenceOf {
 /// Representation of an ASN1 SEQUENCE data element
 /// with corresponding members and extension information
 #[derive(Debug, Clone, PartialEq)]
-pub struct AsnSequence {
+pub struct Sequence {
     pub extensible: Option<usize>,
     pub constraints: Vec<Constraint>,
     pub members: Vec<SequenceMember>,
@@ -205,7 +205,7 @@ impl
             Option<Vec<SequenceMember>>,
         ),
         Option<Vec<Constraint>>,
-    )> for AsnSequence
+    )> for Sequence
 {
     fn from(
         mut value: (
@@ -219,7 +219,7 @@ impl
     ) -> Self {
         let index_of_first_extension = value.0 .0.len();
         value.0 .0.append(&mut value.0 .2.unwrap_or(vec![]));
-        AsnSequence {
+        Sequence {
             constraints: value.1.unwrap_or(vec![]),
             extensible: value.0 .1.map(|_| index_of_first_extension),
             members: value.0 .0,
@@ -227,10 +227,10 @@ impl
     }
 }
 
-impl Quote for AsnSequence {
+impl Quote for Sequence {
     fn quote(&self) -> String {
         format!(
-            "AsnSequence {{ constraints: vec![{}], extensible: {}, members: vec![{}] }}",
+            "Sequence {{ constraints: vec![{}], extensible: {}, members: vec![{}] }}",
             self.constraints
                 .iter()
                 .map(|c| c.quote())
@@ -315,7 +315,7 @@ impl Quote for SequenceMember {
 /// Representation of an ASN1 CHOICE data element
 /// with corresponding members and extension information
 #[derive(Debug, Clone, PartialEq)]
-pub struct AsnChoice {
+pub struct Choice {
     pub extensible: Option<usize>,
     pub options: Vec<ChoiceOption>,
     pub constraints: Vec<Constraint>,
@@ -326,7 +326,7 @@ impl
         Vec<ChoiceOption>,
         Option<ExtensionMarker>,
         Option<Vec<ChoiceOption>>,
-    )> for AsnChoice
+    )> for Choice
 {
     fn from(
         mut value: (
@@ -337,7 +337,7 @@ impl
     ) -> Self {
         let index_of_first_extension = value.0.len();
         value.0.append(&mut value.2.unwrap_or(vec![]));
-        AsnChoice {
+        Choice {
             extensible: value.1.map(|_| index_of_first_extension),
             options: value.0,
             constraints: vec![],
@@ -345,10 +345,10 @@ impl
     }
 }
 
-impl Quote for AsnChoice {
+impl Quote for Choice {
     fn quote(&self) -> String {
         format!(
-            "AsnChoice {{ extensible: {}, options: vec![{}], constraints: vec![{}] }}",
+            "Choice {{ extensible: {}, options: vec![{}], constraints: vec![{}] }}",
             self.extensible
                 .as_ref()
                 .map_or("None".to_owned(), |d| format!("Some({})", d)),
@@ -392,7 +392,7 @@ impl Quote for ChoiceOption {
             "ChoiceOption {{ name: \"{}\".into(), tag: {}, r#type: {}, constraints: vec![{}] }}",
             self.name,
             self.tag.as_ref().map_or(String::from("None"), |t| {
-              String::from("Some(") + &t.quote() + ")"
+                String::from("Some(") + &t.quote() + ")"
             }),
             self.r#type.quote(),
             self.constraints
@@ -407,16 +407,16 @@ impl Quote for ChoiceOption {
 /// Representation of an ASN1 ENUMERATED data element
 /// with corresponding enumerals and extension information
 #[derive(Debug, Clone, PartialEq)]
-pub struct AsnEnumerated {
+pub struct Enumerated {
     pub members: Vec<Enumeral>,
     pub extensible: Option<usize>,
     pub constraints: Vec<Constraint>,
 }
 
-impl Quote for AsnEnumerated {
+impl Quote for Enumerated {
     fn quote(&self) -> String {
         format!(
-            "AsnEnumerated {{ members: vec![{}], extensible: {}, constraints: vec![{}] }}",
+            "Enumerated {{ members: vec![{}], extensible: {}, constraints: vec![{}] }}",
             self.members
                 .iter()
                 .map(|m| m.quote())
@@ -439,7 +439,7 @@ impl
         Vec<Enumeral>,
         Option<ExtensionMarker>,
         Option<Vec<Enumeral>>,
-    )> for AsnEnumerated
+    )> for Enumerated
 {
     fn from(
         mut value: (
@@ -450,7 +450,7 @@ impl
     ) -> Self {
         let index_of_first_extension = value.0.len();
         value.0.append(&mut value.2.unwrap_or(vec![]));
-        AsnEnumerated {
+        Enumerated {
             members: value.0,
             extensible: value.1.map(|_| index_of_first_extension),
             constraints: vec![],
@@ -509,20 +509,147 @@ impl From<(&str, i128)> for DistinguishedValue {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct InformationObjectClass<'a> {
-  pub fields: Vec<InformationObjectField<'a>>
+pub struct InformationObjectClass {
+    pub fields: Vec<InformationObjectClassField>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct InformationObjectField<'a> {
-  pub identifier: ObjectFieldIdentifier<'a>,
-  pub r#type: Option<ASN1Type>,
-  pub is_optional: bool,
-  pub is_unique: bool,
+pub struct InformationObjectClassField {
+    pub identifier: ObjectFieldIdentifier,
+    pub r#type: Option<ASN1Type>,
+    pub is_optional: bool,
+    pub is_unique: bool,
+}
+
+impl
+    From<(
+        ObjectFieldIdentifier,
+        Option<ASN1Type>,
+        Option<OptionalMarker>,
+        Option<&str>,
+    )> for InformationObjectClassField
+{
+    fn from(
+        value: (
+            ObjectFieldIdentifier,
+            Option<ASN1Type>,
+            Option<OptionalMarker>,
+            Option<&str>,
+        ),
+    ) -> Self {
+        Self {
+            identifier: value.0,
+            r#type: value.1,
+            is_optional: value.2.is_some(),
+            is_unique: value.3.is_some(),
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub enum ObjectFieldIdentifier<'a> {
-  SingleValue(&'a str),
-  MultipleValue(&'a str)
+pub enum ObjectFieldIdentifier {
+    SingleValue(String),
+    MultipleValue(String),
+}
+
+impl ObjectFieldIdentifier {
+    pub fn identifier(&self) -> String {
+        match self {
+            ObjectFieldIdentifier::SingleValue(s) => s.clone(),
+            ObjectFieldIdentifier::MultipleValue(s) => s.clone(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct InformationObject {
+    pub supertype: String,
+    pub fields: Vec<InformationObjectField>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct ValueSet {
+    pub values: Vec<ASN1Value>,
+    pub extensible: Option<usize>,
+}
+
+impl
+    From<(
+        Vec<ASN1Value>,
+        Option<ExtensionMarker>,
+        Option<Vec<ASN1Value>>,
+    )> for ValueSet
+{
+    fn from(
+        mut value: (
+            Vec<ASN1Value>,
+            Option<ExtensionMarker>,
+            Option<Vec<ASN1Value>>,
+        ),
+    ) -> Self {
+        let index_of_first_extension = value.0.len();
+        value.0.append(&mut value.2.unwrap_or(vec![]));
+        ValueSet {
+            values: value.0,
+            extensible: value.1.map(|_| index_of_first_extension),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum InformationObjectField {
+    TypeField(TypeField),
+    FixedValueField(FixedValueField),
+    ObjectSetField(ObjectSetField),
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct FixedValueField {
+    pub identifier: String,
+    pub value: ASN1Value,
+}
+
+impl From<(ObjectFieldIdentifier, ASN1Value)> for InformationObjectField {
+    fn from(value: (ObjectFieldIdentifier, ASN1Value)) -> Self {
+        Self::FixedValueField(FixedValueField {
+            identifier: value.0.identifier(),
+            value: value.1,
+        })
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct TypeField {
+    pub identifier: String,
+    pub r#type: ASN1Type,
+}
+
+impl From<(ObjectFieldIdentifier, ASN1Type)> for InformationObjectField {
+    fn from(value: (ObjectFieldIdentifier, ASN1Type)) -> Self {
+        Self::TypeField(TypeField {
+            identifier: value.0.identifier(),
+            r#type: value.1,
+        })
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct ObjectSetField {
+    pub identifier: String,
+    pub value: ValueSet,
+}
+
+impl From<(ObjectFieldIdentifier, ValueSet)> for InformationObjectField {
+    fn from(value: (ObjectFieldIdentifier, ValueSet)) -> Self {
+        Self::ObjectSetField(ObjectSetField {
+            identifier: value.0.identifier(),
+            value: value.1,
+        })
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct InformationObjectFieldReference {
+    pub class: String,
+    pub field_name: ObjectFieldIdentifier,
 }

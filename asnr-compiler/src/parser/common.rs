@@ -5,14 +5,17 @@ use nom::{
         alpha1, alphanumeric1, char, i128, multispace0, multispace1, not_line_ending, u64,
     },
     combinator::{into, opt, recognize},
-    multi::many0,
-    sequence::{delimited, pair, preceded, terminated},
+    multi::{many0, separated_list1},
+    sequence::{delimited, pair, preceded, terminated, tuple},
     IResult,
 };
 
 use asnr_grammar::{subtyping::*, types::*, *};
 
-use super::util::{map_into, take_until_or, take_until_unbalanced};
+use super::{
+    asn1_value,
+    util::{map_into, take_until_or, take_until_unbalanced},
+};
 
 /// Parses an ASN1 comment.
 ///
@@ -159,6 +162,38 @@ pub fn distinguished_val<'a>(input: &'a str) -> IResult<&'a str, DistinguishedVa
     map_into(pair(skip_ws_and_comments(identifier), in_parentheses(i128)))(input)
 }
 
+pub fn optional_comma<'a>(input: &'a str) -> IResult<&'a str, Option<char>> {
+    skip_ws_and_comments(opt(char(COMMA)))(input)
+}
+
+pub fn optional_marker<'a>(input: &'a str) -> IResult<&'a str, Option<OptionalMarker>> {
+    opt(into(skip_ws_and_comments(tag(OPTIONAL))))(input)
+}
+
+pub fn default<'a>(input: &'a str) -> IResult<&'a str, Option<ASN1Value>> {
+    opt(preceded(
+        skip_ws_and_comments(tag(DEFAULT)),
+        skip_ws_and_comments(asn1_value),
+    ))(input)
+}
+
+pub fn value_set<'a>(input: &'a str) -> IResult<&'a str, ValueSet> {
+    into(skip_ws_and_comments(in_braces(tuple((
+        separated_list1(
+            skip_ws_and_comments(alt((tag(PIPE), tag(UNION)))),
+            skip_ws_and_comments(asn1_value),
+        ),
+        opt(skip_ws_and_comments(preceded(
+            char(COMMA),
+            extension_marker,
+        ))),
+        opt(separated_list1(
+            skip_ws_and_comments(alt((tag(PIPE), tag(UNION)))),
+            skip_ws_and_comments(asn1_value),
+        )),
+    )))))(input)
+}
+
 #[cfg(test)]
 mod tests {
 
@@ -203,7 +238,7 @@ and one */"#
 
     #[test]
     fn parses_multiline_block_comment() {
-      assert_eq!(comment(r#"/** 
+        assert_eq!(comment(r#"/** 
       * This DE indicates a change of acceleration.
       *
       * The value shall be set to:

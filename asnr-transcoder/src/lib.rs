@@ -16,7 +16,6 @@ use alloc::{string::String, vec::Vec};
 use asnr_grammar::{types::*, ASN1Type};
 use error::DecodingError;
 use nom::IResult;
-use num::{FromPrimitive, Integer};
 
 pub trait Decode {
     fn decode<'a, D>(decoder: &D, input: &'a [u8]) -> IResult<&'a [u8], Self>
@@ -51,35 +50,35 @@ pub trait DecoderForIndex {
 }
 
 pub trait Decoder {
-    fn decode_integer<'a, O: Integer + FromPrimitive>(
+    fn decode_integer<'a, O: num::Integer + num::FromPrimitive>(
         &self,
-        integer: AsnInteger,
+        integer: Integer,
     ) -> fn(&'a [u8]) -> IResult<&'a [u8], O>;
     fn decode_enumerated<'a, O: TryFrom<i128>>(
         &self,
-        enumerated: AsnEnumerated,
+        enumerated: Enumerated,
     ) -> fn(&'a [u8]) -> IResult<&'a [u8], O>;
     fn decode_choice<'a, O: DecoderForIndex>(
         &self,
-        choice: AsnChoice,
+        choice: Choice,
     ) -> fn(&'a [u8]) -> IResult<&'a [u8], O>;
     fn decode_null<'a, N>(&self, input: &'a [u8]) -> IResult<&'a [u8], N>;
     fn decode_boolean<'a>(&self, input: &'a [u8]) -> IResult<&'a [u8], bool>;
     fn decode_bit_string<'a>(
         &self,
-        bit_string: AsnBitString,
+        bit_string: BitString,
     ) -> fn(&'a [u8]) -> IResult<&'a [u8], Vec<bool>>;
     fn decode_character_string<'a>(
         &self,
-        char_string: AsnCharacterString,
+        char_string: CharacterString,
     ) -> fn(&'a [u8]) -> IResult<&'a [u8], String>;
     fn decode_sequence<'a, T: DecodeMember>(
         &self,
-        sequence: AsnSequence,
+        sequence: Sequence,
     ) -> fn(&'a [u8]) -> IResult<&'a [u8], T>;
     fn decode_sequence_of<'a, T: Decode>(
         &self,
-        sequence_of: AsnSequenceOf,
+        sequence_of: SequenceOf,
         member_decoder: impl FnMut(&Self, &'a [u8]) -> IResult<&'a [u8], T>,
     ) -> fn(&'a [u8]) -> IResult<&'a [u8], Vec<T>>;
     fn decode_unknown_extension<'a>(&self, input: &'a [u8]) -> IResult<&'a [u8], &'a [u8]>;

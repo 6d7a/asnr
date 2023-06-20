@@ -3,6 +3,8 @@
 //! decoding and encoding of the parsed and
 //! validated ASN1 data elements.
 
+use std::ffi::OsStr;
+
 use asnr_grammar::ToplevelDeclaration;
 
 use self::{error::GeneratorError, builder::{generate_boolean, generate_integer, generate_enumerated, generate_bit_string, character_string_template, generate_sequence, generate_sequence_of, generate_choice, generate_null, generate_typealias}};
@@ -10,6 +12,16 @@ pub(crate) mod error;
 mod builder;
 pub(crate) mod template;
 mod util;
+
+pub fn spec_section(name: Option<&OsStr>) -> String {
+  format!(r#"
+
+// ================================================
+// {}
+// ================================================
+
+"#, name.map_or("", |os| os.to_str().unwrap_or("")))
+}
 
 pub fn generate<'a>(
     tld: ToplevelDeclaration,

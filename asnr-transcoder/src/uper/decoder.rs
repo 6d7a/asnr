@@ -7,7 +7,7 @@ use super::Uper;
 impl Decoder for Uper {
     fn decode_integer<'a, O: num::Integer + num::FromPrimitive>(
         &self,
-        _integer: asnr_grammar::types::AsnInteger,
+        _integer: asnr_grammar::types::Integer,
     ) -> fn(&'a [u8]) -> nom::IResult<&'a [u8], O> {
         move |input: &[u8]| {
             nom::bytes::complete::take(1_u8)(input)
@@ -17,7 +17,7 @@ impl Decoder for Uper {
 
     fn decode_enumerated<'a, O: TryFrom<i128>>(
         &self,
-        _enumerated: asnr_grammar::types::AsnEnumerated,
+        _enumerated: asnr_grammar::types::Enumerated,
     ) -> fn(&'a [u8]) -> nom::IResult<&'a [u8], O> {
         todo!()
     }
@@ -28,28 +28,28 @@ impl Decoder for Uper {
 
     fn decode_bit_string<'a>(
         &self,
-        _bit_string: asnr_grammar::types::AsnBitString,
+        _bit_string: asnr_grammar::types::BitString,
     ) -> fn(&'a [u8]) -> nom::IResult<&'a [u8], Vec<bool>> {
         todo!()
     }
 
     fn decode_character_string<'a>(
         &self,
-        _bit_string: asnr_grammar::types::AsnCharacterString,
+        _bit_string: asnr_grammar::types::CharacterString,
     ) -> fn(&'a [u8]) -> nom::IResult<&'a [u8], String> {
         todo!()
     }
 
     fn decode_sequence<'a, T: crate::DecodeMember>(
         &self,
-        _sequence: asnr_grammar::types::AsnSequence,
+        _sequence: asnr_grammar::types::Sequence,
     ) -> fn(&'a [u8]) -> nom::IResult<&'a [u8], T> {
         todo!()
     }
 
     fn decode_sequence_of<'a, T: crate::Decode>(
         &self,
-        _sequence_of: asnr_grammar::types::AsnSequenceOf,
+        _sequence_of: asnr_grammar::types::SequenceOf,
         _member_decoder: impl FnMut(&Self, &'a [u8]) -> nom::IResult<&'a [u8], T>,
     ) -> fn(&'a [u8]) -> nom::IResult<&'a [u8], Vec<T>> {
         todo!()
@@ -61,7 +61,7 @@ impl Decoder for Uper {
 
     fn decode_choice<'a, O: DecoderForIndex>(
       &self,
-      _choice: asnr_grammar::types::AsnChoice,
+      _choice: asnr_grammar::types::Choice,
       ) -> fn(&'a [u8]) -> nom::IResult<&'a [u8], O> {
         todo!()
     }

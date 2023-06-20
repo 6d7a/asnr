@@ -36,7 +36,7 @@ impl Validate for ASN1Type {
     }
 }
 
-impl Validate for AsnInteger {
+impl Validate for Integer {
     fn validate(&self) -> Result<(), ValidatorError> {
         for c in &self.constraints {
             c.validate()?;
@@ -45,7 +45,7 @@ impl Validate for AsnInteger {
     }
 }
 
-impl Validate for AsnBitString {
+impl Validate for BitString {
     fn validate(&self) -> Result<(), ValidatorError> {
         for c in &self.constraints {
             c.validate()?;
@@ -54,7 +54,7 @@ impl Validate for AsnBitString {
     }
 }
 
-impl Validate for AsnCharacterString {
+impl Validate for CharacterString {
     fn validate(&self) -> Result<(), ValidatorError> {
         for c in &self.constraints {
             if let Constraint::ValueConstraint(r) = c {

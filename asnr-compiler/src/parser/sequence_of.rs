@@ -15,7 +15,7 @@ use super::{asn1_type, common::{skip_ws_and_comments, opt_parentheses}, constrai
 ///
 /// `sequence_of` will try to match an SEQUENCE OF declaration in the `input` string.
 /// If the match succeeds, the parser will consume the match and return the remaining string
-/// and a wrapped `AsnSequenceOf` value representing the ASN1 declaration.
+/// and a wrapped `SequenceOf` value representing the ASN1 declaration.
 /// If the match fails, the parser will not consume the input and will return an error.
 pub fn sequence_of<'a>(input: &'a str) -> IResult<&'a str, ASN1Type> {
     map(
@@ -40,7 +40,7 @@ mod tests {
     fn parses_simple_sequence_of() {
         assert_eq!(
             sequence_of("SEQUENCE OF BOOLEAN").unwrap().1,
-            ASN1Type::SequenceOf(AsnSequenceOf {
+            ASN1Type::SequenceOf(SequenceOf {
                 constraints: vec![],
                 r#type: Box::new(ASN1Type::Boolean)
             })
@@ -51,7 +51,7 @@ mod tests {
     fn parses_simple_sequence_of_elsewhere_declared_type() {
         assert_eq!(
             sequence_of("SEQUENCE OF Things").unwrap().1,
-            ASN1Type::SequenceOf(AsnSequenceOf {
+            ASN1Type::SequenceOf(SequenceOf {
                 constraints: vec![],
                 r#type: Box::new(ASN1Type::ElsewhereDeclaredType(DeclarationElsewhere {
                     identifier: "Things".into(),
@@ -67,7 +67,7 @@ mod tests {
             sequence_of("SEQUENCE SIZE (1..13,...) OF CorrelationCellValue  ")
                 .unwrap()
                 .1,
-            ASN1Type::SequenceOf(AsnSequenceOf {
+            ASN1Type::SequenceOf(SequenceOf {
                 constraints: vec![Constraint::SizeConstraint(ValueConstraint {
                     min_value: Some(ASN1Value::Integer(1)),
                     max_value: Some(ASN1Value::Integer(13)),
@@ -87,7 +87,7 @@ mod tests {
             sequence_of("SEQUENCE (SIZE (1..13, ...)) OF CorrelationCellValue  ")
                 .unwrap()
                 .1,
-            ASN1Type::SequenceOf(AsnSequenceOf {
+            ASN1Type::SequenceOf(SequenceOf {
                 constraints: vec![Constraint::SizeConstraint(ValueConstraint {
                     min_value: Some(ASN1Value::Integer(1)),
                     max_value: Some(ASN1Value::Integer(13)),
@@ -111,13 +111,13 @@ mod tests {
             )
             .unwrap()
             .1,
-            ASN1Type::SequenceOf(AsnSequenceOf {
+            ASN1Type::SequenceOf(SequenceOf {
                 constraints: vec![Constraint::SizeConstraint(ValueConstraint {
                     min_value: Some(ASN1Value::Integer(1)),
                     max_value: Some(ASN1Value::Integer(13)),
                     extensible: true
                 })],
-                r#type: Box::new(ASN1Type::Integer(AsnInteger {
+                r#type: Box::new(ASN1Type::Integer(Integer {
                     constraints: vec![ValueConstraint {
                         min_value: Some(ASN1Value::Integer(1)),
                         max_value: Some(ASN1Value::Integer(13)),

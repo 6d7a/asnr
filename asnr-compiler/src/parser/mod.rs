@@ -10,10 +10,10 @@
 //! contains helper parsers not specific to ASN1's notation.
 use nom::{
     branch::alt,
-    combinator::{into, map, opt},
-    multi::many0,
+    combinator::{into, map, opt, recognize},
+    multi::{many0, many1},
     sequence::{pair, preceded, tuple},
-    IResult,
+    IResult, character::complete::one_of,
 };
 
 use asnr_grammar::{ASN1Type, ASN1Value, ModuleReference, ToplevelDeclaration};
@@ -31,7 +31,7 @@ use self::{
     integer::*,
     null::*,
     sequence::sequence,
-    sequence_of::*,
+    sequence_of::*, information_object_class::*,
 };
 
 mod bit_string;
@@ -52,7 +52,10 @@ mod sequence_of;
 mod util;
 
 pub fn asn_spec<'a>(input: &'a str) -> Result<(ModuleReference, Vec<ToplevelDeclaration>), ParserError> {
-    pair(module_reference, many0(skip_ws(top_level_declaration)))(input)
+    pair(module_reference, many0(skip_ws(alt((
+      top_level_declaration,
+      top_level_value_reference
+    )))))(input)
         .map(|(_, res)| res)
         .map_err(|e| e.into())
 }
@@ -104,6 +107,15 @@ pub fn elsewhere_declared_type<'a>(input: &'a str) -> IResult<&'a str, ASN1Type>
         ),
         |m| ASN1Type::ElsewhereDeclaredType(m.into()),
     )(input)
+}
+
+fn top_level_value_reference<'a>(input: &'a str) -> IResult<&'a str, ToplevelDeclaration> {
+  into(tuple((
+    skip_ws(many0(comment)),
+    skip_ws(identifier),
+    skip_ws(identifier),
+    preceded(assignment, information_object),
+  )))(input)
 }
 
 #[cfg(test)]
@@ -298,7 +310,7 @@ mod tests {
             ToplevelDeclaration {
                 comments: "Comments".into(),
                 name: "InterferenceManagementZones".into(),
-                r#type: ASN1Type::SequenceOf(AsnSequenceOf {
+                r#type: ASN1Type::SequenceOf(SequenceOf {
                     constraints: vec![Constraint::SizeConstraint(ValueConstraint {
                         min_value: Some(ASN1Value::Integer(1)),
                         max_value: Some(ASN1Value::Integer(16)),

@@ -17,7 +17,7 @@ use super::common::*;
 ///
 /// `enumerated` will try to match an ENUMERATED declaration in the `input` string.
 /// If the match succeeds, the parser will consume the match and return the remaining string
-/// and a wrapped `AsnEnumerated` value representing the ASN1 declaration.
+/// and a wrapped `Enumerated` value representing the ASN1 declaration.
 /// If the match fails, the parser will not consume the input and will return an error.
 pub fn enumerated<'a>(input: &'a str) -> IResult<&'a str, ASN1Type> {
     map(
@@ -118,7 +118,7 @@ mod tests {
             )
             .unwrap()
             .1,
-            ASN1Type::Enumerated(AsnEnumerated {
+            ASN1Type::Enumerated(Enumerated {
                 constraints: vec![],
                 members: vec![
                     Enumeral {
@@ -148,7 +148,7 @@ mod tests {
             enumerated("ENUMERATED {m1, m2, m3 -- another annoying comment we'll ignore --,...}")
                 .unwrap()
                 .1,
-            ASN1Type::Enumerated(AsnEnumerated {
+            ASN1Type::Enumerated(Enumerated {
                 constraints: vec![],
                 members: vec![
                     Enumeral {
@@ -184,7 +184,7 @@ mod tests {
             )
             .unwrap()
             .1,
-            ASN1Type::Enumerated(AsnEnumerated {
+            ASN1Type::Enumerated(Enumerated {
                 constraints: vec![],
                 members: vec![
                     Enumeral {
@@ -216,7 +216,7 @@ mod tests {
             )
             .unwrap()
             .1,
-            ASN1Type::Enumerated(AsnEnumerated {
+            ASN1Type::Enumerated(Enumerated {
                 constraints: vec![],
                 members: vec![
                     Enumeral {
@@ -251,7 +251,7 @@ mod tests {
             )
             .unwrap()
             .1,
-            ASN1Type::Enumerated(AsnEnumerated {
+            ASN1Type::Enumerated(Enumerated {
                 constraints: vec![],
                 members: vec![Enumeral {
                     name: "forward".into(),

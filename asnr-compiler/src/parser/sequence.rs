@@ -9,7 +9,7 @@ use nom::{
 
 use asnr_grammar::{subtyping::*, types::*, *};
 
-use super::{constraint::constraint, *};
+use super::{constraint::constraint, *, common::optional_comma};
 
 /// Tries to parse an ASN1 SEQUENCE
 ///
@@ -17,7 +17,7 @@ use super::{constraint::constraint, *};
 ///
 /// `sequence` will try to match an SEQUENCE declaration in the `input` string.
 /// If the match succeeds, the parser will consume the match and return the remaining string
-/// and a wrapped `AsnSequence` value representing the ASN1 declaration. If the defined SEQUENCE
+/// and a wrapped `Sequence` value representing the ASN1 declaration. If the defined SEQUENCE
 /// contains anonymous SEQUENCEs as members, these nested SEQUENCEs will be represented as
 /// structs within the same global scope.
 /// If the match fails, the parser will not consume the input and will return an error.
@@ -29,12 +29,12 @@ pub fn sequence<'a>(input: &'a str) -> IResult<&'a str, ASN1Type> {
                 in_braces(tuple((
                     many0(terminated(
                         skip_ws_and_comments(sequence_member),
-                        skip_ws_and_comments(opt(char(COMMA))),
+                        optional_comma,
                     )),
                     opt(terminated(extension_marker, opt(char(COMMA)))),
                     opt(many0(terminated(
                         skip_ws_and_comments(sequence_member),
-                        skip_ws_and_comments(opt(char(COMMA))),
+                        optional_comma,
                     ))),
                 ))),
                 opt(constraint),
@@ -55,16 +55,6 @@ fn sequence_member<'a>(input: &'a str) -> IResult<&'a str, SequenceMember> {
     )))(input)
 }
 
-fn optional_marker<'a>(input: &'a str) -> IResult<&'a str, Option<OptionalMarker>> {
-    opt(into(skip_ws_and_comments(tag(OPTIONAL))))(input)
-}
-
-fn default<'a>(input: &'a str) -> IResult<&'a str, Option<ASN1Value>> {
-    opt(preceded(
-        skip_ws_and_comments(tag(DEFAULT)),
-        skip_ws_and_comments(asn1_value),
-    ))(input)
-}
 
 #[cfg(test)]
 mod tests {
@@ -139,7 +129,7 @@ mod tests {
         )
         .unwrap()
         .1,
-        ASN1Type::Sequence(AsnSequence {
+        ASN1Type::Sequence(Sequence {
             extensible: Some(1),
             constraints: vec![],
             members: vec![
@@ -168,7 +158,7 @@ mod tests {
             )
             .unwrap()
             .1,
-            ASN1Type::Sequence(AsnSequence {
+            ASN1Type::Sequence(Sequence {
                 extensible: None,
                 constraints: vec![],
                 members: vec![
@@ -214,7 +204,7 @@ mod tests {
             )
             .unwrap()
             .1,
-            ASN1Type::Sequence(AsnSequence {
+            ASN1Type::Sequence(Sequence {
                 extensible: None,
                 constraints: vec![],
                 members: vec![
@@ -273,7 +263,7 @@ mod tests {
             )
             .unwrap()
             .1,
-            ASN1Type::Sequence(AsnSequence {
+            ASN1Type::Sequence(Sequence {
                 extensible: Some(3),
                 constraints: vec![],
                 members: vec![
@@ -335,7 +325,7 @@ mod tests {
             )
             .unwrap()
             .1,
-            ASN1Type::Sequence(AsnSequence {
+            ASN1Type::Sequence(Sequence {
                 extensible: Some(3),
                 constraints: vec![],
                 members: vec![
@@ -343,7 +333,7 @@ mod tests {
                         name: "unNumber".into(),
 
                         tag: None,
-                        r#type: ASN1Type::Integer(AsnInteger {
+                        r#type: ASN1Type::Integer(Integer {
                             constraints: vec![ValueConstraint {
                                 min_value: Some(ASN1Value::Integer(0)),
                                 max_value: Some(ASN1Value::Integer(9999)),
@@ -368,7 +358,7 @@ mod tests {
                         name: "emergencyActionCode".into(),
 
                         tag: None,
-                        r#type: ASN1Type::CharacterString(AsnCharacterString {
+                        r#type: ASN1Type::CharacterString(CharacterString {
                             constraints: vec![Constraint::ValueConstraint(ValueConstraint {
                                 min_value: Some(ASN1Value::Integer(1)),
                                 max_value: Some(ASN1Value::Integer(24)),
@@ -405,14 +395,14 @@ mod tests {
             )
             .unwrap()
             .1,
-            ASN1Type::Sequence(AsnSequence {
+            ASN1Type::Sequence(Sequence {
                 extensible: Some(1),
                 constraints: vec![],
                 members: vec![SequenceMember {
                     name: "nested".into(),
 
                     tag: None,
-                    r#type: ASN1Type::Sequence(AsnSequence {
+                    r#type: ASN1Type::Sequence(Sequence {
                         extensible: Some(3),
                         constraints: vec![],
                         members: vec![
@@ -441,14 +431,14 @@ mod tests {
                                 name: "another".into(),
 
                                 tag: None,
-                                r#type: ASN1Type::Sequence(AsnSequence {
+                                r#type: ASN1Type::Sequence(Sequence {
                                     extensible: None,
                                     constraints: vec![],
                                     members: vec![SequenceMember {
                                         name: "inner".into(),
 
                                         tag: None,
-                                        r#type: ASN1Type::BitString(AsnBitString {
+                                        r#type: ASN1Type::BitString(BitString {
                                             constraints: vec![ValueConstraint {
                                                 min_value: Some(ASN1Value::Integer(1)),
                                                 max_value: Some(ASN1Value::Integer(1)),

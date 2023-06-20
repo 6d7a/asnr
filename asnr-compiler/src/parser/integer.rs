@@ -19,7 +19,7 @@ pub fn integer_value<'a>(input: &'a str) -> IResult<&'a str, ASN1Value> {
 /// 
 /// `integer` will try to match an INTEGER declaration in the `input` string.
 /// If the match succeeds, the parser will consume the match and return the remaining string
-/// and a wrapped `AsnInteger` value representing the ASN1 declaration.
+/// and a wrapped `Integer` value representing the ASN1 declaration.
 /// If the match fails, the parser will not consume the input and will return an error.
 pub fn integer<'a>(input: &'a str) -> IResult<&'a str, ASN1Type> {
     map(
@@ -44,7 +44,7 @@ mod tests {
     fn parses_integer() {
         assert_eq!(
             integer("INTEGER"),
-            Ok(("", ASN1Type::Integer(AsnInteger::default())))
+            Ok(("", ASN1Type::Integer(Integer::default())))
         );
         assert_eq!(
             integer("INTEGER  (-9..-4, ...)"),

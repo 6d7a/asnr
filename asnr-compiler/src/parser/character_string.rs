@@ -18,7 +18,7 @@ use super::{common::*, constraint::simple_value_constraint};
 /// string, i.e. ASN1 types such as IA5String, UTF8String, VideotexString, but also
 /// OCTET STRING, which is treated like a String and not a buffer.
 /// If the match succeeds, the parser will consume the match and return the remaining string
-/// and a wrapped `AsnCharacterString` value representing the ASN1 declaration.
+/// and a wrapped `CharacterString` value representing the ASN1 declaration.
 /// If the match fails, the parser will not consume the input and will return an error.
 pub fn character_string<'a>(input: &'a str) -> IResult<&'a str, ASN1Type> {
     map(
@@ -54,7 +54,7 @@ mod tests {
         let sample = "  OCTET STRING";
         assert_eq!(
             character_string(sample).unwrap().1,
-            ASN1Type::CharacterString(AsnCharacterString {
+            ASN1Type::CharacterString(CharacterString {
                 constraints: vec![],
                 r#type: CharacterStringType::OctetString
             })
@@ -66,7 +66,7 @@ mod tests {
         let sample = "  OCTET STRING(SIZE (8))";
         assert_eq!(
             character_string(sample).unwrap().1,
-            ASN1Type::CharacterString(AsnCharacterString {
+            ASN1Type::CharacterString(CharacterString {
                 constraints: vec![Constraint::ValueConstraint(ValueConstraint {
                     max_value: Some(ASN1Value::Integer(8)),
                     min_value: Some(ASN1Value::Integer(8)),
@@ -82,7 +82,7 @@ mod tests {
         let sample = "  OCTET STRING -- even here?!?!? -- (SIZE (8 ..18))";
         assert_eq!(
             character_string(sample).unwrap().1,
-            ASN1Type::CharacterString(AsnCharacterString {
+            ASN1Type::CharacterString(CharacterString {
                 constraints: vec![Constraint::ValueConstraint(ValueConstraint {
                     max_value: Some(ASN1Value::Integer(18)),
                     min_value: Some(ASN1Value::Integer(8)),
@@ -99,7 +99,7 @@ mod tests {
         (SIZE (2, ...))"#;
         assert_eq!(
             character_string(sample).unwrap().1,
-            ASN1Type::CharacterString(AsnCharacterString {
+            ASN1Type::CharacterString(CharacterString {
                 constraints: vec![Constraint::ValueConstraint(ValueConstraint {
                     max_value: Some(ASN1Value::Integer(2)),
                     min_value: Some(ASN1Value::Integer(2)),
@@ -115,7 +115,7 @@ mod tests {
         let sample = "  OCTET STRING (SIZE (8 -- junior dev's comment -- .. 18, ...))";
         assert_eq!(
             character_string(sample).unwrap().1,
-            ASN1Type::CharacterString(AsnCharacterString {
+            ASN1Type::CharacterString(CharacterString {
                 constraints: vec![Constraint::ValueConstraint(ValueConstraint {
                     max_value: Some(ASN1Value::Integer(18)),
                     min_value: Some(ASN1Value::Integer(8)),

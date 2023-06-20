@@ -304,7 +304,7 @@ mod tests {
         let enum_tld = ToplevelDeclaration {
             name: "TestEnum".into(),
             comments: "".into(),
-            r#type: ASN1Type::Enumerated(AsnEnumerated {
+            r#type: ASN1Type::Enumerated(Enumerated {
                 constraints: vec![],
                 members: vec![
                     Enumeral {
@@ -334,7 +334,7 @@ mod tests {
         let bs_tld = ToplevelDeclaration {
             name: "BitString".into(),
             comments: "".into(),
-            r#type: ASN1Type::BitString(AsnBitString {
+            r#type: ASN1Type::BitString(BitString {
                 constraints: vec![ValueConstraint {
                     max_value: Some(ASN1Value::Integer(8)),
                     min_value: Some(ASN1Value::Integer(8)),
@@ -364,7 +364,7 @@ mod tests {
         let int_tld = ToplevelDeclaration {
             name: "TestInt".into(),
             comments: "".into(),
-            r#type: ASN1Type::Integer(AsnInteger {
+            r#type: ASN1Type::Integer(Integer {
                 constraints: vec![ValueConstraint {
                     max_value: Some(ASN1Value::Integer(1)),
                     min_value: Some(ASN1Value::Integer(8)),
@@ -394,13 +394,13 @@ mod tests {
         let seq_tld = ToplevelDeclaration {
             name: "Sequence".into(),
             comments: "".into(),
-            r#type: ASN1Type::Sequence(AsnSequence {
+            r#type: ASN1Type::Sequence(Sequence {
                 constraints: vec![],
                 extensible: Some(1),
                 members: vec![SequenceMember {
                     name: "nested".into(),
                     tag: None,
-                    r#type: ASN1Type::Sequence(AsnSequence {
+                    r#type: ASN1Type::Sequence(Sequence {
                         extensible: Some(3),
                         constraints: vec![],
                         members: vec![
@@ -426,14 +426,14 @@ mod tests {
                             SequenceMember {
                                 name: "another".into(),
                                 tag: None,
-                                r#type: ASN1Type::Sequence(AsnSequence {
+                                r#type: ASN1Type::Sequence(Sequence {
                                     extensible: None,
                                     constraints: vec![],
                                     members: vec![SequenceMember {
                                         name: "inner".into(),
 
                                         tag: None,
-                                        r#type: ASN1Type::BitString(AsnBitString {
+                                        r#type: ASN1Type::BitString(BitString {
                                             constraints: vec![ValueConstraint {
                                                 min_value: Some(ASN1Value::Integer(1)),
                                                 max_value: Some(ASN1Value::Integer(1)),
