@@ -1,10 +1,9 @@
-use std::{cmp::min, ops::RangeFrom};
+use std::{cmp::min};
 
 use nom::{
     bytes::complete::tag,
     error::{Error, ErrorKind, ParseError},
-    AsChar, Err, FindSubstring, FindToken, IResult, InputIter, InputLength, InputTake, Parser,
-    Slice, character::complete::one_of,
+    Err, FindSubstring, IResult, InputLength, InputTake, Parser,
 };
 
 pub fn hex_to_bools(c: char) -> [bool; 4] {

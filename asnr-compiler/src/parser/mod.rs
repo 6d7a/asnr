@@ -10,9 +10,8 @@
 //! contains helper parsers not specific to ASN1's notation.
 use nom::{
     branch::alt,
-    character::complete::one_of,
-    combinator::{into, map, opt, recognize},
-    multi::{many0, many1},
+    combinator::{into, map, opt},
+    multi::{many0},
     sequence::{pair, preceded, tuple},
     IResult,
 };

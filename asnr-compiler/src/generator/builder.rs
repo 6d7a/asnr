@@ -255,7 +255,7 @@ pub fn generate_choice<'a>(
 
 pub fn generate_information_object_class<'a>(
   tld: ToplevelTypeDeclaration,
-  custom_derive: Option<&'a str>,
+  _custom_derive: Option<&'a str>,
 ) -> Result<String, GeneratorError> {
   if let ASN1Type::InformationObjectClass(ref ioc) = tld.r#type {      
       Ok(information_object_class_template(format_comments(&tld.comments), rustify_name(&tld.name), ioc.quote()))

@@ -1,8 +1,8 @@
 use nom::{
     branch::alt,
-    bytes::complete::{tag, take_until},
+    bytes::complete::{tag},
     character::complete::{
-        alpha1, alphanumeric1, char, i128, multispace0, multispace1, not_line_ending, u64, one_of,
+        alpha1, alphanumeric1, char, i128, multispace0, multispace1, u64, one_of,
     },
     combinator::{into, opt, recognize},
     multi::{many0, separated_list1},

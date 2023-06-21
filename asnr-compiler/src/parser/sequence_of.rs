@@ -1,9 +1,8 @@
 use asnr_grammar::*;
 use nom::{
     bytes::complete::tag,
-    character::complete::char,
     combinator::{map, opt},
-    sequence::{delimited, pair, preceded},
+    sequence::{pair, preceded},
     IResult,
 };
 

@@ -5,7 +5,7 @@
 
 use std::ffi::OsStr;
 
-use asnr_grammar::{ToplevelTypeDeclaration, ToplevelDeclaration, ASN1Type};
+use asnr_grammar::{ToplevelDeclaration, ASN1Type};
 
 use self::{error::GeneratorError, builder::{generate_boolean, generate_integer, generate_enumerated, generate_bit_string, character_string_template, generate_sequence, generate_sequence_of, generate_choice, generate_null, generate_typealias, generate_null_value, generate_integer_value, generate_information_object_class}};
 pub(crate) mod error;

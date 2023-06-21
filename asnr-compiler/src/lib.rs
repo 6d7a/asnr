@@ -40,7 +40,7 @@ use std::{
     process::{Command, Stdio},
 };
 
-use asnr_grammar::{ToplevelTypeDeclaration, ToplevelDeclaration};
+use asnr_grammar::{ToplevelDeclaration};
 use generator::{generate, template::RUST_IMPORTS_TEMPLATE, spec_section};
 use parser::asn_spec;
 use validator::Validate;

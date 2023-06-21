@@ -1,10 +1,8 @@
 use nom::{
-    branch::alt,
-    bytes::complete::tag,
-    character::complete::{alphanumeric1, char, one_of},
-    combinator::{into, map, opt, recognize, value},
-    multi::{many0, many1, separated_list1},
-    sequence::{pair, preceded, separated_pair, terminated, tuple},
+    character::complete::{char},
+    combinator::{into},
+    multi::{separated_list1},
+    sequence::{separated_pair},
     IResult,
 };
 
