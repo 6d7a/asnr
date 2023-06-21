@@ -10,13 +10,17 @@
 //! contains helper parsers not specific to ASN1's notation.
 use nom::{
     branch::alt,
+    character::complete::one_of,
     combinator::{into, map, opt, recognize},
     multi::{many0, many1},
     sequence::{pair, preceded, tuple},
-    IResult, character::complete::one_of,
+    IResult,
 };
 
-use asnr_grammar::{ASN1Type, ASN1Value, ModuleReference, ToplevelDeclaration};
+use asnr_grammar::{
+    ASN1Type, ASN1Value, ModuleReference, ToplevelDeclaration, ToplevelTypeDeclaration,
+    ToplevelValueDeclaration,
+};
 
 use self::{
     bit_string::{bit_string, bit_string_value},
@@ -27,11 +31,12 @@ use self::{
     constraint::constraint,
     enumerated::*,
     error::ParserError,
-    module_reference::module_reference,
+    information_object_class::*,
     integer::*,
+    module_reference::module_reference,
     null::*,
     sequence::sequence,
-    sequence_of::*, information_object_class::*,
+    sequence_of::*, parameterization::parameterization,
 };
 
 mod bit_string;
@@ -47,30 +52,44 @@ mod integer;
 mod module_reference;
 mod null;
 mod object_identifier;
+mod parameterization;
 mod sequence;
 mod sequence_of;
 mod util;
 
-pub fn asn_spec<'a>(input: &'a str) -> Result<(ModuleReference, Vec<ToplevelDeclaration>), ParserError> {
-    pair(module_reference, many0(skip_ws(alt((
-      top_level_declaration,
-      top_level_value_reference
-    )))))(input)
-        .map(|(_, res)| res)
-        .map_err(|e| e.into())
+pub fn asn_spec<'a>(
+    input: &'a str,
+) -> Result<(ModuleReference, Vec<ToplevelDeclaration>), ParserError> {
+    pair(
+        module_reference,
+        many0(skip_ws(alt((
+            map(top_level_type_declaration, |m| ToplevelDeclaration::Type(m)),
+            map(top_level_information_object, |m| {
+                ToplevelDeclaration::Type(m)
+            }),
+            map(top_level_value_declaration, |m| {
+                ToplevelDeclaration::Value(m)
+            }),
+        )))),
+    )(input)
+    .map(|(_, res)| res)
+    .map_err(|e| e.into())
 }
 
-pub fn top_level_declaration<'a>(input: &'a str) -> IResult<&'a str, ToplevelDeclaration> {
+pub fn top_level_type_declaration<'a>(input: &'a str) -> IResult<&'a str, ToplevelTypeDeclaration> {
     into(tuple((
         skip_ws(many0(comment)),
-        skip_ws(identifier),
+        skip_ws(type_identifier),
+        opt(parameterization),
         preceded(assignment, asn1_type),
     )))(input)
 }
 
+
 pub fn asn1_type<'a>(input: &'a str) -> IResult<&'a str, ASN1Type> {
     alt((
         null,
+        information_object_class,
         sequence_of,
         sequence,
         choice,
@@ -94,7 +113,7 @@ pub fn asn1_value<'a>(input: &'a str) -> IResult<&'a str, ASN1Value> {
 }
 
 pub fn elsewhere_declared_value<'a>(input: &'a str) -> IResult<&'a str, ASN1Value> {
-    map(skip_ws_and_comments(identifier), |m| {
+    map(skip_ws_and_comments(value_identifier), |m| {
         ASN1Value::ElsewhereDeclaredValue(m.into())
     })(input)
 }
@@ -102,20 +121,29 @@ pub fn elsewhere_declared_value<'a>(input: &'a str) -> IResult<&'a str, ASN1Valu
 pub fn elsewhere_declared_type<'a>(input: &'a str) -> IResult<&'a str, ASN1Type> {
     map(
         pair(
-            skip_ws_and_comments(identifier),
+            skip_ws_and_comments(type_identifier),
             opt(skip_ws_and_comments(constraint)),
         ),
         |m| ASN1Type::ElsewhereDeclaredType(m.into()),
     )(input)
 }
 
-fn top_level_value_reference<'a>(input: &'a str) -> IResult<&'a str, ToplevelDeclaration> {
-  into(tuple((
-    skip_ws(many0(comment)),
-    skip_ws(identifier),
-    skip_ws(identifier),
-    preceded(assignment, information_object),
-  )))(input)
+fn top_level_information_object<'a>(input: &'a str) -> IResult<&'a str, ToplevelTypeDeclaration> {
+    into(tuple((
+        skip_ws(many0(comment)),
+        skip_ws(identifier),
+        skip_ws(identifier),
+        preceded(assignment, information_object),
+    )))(input)
+}
+
+fn top_level_value_declaration<'a>(input: &'a str) -> IResult<&'a str, ToplevelValueDeclaration> {
+    into(tuple((
+        skip_ws(many0(comment)),
+        skip_ws(value_identifier),
+        skip_ws(identifier),
+        preceded(assignment, asn1_value),
+    )))(input)
 }
 
 #[cfg(test)]
@@ -125,11 +153,11 @@ mod tests {
 
     use asnr_grammar::{subtyping::*, types::*, *};
 
-    use super::top_level_declaration;
+    use super::top_level_type_declaration;
 
     #[test]
     fn parses_toplevel_simple_integer_declaration() {
-        let tld = top_level_declaration(
+        let tld = top_level_type_declaration(
             "/**
           * The DE represents a cardinal number that counts the size of a set. 
           * 
@@ -160,7 +188,7 @@ mod tests {
 
     #[test]
     fn parses_toplevel_macro_integer_declaration() {
-        let tld = top_level_declaration(r#"/** 
+        let tld = top_level_type_declaration(r#"/** 
         * This DE represents the magnitude of the acceleration vector in a defined coordinate system.
         *
         * The value shall be set to:
@@ -204,7 +232,7 @@ mod tests {
 
     #[test]
     fn parses_toplevel_enumerated_declaration() {
-        let tld = top_level_declaration(
+        let tld = top_level_type_declaration(
             r#"-- Coverage Enhancement level encoded according to TS 36.331 [16] --
         CE-mode-B-SupportIndicator ::= ENUMERATED {
            supported,
@@ -236,7 +264,7 @@ mod tests {
 
     #[test]
     fn parses_toplevel_boolean_declaration() {
-        let tld = top_level_declaration(
+        let tld = top_level_type_declaration(
             r#"/**
             * This DE indicates whether a vehicle (e.g. public transport vehicle, truck) is under the embarkation process.
             * If that is the case, the value is *TRUE*, otherwise *FALSE*.
@@ -257,7 +285,7 @@ mod tests {
 
     #[test]
     fn parses_toplevel_crossrefering_declaration() {
-        let tld = top_level_declaration(
+        let tld = top_level_type_declaration(
             r#"-- Comments go here
         EventZone::= EventHistory
         ((WITH COMPONENT (WITH COMPONENTS {..., eventDeltaTime PRESENT})) |
@@ -268,7 +296,8 @@ mod tests {
         .1;
         assert_eq!(
             tld,
-            ToplevelDeclaration {
+            ToplevelTypeDeclaration {
+              parameterization: None,
                 comments: " Comments go here".into(),
                 name: "EventZone".into(),
                 r#type: ASN1Type::ElsewhereDeclaredType(DeclarationElsewhere {
@@ -299,7 +328,7 @@ mod tests {
 
     #[test]
     fn parses_anonymous_sequence_of_declaration() {
-        let tld = top_level_declaration(
+        let tld = top_level_type_declaration(
             r#"--Comments
         InterferenceManagementZones ::= SEQUENCE (SIZE(1..16, ...)) OF InterferenceManagementZone"#,
         )
@@ -307,7 +336,8 @@ mod tests {
         .1;
         assert_eq!(
             tld,
-            ToplevelDeclaration {
+            ToplevelTypeDeclaration {
+              parameterization: None,
                 comments: "Comments".into(),
                 name: "InterferenceManagementZones".into(),
                 r#type: ASN1Type::SequenceOf(SequenceOf {

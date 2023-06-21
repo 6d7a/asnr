@@ -11,7 +11,7 @@ extern crate alloc;
 pub mod subtyping;
 pub mod types;
 
-use alloc::{format, string::String, vec, vec::Vec};
+use alloc::{format, string::{String, ToString}, vec, vec::Vec, borrow::ToOwned};
 use subtyping::Constraint;
 use types::*;
 
@@ -67,6 +67,7 @@ pub const FALSE: &'static str = "FALSE";
 
 // Header tokens
 pub const BEGIN: &'static str = "BEGIN";
+pub const END: &'static str = "END";
 pub const DEFINITIONS: &'static str = "DEFINITIONS";
 pub const AUTOMATIC: &'static str = "AUTOMATIC";
 pub const EXPLICIT: &'static str = "EXPLICIT";
@@ -84,6 +85,8 @@ pub const SEMICOLON: char = ';';
 pub const AMPERSAND: char = '&';
 pub const CLASS: &'static str = "CLASS";
 pub const UNIQUE: &'static str = "UNIQUE";
+pub const WITH_SYNTAX: &'static str = "WITH SYNTAX";
+
 
 // Subtyping tokens
 pub const SIZE: &'static str = "SIZE";
@@ -103,7 +106,31 @@ pub const ASSIGN: &'static str = "::=";
 pub const RANGE: &'static str = "..";
 pub const ELLIPSIS: &'static str = "...";
 pub const COMMA: char = ',';
+pub const COLON: char = ':';
 pub const SINGLE_QUOTE: char = '\'';
+
+// invalid syntax word tokens
+pub const ABSTRACT_SYNTAX: &'static str = "ABSTRACT-SYNTAX";
+pub const BIT: &'static str = "BIT";
+pub const CHARACTER: &'static str = "CHARACTER";
+pub const CONTAINING: &'static str = "CONTAINING";
+pub const DATE: &'static str = "DATE";
+pub const DATE_TIME: &'static str = "DATE-TIME";
+pub const DURATION: &'static str = "DURATION";
+pub const EMBEDDED: &'static str = "EMBEDDED";
+pub const EXTERNAL: &'static str = "EXTERNAL";
+pub const INSTANCE: &'static str = "INSTANCE";
+pub const MINUS_INFINITY: &'static str = "MINUS-INFINITY";
+pub const NOT_A_NUMBER: &'static str = "NOT-A-NUMBER";
+pub const OBJECT: &'static str = "OBJECT";
+pub const OCTET: &'static str = "OCTET";
+pub const OID_IRI: &'static str = "OID-IRI";
+pub const PLUS_INFINITY: &'static str = "PLUS-INFINITY";
+pub const RELATIVE_OID: &'static str = "RELATIVE-OID";
+pub const RELATIVE_OID_IRI: &'static str = "RELATIVE-OID-IRI";
+pub const TIME: &'static str = "TIME";
+pub const TIME_OF_DAY: &'static str = "TIME-OF-DAY";
+pub const TYPE_IDENTIFIER: &'static str = "TYPE-IDENTIFIER";
 
 /// The `Quote` trait serves to convert a structure
 /// into a stringified rust representation of its initialization.
@@ -268,24 +295,51 @@ impl From<(&str, u128)> for ObjectIdentifierArc {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct ToplevelDeclaration {
-    pub comments: String,
-    pub name: String,
-    pub r#type: ASN1Type,
+pub enum ToplevelDeclaration {
+  Type(ToplevelTypeDeclaration),
+  Value(ToplevelValueDeclaration),
 }
 
-impl From<(Vec<&str>, &str, ASN1Type)> for ToplevelDeclaration {
-    fn from(value: (Vec<&str>, &str, ASN1Type)) -> Self {
+#[derive(Debug, Clone, PartialEq)]
+pub struct ToplevelValueDeclaration {
+    pub comments: String,
+    pub name: String,
+    pub type_name: String,
+    pub value: ASN1Value,
+}
+
+impl From<(Vec<&str>, &str, &str, ASN1Value)> for ToplevelValueDeclaration {
+    fn from(value: (Vec<&str>, &str, &str, ASN1Value)) -> Self {
         Self {
             comments: value.0.join("\n"),
             name: value.1.into(),
-            r#type: value.2,
+            type_name: value.2.into(),
+            value: value.3,
         }
     }
 }
 
-impl From<(Vec<&str>, &str, &str, Vec<InformationObjectField>)> for ToplevelDeclaration {
-    fn from(value: (Vec<&str>, &str, &str, Vec<InformationObjectField>)) -> Self {
+#[derive(Debug, Clone, PartialEq)]
+pub struct ToplevelTypeDeclaration {
+    pub comments: String,
+    pub name: String,
+    pub r#type: ASN1Type,
+    pub parameterization: Option<Parameterization>
+}
+
+impl From<(Vec<&str>, &str, Option<Parameterization>, ASN1Type)> for ToplevelTypeDeclaration {
+    fn from(value: (Vec<&str>, &str, Option<Parameterization>, ASN1Type)) -> Self {
+        Self {
+            comments: value.0.join("\n"),
+            name: value.1.into(),
+            parameterization: value.2,
+            r#type: value.3,
+        }
+    }
+}
+
+impl From<(Vec<&str>, &str, &str, InformationObjectFields)> for ToplevelTypeDeclaration {
+    fn from(value: (Vec<&str>, &str, &str, InformationObjectFields)) -> Self {
         Self {
             comments: value.0.join("\n"),
             name: value.1.into(),
@@ -293,6 +347,7 @@ impl From<(Vec<&str>, &str, &str, Vec<InformationObjectField>)> for ToplevelDecl
                 supertype: value.2.into(),
                 fields: value.3,
             }),
+            parameterization: None
         }
     }
 }
@@ -388,6 +443,20 @@ pub enum ASN1Value {
     BitString(Vec<bool>),
     EnumeratedValue(String),
     ElsewhereDeclaredValue(String),
+}
+
+impl ToString for ASN1Value {
+    fn to_string(&self) -> String {
+        match self {
+            ASN1Value::Null => "ASN1_NULL".to_owned(),
+            ASN1Value::Boolean(b) => format!("{}", b),
+            ASN1Value::Integer(i) => format!("{}", i),
+            ASN1Value::String(s) => s.clone(),
+            ASN1Value::BitString(_) => todo!(),
+            ASN1Value::EnumeratedValue(e) => e.clone(),
+            ASN1Value::ElsewhereDeclaredValue(e) => e.clone(),
+        }
+    }
 }
 
 impl Quote for ASN1Value {

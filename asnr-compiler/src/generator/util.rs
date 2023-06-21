@@ -51,7 +51,7 @@ pub fn format_enumeral_from_int(enumeral: &Enumeral) -> String {
     format!("x if x == Self::{name} as i128 => Ok(Self::{name}),")
 }
 
-pub fn format_distinguished_values(tld: &ToplevelDeclaration) -> String {
+pub fn format_distinguished_values(tld: &ToplevelTypeDeclaration) -> String {
     let name = &rustify_name(&tld.name);
     match &tld.r#type {
         asnr_grammar::ASN1Type::Integer(i) => match &i.distinguished_values {
@@ -104,7 +104,10 @@ pub fn format_distinguished_int_value(value: &DistinguishedValue) -> String {
     format!("pub fn is_{name}(&self) -> bool {{ self.0 as i128 == {i} }}")
 }
 
-pub fn flatten_nested_sequence_members(members: &Vec<SequenceMember>, parent_name: &String) -> Vec<String> {
+pub fn flatten_nested_sequence_members(
+    members: &Vec<SequenceMember>,
+    parent_name: &String,
+) -> Vec<String> {
     members
         .iter()
         .filter(|m| match m.r#type {
@@ -115,7 +118,10 @@ pub fn flatten_nested_sequence_members(members: &Vec<SequenceMember>, parent_nam
         .collect::<Vec<String>>()
 }
 
-pub fn flatten_nested_choice_options(options: &Vec<ChoiceOption>, parent_name: &String) -> Vec<String> {
+pub fn flatten_nested_choice_options(
+    options: &Vec<ChoiceOption>,
+    parent_name: &String,
+) -> Vec<String> {
     options
         .iter()
         .filter(|m| match m.r#type {
@@ -126,7 +132,10 @@ pub fn flatten_nested_choice_options(options: &Vec<ChoiceOption>, parent_name: &
         .collect::<Vec<String>>()
 }
 
-pub fn extract_choice_options(options: &Vec<ChoiceOption>, parent_name: &String) -> Vec<StringifiedNameType> {
+pub fn extract_choice_options(
+    options: &Vec<ChoiceOption>,
+    parent_name: &String,
+) -> Vec<StringifiedNameType> {
     options
         .iter()
         .map(|m| {
@@ -151,7 +160,10 @@ pub fn format_option_declaration(members: &Vec<StringifiedNameType>) -> String {
         .join("\n  ")
 }
 
-pub fn extract_sequence_members(members: &Vec<SequenceMember>, parent_name: &String) -> Vec<StringifiedNameType> {
+pub fn extract_sequence_members(
+    members: &Vec<SequenceMember>,
+    parent_name: &String,
+) -> Vec<StringifiedNameType> {
     members
         .iter()
         .map(|m| {
@@ -212,24 +224,32 @@ pub fn format_decode_member_body(members: &Vec<StringifiedNameType>) -> String {
         .join("\n      ")
 }
 
-fn declare_inner_sequence_member(member: &SequenceMember, parent_name: &String) -> Result<String, GeneratorError> {
+fn declare_inner_sequence_member(
+    member: &SequenceMember,
+    parent_name: &String,
+) -> Result<String, GeneratorError> {
     generate(
-        ToplevelDeclaration {
+        ToplevelDeclaration::Type(ToplevelTypeDeclaration {
+            parameterization: None,
             comments: " Inner type ".into(),
             name: inner_name(&member.name, parent_name),
             r#type: member.r#type.clone(),
-        },
+        }),
         None,
     )
 }
 
-fn declare_inner_choice_option(option: &ChoiceOption, parent_name: &String) -> Result<String, GeneratorError> {
+fn declare_inner_choice_option(
+    option: &ChoiceOption,
+    parent_name: &String,
+) -> Result<String, GeneratorError> {
     generate(
-        ToplevelDeclaration {
-            comments: " Inner type ".into(),
+        ToplevelDeclaration::Type(ToplevelTypeDeclaration {
+          parameterization: None,
+          comments: " Inner type ".into(),
             name: inner_name(&option.name, parent_name),
             r#type: option.r#type.clone(),
-        },
+        }),
         None,
     )
 }

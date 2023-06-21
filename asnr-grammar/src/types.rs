@@ -1,4 +1,6 @@
-use alloc::{borrow::ToOwned, boxed::Box, string::ToString, vec};
+use core::fmt::Debug;
+
+use alloc::{borrow::ToOwned, boxed::Box, fmt::format, string::ToString, vec};
 
 use crate::{subtyping::*, *};
 
@@ -509,8 +511,128 @@ impl From<(&str, i128)> for DistinguishedValue {
 }
 
 #[derive(Debug, Clone, PartialEq)]
+pub enum SyntaxExpression {
+    Required(SyntaxToken),
+    Optional(Vec<SyntaxExpression>),
+}
+
+impl Quote for SyntaxExpression {
+    fn quote(&self) -> String {
+        match self {
+            SyntaxExpression::Required(r) => format!("SyntaxExpression::Required({})", r.quote()),
+            SyntaxExpression::Optional(o) => format!(
+                "SyntaxExpression::Optional(vec![{}])",
+                o.iter()
+                    .map(|s| s.quote())
+                    .collect::<Vec<String>>()
+                    .join(", ")
+            ),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum SyntaxApplication {
+    ObjectSetDeclaration(ValueSet),
+    ValueReference(ASN1Value),
+    TypeReference(ASN1Type),
+    Comma,
+    Literal(String),
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum SyntaxToken {
+    Literal(String),
+    Comma,
+    Field(ObjectFieldIdentifier),
+}
+
+impl Quote for SyntaxToken {
+    fn quote(&self) -> String {
+        match self {
+            SyntaxToken::Literal(l) => format!("SyntaxToken::Literal(\"{l}\".into())"),
+            SyntaxToken::Comma => "SyntaxToken::Comma".to_owned(),
+            SyntaxToken::Field(o) => format!("SyntaxToken::Field({})", o.quote()),
+        }
+    }
+}
+
+impl From<ObjectFieldIdentifier> for SyntaxToken {
+    fn from(value: ObjectFieldIdentifier) -> Self {
+        Self::Field(value)
+    }
+}
+
+impl From<&str> for SyntaxToken {
+    fn from(value: &str) -> Self {
+        if value == "," {
+            Self::Comma
+        } else {
+            Self::Literal(value.into())
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct InformationObjectSyntax {
+    pub expressions: Vec<SyntaxExpression>,
+}
+
+impl Quote for InformationObjectSyntax {
+    fn quote(&self) -> String {
+        format!(
+            "InformationObjectSyntax {{ expressions: vec![{}] }}",
+            self.expressions
+                .iter()
+                .map(|s| s.quote())
+                .collect::<Vec<String>>()
+                .join(", ")
+        )
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
 pub struct InformationObjectClass {
     pub fields: Vec<InformationObjectClassField>,
+    pub syntax: Option<InformationObjectSyntax>,
+}
+
+impl Quote for InformationObjectClass {
+    fn quote(&self) -> String {
+        format!(
+            "InformationObjectClass {{ fields: vec![{}], syntax: {} }}",
+            self.fields
+                .iter()
+                .map(|f| f.quote())
+                .collect::<Vec<String>>()
+                .join(", "),
+            self.syntax.as_ref()
+                .map_or("None".to_owned(), |d| String::from("Some(")
+                    + &d.quote()
+                    + ")")
+        )
+    }
+}
+
+impl
+    From<(
+        Vec<InformationObjectClassField>,
+        Option<Vec<SyntaxExpression>>,
+    )> for InformationObjectClass
+{
+    fn from(
+        value: (
+            Vec<InformationObjectClassField>,
+            Option<Vec<SyntaxExpression>>,
+        ),
+    ) -> Self {
+        Self {
+            fields: value.0,
+            syntax: value
+                .1
+                .map(|expr| InformationObjectSyntax { expressions: expr }),
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -518,30 +640,46 @@ pub struct InformationObjectClassField {
     pub identifier: ObjectFieldIdentifier,
     pub r#type: Option<ASN1Type>,
     pub is_optional: bool,
+    pub default: Option<ASN1Value>,
     pub is_unique: bool,
+}
+
+impl Quote for InformationObjectClassField {
+    fn quote(&self) -> String {
+        format!("InformationObjectClassField {{ identifier: {}, r#type: {}, is_optional: {}, default: {}, is_unique: {} }}",
+        self.identifier.quote(),
+        self.r#type.as_ref().map_or("None".to_owned(), |t| String::from("Some(") + &t.quote() + ")" ),
+        self.is_optional,
+        self.default.as_ref().map_or("None".to_owned(), |d| String::from("Some(") + &d.quote() + ")" ),
+        self.is_unique
+      )
+    }
 }
 
 impl
     From<(
         ObjectFieldIdentifier,
         Option<ASN1Type>,
-        Option<OptionalMarker>,
         Option<&str>,
+        Option<OptionalMarker>,
+        Option<ASN1Value>,
     )> for InformationObjectClassField
 {
     fn from(
         value: (
             ObjectFieldIdentifier,
             Option<ASN1Type>,
-            Option<OptionalMarker>,
             Option<&str>,
+            Option<OptionalMarker>,
+            Option<ASN1Value>,
         ),
     ) -> Self {
         Self {
             identifier: value.0,
             r#type: value.1,
-            is_optional: value.2.is_some(),
-            is_unique: value.3.is_some(),
+            is_unique: value.2.is_some(),
+            is_optional: value.3.is_some() || value.4.is_some(),
+            default: value.4,
         }
     }
 }
@@ -550,6 +688,19 @@ impl
 pub enum ObjectFieldIdentifier {
     SingleValue(String),
     MultipleValue(String),
+}
+
+impl Quote for ObjectFieldIdentifier {
+    fn quote(&self) -> String {
+        match self {
+            ObjectFieldIdentifier::SingleValue(s) => {
+                format!("ObjectFieldIdentifier::SingleValue(\"{s}\".into())")
+            }
+            ObjectFieldIdentifier::MultipleValue(m) => {
+                format!("ObjectFieldIdentifier::MultipleValue(\"{m}\".into())")
+            }
+        }
+    }
 }
 
 impl ObjectFieldIdentifier {
@@ -564,7 +715,13 @@ impl ObjectFieldIdentifier {
 #[derive(Debug, Clone, PartialEq)]
 pub struct InformationObject {
     pub supertype: String,
-    pub fields: Vec<InformationObjectField>,
+    pub fields: InformationObjectFields,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum InformationObjectFields {
+    DefaultSyntax(Vec<InformationObjectField>),
+    CustomSyntax(Vec<SyntaxApplication>),
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -652,4 +809,29 @@ impl From<(ObjectFieldIdentifier, ValueSet)> for InformationObjectField {
 pub struct InformationObjectFieldReference {
     pub class: String,
     pub field_name: ObjectFieldIdentifier,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct Parameterization {
+    pub parameters: Vec<ParameterizationArgument>,
+}
+
+impl From<Vec<(&str, &str)>> for Parameterization {
+    fn from(value: Vec<(&str, &str)>) -> Self {
+        Self {
+            parameters: value
+                .into_iter()
+                .map(|(t, i)| ParameterizationArgument {
+                    r#type: t.into(),
+                    name: i.into(),
+                })
+                .collect(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct ParameterizationArgument {
+    pub r#type: String,
+    pub name: String,
 }

@@ -17,11 +17,16 @@ pub trait Validate {
 
 impl Validate for ToplevelDeclaration {
     fn validate(&self) -> Result<(), ValidatorError> {
-        if let Err(mut e) = self.r#type.validate() {
-            e.specify_data_element(self.name.clone());
-            return Err(e);
+        match self {
+            ToplevelDeclaration::Type(t) => {
+                if let Err(mut e) = t.r#type.validate() {
+                    e.specify_data_element(t.name.clone());
+                    return Err(e);
+                }
+                Ok(())
+            }
+            ToplevelDeclaration::Value(_v) => Ok(()),
         }
-        Ok(())
     }
 }
 
@@ -67,7 +72,9 @@ impl Validate for CharacterString {
 
 impl Validate for ValueConstraint {
     fn validate(&self) -> Result<(), ValidatorError> {
-        if let Some((ASN1Value::Integer(min), ASN1Value::Integer(max))) = self.min_value.as_ref().zip(self.max_value.as_ref()) {
+        if let Some((ASN1Value::Integer(min), ASN1Value::Integer(max))) =
+            self.min_value.as_ref().zip(self.max_value.as_ref())
+        {
             if min > max {
                 return Err(ValidatorError::new(
                     None,

@@ -12,8 +12,24 @@ pub struct StringifiedNameType {
     pub r#type: String,
 }
 
+pub fn generate_integer_value(tld: ToplevelValueDeclaration) -> Result<String, GeneratorError> {
+    if let ASN1Value::Integer(i) = tld.value {
+        Ok(integer_value_template(
+            format_comments(&tld.comments),
+            rustify_name(&tld.name),
+            i,
+        ))
+    } else {
+        Err(GeneratorError::new(
+            ToplevelDeclaration::Value(tld),
+            "Expected INTEGER value top-level declaration",
+            GeneratorErrorType::Asn1TypeMismatch,
+        ))
+    }
+}
+
 pub fn generate_integer<'a>(
-    tld: ToplevelDeclaration,
+    tld: ToplevelTypeDeclaration,
     custom_derive: Option<&'a str>,
 ) -> Result<String, GeneratorError> {
     if let ASN1Type::Integer(ref int) = tld.r#type {
@@ -37,7 +53,7 @@ pub fn generate_integer<'a>(
         ))
     } else {
         Err(GeneratorError::new(
-            tld,
+            ToplevelDeclaration::Type(tld),
             "Expected INTEGER top-level declaration",
             GeneratorErrorType::Asn1TypeMismatch,
         ))
@@ -45,7 +61,7 @@ pub fn generate_integer<'a>(
 }
 
 pub fn generate_bit_string<'a>(
-    tld: ToplevelDeclaration,
+    tld: ToplevelTypeDeclaration,
     custom_derive: Option<&'a str>,
 ) -> Result<String, GeneratorError> {
     if let ASN1Type::BitString(ref bitstr) = tld.r#type {
@@ -58,7 +74,7 @@ pub fn generate_bit_string<'a>(
         ))
     } else {
         Err(GeneratorError::new(
-            tld,
+            ToplevelDeclaration::Type(tld),
             "Expected BIT STRING top-level declaration",
             GeneratorErrorType::Asn1TypeMismatch,
         ))
@@ -66,7 +82,7 @@ pub fn generate_bit_string<'a>(
 }
 
 pub fn character_string_template<'a>(
-    tld: ToplevelDeclaration,
+    tld: ToplevelTypeDeclaration,
     custom_derive: Option<&'a str>,
 ) -> Result<String, GeneratorError> {
     if let ASN1Type::CharacterString(ref char_str) = tld.r#type {
@@ -78,7 +94,7 @@ pub fn character_string_template<'a>(
         ))
     } else {
         Err(GeneratorError::new(
-            tld,
+            ToplevelDeclaration::Type(tld),
             "Expected Character String top-level declaration",
             GeneratorErrorType::Asn1TypeMismatch,
         ))
@@ -86,7 +102,7 @@ pub fn character_string_template<'a>(
 }
 
 pub fn generate_boolean<'a>(
-    tld: ToplevelDeclaration,
+    tld: ToplevelTypeDeclaration,
     custom_derive: Option<&'a str>,
 ) -> Result<String, GeneratorError> {
     if let ASN1Type::Boolean = tld.r#type {
@@ -97,7 +113,7 @@ pub fn generate_boolean<'a>(
         ))
     } else {
         Err(GeneratorError::new(
-            tld,
+            ToplevelDeclaration::Type(tld),
             "Expected BOOLEAN top-level declaration",
             GeneratorErrorType::Asn1TypeMismatch,
         ))
@@ -105,47 +121,62 @@ pub fn generate_boolean<'a>(
 }
 
 pub fn generate_typealias<'a>(
-  tld: ToplevelDeclaration,
-  custom_derive: Option<&'a str>,
+    tld: ToplevelTypeDeclaration,
+    custom_derive: Option<&'a str>,
 ) -> Result<String, GeneratorError> {
-  if let ASN1Type::ElsewhereDeclaredType(dec) = &tld.r#type {
-      Ok(typealias_template(
-          format_comments(&tld.comments),
-          custom_derive.unwrap_or(DERIVE_DEFAULT),
-          rustify_name(&tld.name),
-          rustify_name(&dec.identifier),
-          tld.r#type.quote()
-      ))
-  } else {
-      Err(GeneratorError::new(
-          tld,
-          "Expected NULL top-level declaration",
-          GeneratorErrorType::Asn1TypeMismatch,
-      ))
-  }
+    if let ASN1Type::ElsewhereDeclaredType(dec) = &tld.r#type {
+        Ok(typealias_template(
+            format_comments(&tld.comments),
+            custom_derive.unwrap_or(DERIVE_DEFAULT),
+            rustify_name(&tld.name),
+            rustify_name(&dec.identifier),
+            tld.r#type.quote(),
+        ))
+    } else {
+        Err(GeneratorError::new(
+            ToplevelDeclaration::Type(tld),
+            "Expected type alias top-level declaration",
+            GeneratorErrorType::Asn1TypeMismatch,
+        ))
+    }
+}
+
+pub fn generate_null_value(tld: ToplevelValueDeclaration) -> Result<String, GeneratorError> {
+    if let ASN1Value::Null = tld.value {
+        Ok(null_value_template(
+            format_comments(&tld.comments),
+            rustify_name(&tld.name),
+        ))
+    } else {
+        Err(GeneratorError::new(
+            ToplevelDeclaration::Value(tld),
+            "Expected NULL value top-level declaration",
+            GeneratorErrorType::Asn1TypeMismatch,
+        ))
+    }
 }
 
 pub fn generate_null<'a>(
-  tld: ToplevelDeclaration,
-  custom_derive: Option<&'a str>,
+    tld: ToplevelTypeDeclaration,
+    custom_derive: Option<&'a str>,
 ) -> Result<String, GeneratorError> {
-  if let ASN1Type::Null = tld.r#type {
-      Ok(null_template(
-          format_comments(&tld.comments),
-          custom_derive.unwrap_or(DERIVE_DEFAULT),
-          rustify_name(&tld.name),
-      ))
-  } else {
-      Err(GeneratorError::new(
-          tld,
-          "Expected NULL top-level declaration",
-          GeneratorErrorType::Asn1TypeMismatch,
-      ))
-  }
+    if let ASN1Type::Null = tld.r#type {
+        Ok(null_template(
+            format_comments(&tld.comments),
+            custom_derive.unwrap_or(DERIVE_DEFAULT),
+            rustify_name(&tld.name),
+        ))
+    } else {
+        Err(GeneratorError::new(
+            ToplevelDeclaration::Type(tld),
+            "Expected NULL top-level declaration",
+            GeneratorErrorType::Asn1TypeMismatch,
+        ))
+    }
 }
 
 pub fn generate_enumerated<'a>(
-    tld: ToplevelDeclaration,
+    tld: ToplevelTypeDeclaration,
     custom_derive: Option<&'a str>,
 ) -> Result<String, GeneratorError> {
     if let ASN1Type::Enumerated(ref enumerated) = tld.r#type {
@@ -171,7 +202,7 @@ pub fn generate_enumerated<'a>(
         ))
     } else {
         Err(GeneratorError::new(
-            tld,
+            ToplevelDeclaration::Type(tld),
             "Expected ENUMERATED top-level declaration",
             GeneratorErrorType::Asn1TypeMismatch,
         ))
@@ -179,7 +210,7 @@ pub fn generate_enumerated<'a>(
 }
 
 pub fn generate_choice<'a>(
-    tld: ToplevelDeclaration,
+    tld: ToplevelTypeDeclaration,
     custom_derive: Option<&'a str>,
 ) -> Result<String, GeneratorError> {
     if let ASN1Type::Choice(ref choice) = tld.r#type {
@@ -191,7 +222,7 @@ pub fn generate_choice<'a>(
             Some(o) => default_choice(o),
             None => {
                 return Err(GeneratorError {
-                    top_level_declaration: tld,
+                    top_level_declaration: ToplevelDeclaration::Type(tld),
                     details: "Empty CHOICE types are not yet supported!".into(),
                     kind: GeneratorErrorType::EmptyChoiceType,
                 })
@@ -215,15 +246,30 @@ pub fn generate_choice<'a>(
         ))
     } else {
         Err(GeneratorError::new(
-            tld,
+            ToplevelDeclaration::Type(tld),
             "Expected CHOICE top-level declaration",
             GeneratorErrorType::Asn1TypeMismatch,
         ))
     }
 }
 
+pub fn generate_information_object_class<'a>(
+  tld: ToplevelTypeDeclaration,
+  custom_derive: Option<&'a str>,
+) -> Result<String, GeneratorError> {
+  if let ASN1Type::InformationObjectClass(ref ioc) = tld.r#type {      
+      Ok(information_object_class_template(format_comments(&tld.comments), rustify_name(&tld.name), ioc.quote()))
+  } else {
+      Err(GeneratorError::new(
+          ToplevelDeclaration::Type(tld),
+          "Expected CLASS top-level declaration",
+          GeneratorErrorType::Asn1TypeMismatch,
+      ))
+  }
+}
+
 pub fn generate_sequence<'a>(
-    tld: ToplevelDeclaration,
+    tld: ToplevelTypeDeclaration,
     custom_derive: Option<&'a str>,
 ) -> Result<String, GeneratorError> {
     if let ASN1Type::Sequence(ref seq) = tld.r#type {
@@ -245,7 +291,7 @@ pub fn generate_sequence<'a>(
         ))
     } else {
         Err(GeneratorError::new(
-            tld,
+            ToplevelDeclaration::Type(tld),
             "Expected SEQUENCE top-level declaration",
             GeneratorErrorType::Asn1TypeMismatch,
         ))
@@ -253,7 +299,7 @@ pub fn generate_sequence<'a>(
 }
 
 pub fn generate_sequence_of<'a>(
-    tld: ToplevelDeclaration,
+    tld: ToplevelTypeDeclaration,
     custom_derive: Option<&'a str>,
 ) -> Result<String, GeneratorError> {
     if let ASN1Type::SequenceOf(ref seq_of) = tld.r#type {
@@ -261,11 +307,12 @@ pub fn generate_sequence_of<'a>(
         let anonymous_item = match seq_of.r#type.as_ref() {
             ASN1Type::ElsewhereDeclaredType(_) => None,
             n => Some(generate(
-                ToplevelDeclaration {
+                ToplevelDeclaration::Type(ToplevelTypeDeclaration {
+                    parameterization: None,
                     comments: " Anonymous SEQUENCE OF member ".into(),
                     name: String::from("Anonymous_") + &name,
                     r#type: n.clone(),
-                },
+                }),
                 None,
             )?),
         }
@@ -284,7 +331,7 @@ pub fn generate_sequence_of<'a>(
         ))
     } else {
         Err(GeneratorError::new(
-            tld,
+            ToplevelDeclaration::Type(tld),
             "Expected SEQUENCE OF top-level declaration",
             GeneratorErrorType::Asn1TypeMismatch,
         ))
@@ -301,7 +348,9 @@ mod tests {
 
     #[test]
     fn generates_enumerated_from_template() {
-        let enum_tld = ToplevelDeclaration {
+        let enum_tld = ToplevelTypeDeclaration {
+            parameterization: None,
+
             name: "TestEnum".into(),
             comments: "".into(),
             r#type: ASN1Type::Enumerated(Enumerated {
@@ -331,7 +380,7 @@ mod tests {
 
     #[test]
     fn generates_bitstring_from_template() {
-        let bs_tld = ToplevelDeclaration {
+        let bs_tld = ToplevelTypeDeclaration {              parameterization: None,
             name: "BitString".into(),
             comments: "".into(),
             r#type: ASN1Type::BitString(BitString {
@@ -361,7 +410,7 @@ mod tests {
 
     #[test]
     fn generates_integer_from_template() {
-        let int_tld = ToplevelDeclaration {
+        let int_tld = ToplevelTypeDeclaration {              parameterization: None,
             name: "TestInt".into(),
             comments: "".into(),
             r#type: ASN1Type::Integer(Integer {
@@ -391,7 +440,7 @@ mod tests {
 
     #[test]
     fn generates_sequence_from_template() {
-        let seq_tld = ToplevelDeclaration {
+        let seq_tld = ToplevelTypeDeclaration {              parameterization: None,
             name: "Sequence".into(),
             comments: "".into(),
             r#type: ASN1Type::Sequence(Sequence {

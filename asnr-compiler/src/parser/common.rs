@@ -2,7 +2,7 @@ use nom::{
     branch::alt,
     bytes::complete::{tag, take_until},
     character::complete::{
-        alpha1, alphanumeric1, char, i128, multispace0, multispace1, not_line_ending, u64,
+        alpha1, alphanumeric1, char, i128, multispace0, multispace1, not_line_ending, u64, one_of,
     },
     combinator::{into, opt, recognize},
     multi::{many0, separated_list1},
@@ -62,6 +62,20 @@ pub fn block_comment<'a>(input: &'a str) -> IResult<&'a str, &'a str> {
 pub fn identifier<'a>(input: &'a str) -> IResult<&'a str, &'a str> {
     recognize(pair(
         alpha1,
+        many0(alt((preceded(char('-'), alphanumeric1), alphanumeric1))),
+    ))(input)
+}
+
+pub fn type_identifier<'a>(input: &'a str) -> IResult<&'a str, &'a str> {
+    recognize(pair(
+        one_of("ABCDEFGHIJKLMNOPQRSTUVWXYZ"),
+        many0(alt((preceded(char('-'), alphanumeric1), alphanumeric1))),
+    ))(input)
+}
+
+pub fn value_identifier<'a>(input: &'a str) -> IResult<&'a str, &'a str> {
+    recognize(pair(
+        one_of("abcdefghijklmnopqrstuvwxyz"),
         many0(alt((preceded(char('-'), alphanumeric1), alphanumeric1))),
     ))(input)
 }
