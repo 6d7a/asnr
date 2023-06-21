@@ -1,6 +1,6 @@
 use core::fmt::Debug;
 
-use alloc::{borrow::ToOwned, boxed::Box, fmt::format, string::ToString, vec};
+use alloc::{borrow::ToOwned, boxed::Box, string::ToString, vec};
 
 use crate::{subtyping::*, *};
 

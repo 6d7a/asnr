@@ -384,16 +384,16 @@ pub trait {name} {{
 "#)
 }
 
-pub fn information_object_template(
-  comments: String,
-  name: String,
-  information_object_class_descriptor: String,
-) -> String {
-  format!(r#"{comments}
-pub struct {name} {{
+// pub fn information_object_template(
+//   comments: String,
+//   name: String,
+//   information_object_class_descriptor: String,
+// ) -> String {
+//   format!(r#"{comments}
+// pub struct {name} {{
 
-}}
+// }}
 
-impl {supertype} for {name};
-"#)
-}
+// impl {supertype} for {name};
+// "#)
+// }
