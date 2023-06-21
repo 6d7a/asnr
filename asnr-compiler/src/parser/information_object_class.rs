@@ -149,6 +149,7 @@ fn syntax_literal<'a>(input: &'a str) -> IResult<&'a str, &'a str> {
     ))(input)
 }
 
+#[cfg(test)]
 mod tests {
     use asnr_grammar::{types::*, *};
 

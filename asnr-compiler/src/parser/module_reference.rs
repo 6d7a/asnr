@@ -92,6 +92,7 @@ fn environments<'a>(
     ))(input)
 }
 
+#[cfg(test)]
 mod tests {
     use asnr_grammar::*;
 
