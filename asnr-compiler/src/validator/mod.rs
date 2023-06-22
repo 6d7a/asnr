@@ -26,6 +26,7 @@ impl Validate for ToplevelDeclaration {
                 Ok(())
             }
             ToplevelDeclaration::Value(_v) => Ok(()),
+            ToplevelDeclaration::Information(_i) => Ok(()),
         }
     }
 }

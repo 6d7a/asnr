@@ -1,17 +1,10 @@
-use asnr_grammar::{
-    subtyping::{
-        ArithmeticOperator, ComponentConstraint, ComponentPresence, Constraint, ExtensionMarker,
-        ValueConstraint,
-    },
-    ABSENT, CARET, COMMA, ELLIPSIS, EXCEPT, INTERSECTION, PIPE, PRESENT, SIZE, UNION,
-    WITH_COMPONENT, WITH_COMPONENTS,
-};
+use asnr_grammar::{subtyping::*, *};
 use nom::{
     branch::alt,
     bytes::complete::tag,
     character::complete::char,
     combinator::{into, map, opt, value},
-    multi::many1,
+    multi::{many0_count, many1, separated_list1},
     sequence::{pair, preceded, terminated, tuple},
     IResult,
 };
@@ -22,6 +15,7 @@ use super::{
         extension_marker, identifier, in_braces, in_parentheses, opt_parentheses, range_seperator,
         skip_ws_and_comments,
     },
+    information_object_class::object_set,
 };
 
 pub fn constraint<'a>(input: &'a str) -> IResult<&'a str, Vec<Constraint>> {
@@ -48,6 +42,7 @@ pub fn constraint<'a>(input: &'a str) -> IResult<&'a str, Vec<Constraint>> {
 pub fn single_constraint<'a>(input: &'a str) -> IResult<&'a str, Constraint> {
     skip_ws_and_comments(alt((
         map(size_constraint, |c| Constraint::SizeConstraint(c)),
+        map(table_constraint, |t| Constraint::TableConstraint(t)),
         map(simple_value_constraint, |v| Constraint::ValueConstraint(v)),
         map(array_component_constraint, |c| {
             Constraint::ArrayComponentConstraint(c)
@@ -143,7 +138,7 @@ pub fn extensible_range_constraint<'a>(input: &'a str) -> IResult<&'a str, Value
 pub fn component_constraint<'a>(input: &'a str) -> IResult<&'a str, ComponentConstraint> {
     into(in_parentheses(preceded(
         tag(WITH_COMPONENTS),
-        skip_ws_and_comments(in_braces(pair(
+        in_braces(pair(
             opt(skip_ws_and_comments(terminated(
                 value(ExtensionMarker(), tag(ELLIPSIS)),
                 skip_ws_and_comments(char(COMMA)),
@@ -152,11 +147,11 @@ pub fn component_constraint<'a>(input: &'a str) -> IResult<&'a str, ComponentCon
                 subset_member,
                 opt(skip_ws_and_comments(char(COMMA))),
             )),
-        ))),
+        )),
     )))(input)
 }
 
-pub fn array_component_constraint<'a>(input: &'a str) -> IResult<&'a str, ComponentConstraint> {
+fn array_component_constraint<'a>(input: &'a str) -> IResult<&'a str, ComponentConstraint> {
     in_parentheses(preceded(
         tag(WITH_COMPONENT),
         skip_ws_and_comments(alt((component_constraint, array_component_constraint))),
@@ -176,15 +171,26 @@ fn subset_member<'a>(
     )))(input)
 }
 
+fn table_constraint<'a>(input: &'a str) -> IResult<&'a str, TableConstraint> {
+    in_parentheses(into(pair(
+        object_set,
+        opt(in_braces(separated_list1(
+            skip_ws_and_comments(char(COMMA)),
+            relational_constraint,
+        ))),
+    )))(input)
+}
+
+fn relational_constraint<'a>(input: &'a str) -> IResult<&'a str, RelationalConstraint> {
+    into(skip_ws_and_comments(preceded(
+        char(AT),
+        pair(many0_count(char(DOT)), identifier),
+    )))(input)
+}
+
 #[cfg(test)]
 mod tests {
-    use asnr_grammar::{
-        subtyping::{
-            ArithmeticOperator, ComponentConstraint, ComponentPresence, ConstrainedComponent,
-            Constraint, ValueConstraint,
-        },
-        ASN1Value,
-    };
+    use asnr_grammar::{subtyping::*, types::*, *};
 
     use crate::parser::constraint::{component_constraint, constraint, simple_value_constraint};
 
@@ -482,6 +488,64 @@ mod tests {
                     extensible: false
                 })
             ]
+        );
+    }
+
+    #[test]
+    fn parses_table_constraint() {
+        assert_eq!(
+            constraint(
+                "({
+              My-ops | 
+              {
+                &id 5,
+                &Type INTEGER (1..6)
+              } |
+              {ConnectionManeuverAssist-addGrpC  IDENTIFIED BY addGrpC}, 
+              ...
+            })"
+            )
+            .unwrap()
+            .1,
+            vec![Constraint::TableConstraint(TableConstraint {
+                object_set: ObjectSet {
+                    values: vec![
+                        ObjectSetValue::Reference("My-ops".into()),
+                        ObjectSetValue::Inline(InformationObjectFields::DefaultSyntax(vec![
+                            InformationObjectField::FixedValueField(FixedValueField {
+                                identifier: "&id".into(),
+                                value: ASN1Value::Integer(5)
+                            }),
+                            InformationObjectField::TypeField(TypeField {
+                                identifier: "&Type".into(),
+                                r#type: ASN1Type::Integer(Integer {
+                                    constraints: vec![ValueConstraint {
+                                        min_value: Some(ASN1Value::Integer(1)),
+                                        max_value: Some(ASN1Value::Integer(6)),
+                                        extensible: false
+                                    }],
+                                    distinguished_values: None
+                                })
+                            })
+                        ])),
+                        ObjectSetValue::Inline(InformationObjectFields::CustomSyntax(vec![
+                            SyntaxApplication::TypeReference(ASN1Type::ElsewhereDeclaredType(
+                                DeclarationElsewhere {
+                                    identifier: "ConnectionManeuverAssist-addGrpC".into(),
+                                    constraints: vec![]
+                                }
+                            )),
+                            SyntaxApplication::Literal("IDENTIFIED".into()),
+                            SyntaxApplication::Literal("BY".into()),
+                            SyntaxApplication::ValueReference(ASN1Value::ElsewhereDeclaredValue(
+                                "addGrpC".into()
+                            ))
+                        ]))
+                    ],
+                    extensible: Some(3)
+                },
+                linked_fields: vec![]
+            })]
         );
     }
 }

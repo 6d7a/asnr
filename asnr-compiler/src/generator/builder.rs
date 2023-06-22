@@ -1,4 +1,5 @@
 use asnr_grammar::*;
+use asnr_traits::*;
 
 use super::{
     error::{GeneratorError, GeneratorErrorType},
@@ -49,7 +50,7 @@ pub fn generate_integer<'a>(
             rustify_name(&tld.name),
             integer_type,
             format_distinguished_values(&tld),
-            int.quote(),
+            int.declare(),
         ))
     } else {
         Err(GeneratorError::new(
@@ -70,7 +71,7 @@ pub fn generate_bit_string<'a>(
             custom_derive.unwrap_or(DERIVE_DEFAULT),
             rustify_name(&tld.name),
             format_distinguished_values(&tld),
-            bitstr.quote(),
+            bitstr.declare(),
         ))
     } else {
         Err(GeneratorError::new(
@@ -90,7 +91,7 @@ pub fn character_string_template<'a>(
             format_comments(&tld.comments),
             custom_derive.unwrap_or(DERIVE_DEFAULT),
             rustify_name(&tld.name),
-            char_str.quote(),
+            char_str.declare(),
         ))
     } else {
         Err(GeneratorError::new(
@@ -130,7 +131,7 @@ pub fn generate_typealias<'a>(
             custom_derive.unwrap_or(DERIVE_DEFAULT),
             rustify_name(&tld.name),
             rustify_name(&dec.identifier),
-            tld.r#type.quote(),
+            tld.r#type.declare(),
         ))
     } else {
         Err(GeneratorError::new(
@@ -198,7 +199,7 @@ pub fn generate_enumerated<'a>(
             rustify_name(&tld.name),
             enumerals,
             enumerals_from_int,
-            enumerated.quote(),
+            enumerated.declare(),
         ))
     } else {
         Err(GeneratorError::new(
@@ -242,7 +243,7 @@ pub fn generate_choice<'a>(
             default_option,
             options_declaration,
             options_from_int,
-            choice.quote(),
+            choice.declare(),
         ))
     } else {
         Err(GeneratorError::new(
@@ -254,14 +255,14 @@ pub fn generate_choice<'a>(
 }
 
 pub fn generate_information_object_class<'a>(
-  tld: ToplevelTypeDeclaration,
+  tld: ToplevelInformationDeclaration,
   _custom_derive: Option<&'a str>,
 ) -> Result<String, GeneratorError> {
-  if let ASN1Type::InformationObjectClass(ref ioc) = tld.r#type {      
-      Ok(information_object_class_template(format_comments(&tld.comments), rustify_name(&tld.name), ioc.quote()))
+  if let ASN1Information::ObjectClass(ref ioc) = tld.value {      
+      Ok(information_object_class_template(format_comments(&tld.comments), rustify_name(&tld.name), ioc.declare()))
   } else {
       Err(GeneratorError::new(
-          ToplevelDeclaration::Type(tld),
+          ToplevelDeclaration::Information(tld),
           "Expected CLASS top-level declaration",
           GeneratorErrorType::Asn1TypeMismatch,
       ))
@@ -287,7 +288,7 @@ pub fn generate_sequence<'a>(
             extension_decl,
             format_decode_member_body(&members),
             extension_decoder,
-            seq.quote(),
+            seq.declare(),
         ))
     } else {
         Err(GeneratorError::new(
@@ -327,7 +328,7 @@ pub fn generate_sequence_of<'a>(
             name,
             anonymous_item,
             member_type,
-            seq_of.quote(),
+            seq_of.declare(),
         ))
     } else {
         Err(GeneratorError::new(

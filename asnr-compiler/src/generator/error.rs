@@ -33,6 +33,7 @@ impl Display for GeneratorError {
        let name = match &self.top_level_declaration {
         ToplevelDeclaration::Type(t) => &t.name,
         ToplevelDeclaration::Value(v) => &v.name,
+        ToplevelDeclaration::Information(i) => &i.name,
     };
         write!(
             f,

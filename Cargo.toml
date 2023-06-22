@@ -3,5 +3,7 @@
 members = [
     "asnr-compiler",
     "asnr-grammar",
-    "asnr-transcoder"
+    "asnr-grammar-derive",
+    "asnr-transcoder",
+    "asnr-traits"
 ]

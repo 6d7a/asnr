@@ -7,11 +7,22 @@
 //!
 #![no_std]
 extern crate alloc;
+extern crate asnr_traits;
+#[macro_use]
+extern crate asnr_grammar_derive;
+
+use asnr_traits::Declare;
 
 pub mod subtyping;
 pub mod types;
 
-use alloc::{format, string::{String, ToString}, vec, vec::Vec, borrow::ToOwned};
+use alloc::{
+  borrow::ToOwned,
+  format,
+  string::{String, ToString},
+  vec,
+  vec::Vec,
+};
 use subtyping::Constraint;
 use types::*;
 
@@ -80,13 +91,13 @@ pub const EXTENSIBILITY_IMPLIED: &'static str = "EXTENSIBILITY IMPLIED";
 pub const WITH_SUCCESSORS: &'static str = "WITH SUCCESSORS";
 pub const SEMICOLON: char = ';';
 
-
 // Information Object Class tokens
 pub const AMPERSAND: char = '&';
 pub const CLASS: &'static str = "CLASS";
 pub const UNIQUE: &'static str = "UNIQUE";
 pub const WITH_SYNTAX: &'static str = "WITH SYNTAX";
-
+pub const AT: char = '@';
+pub const DOT: char = '.';
 
 // Subtyping tokens
 pub const SIZE: &'static str = "SIZE";
@@ -132,40 +143,6 @@ pub const TIME: &'static str = "TIME";
 pub const TIME_OF_DAY: &'static str = "TIME-OF-DAY";
 pub const TYPE_IDENTIFIER: &'static str = "TYPE-IDENTIFIER";
 
-/// The `Quote` trait serves to convert a structure
-/// into a stringified rust representation of its initialization.
-///
-/// #### Example
-/// Let's say we have
-/// ```rust
-/// # use asnr_grammar::Quote;
-///
-/// pub struct Foo {
-///   pub bar: u8
-/// }
-/// // The implementation of `Quote` for `Foo` would look like this:
-/// impl Quote for Foo {
-///   fn quote(&self) -> String {
-///     format!("Foo {{ bar: {} }}", self.bar)
-///   }
-/// }
-/// ```
-pub trait Quote {
-    /// Returns a stringified representation of the implementing struct's initialization
-    ///
-    /// #### Example
-    /// ```rust
-    /// # use asnr_grammar::Quote;
-    /// # pub struct Foo { pub bar: u8 }
-    /// # impl Quote for Foo {
-    /// #  fn quote(&self) -> String { format!("Foo {{ bar: {} }}", self.bar) }
-    /// # }
-    /// let foo = Foo { bar: 1 };
-    /// assert_eq!("Foo { bar: 1 }".to_string(), foo.quote());
-    /// ```
-    fn quote(&self) -> String;
-}
-
 #[derive(Debug, Clone, PartialEq)]
 pub struct EncodingReferenceDefault(pub String);
 
@@ -200,9 +177,9 @@ impl From<(Vec<&str>, (&str, ObjectIdentifier, Option<&str>))> for Import {
     fn from(value: (Vec<&str>, (&str, ObjectIdentifier, Option<&str>))) -> Self {
         Self {
             types: value.0.into_iter().map(|s| String::from(s)).collect(),
-            origin_name: value.1.0.into(),
-            origin_identifier: value.1.1,
-            with_successors: value.1.2.is_some(),
+            origin_name: value.1 .0.into(),
+            origin_identifier: value.1 .1,
+            with_successors: value.1 .2.is_some(),
         }
     }
 }
@@ -261,7 +238,7 @@ impl From<Vec<ObjectIdentifierArc>> for ObjectIdentifier {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Declare)]
 pub struct ObjectIdentifierArc {
     pub name: Option<String>,
     pub number: Option<u128>,
@@ -296,8 +273,9 @@ impl From<(&str, u128)> for ObjectIdentifierArc {
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum ToplevelDeclaration {
-  Type(ToplevelTypeDeclaration),
-  Value(ToplevelValueDeclaration),
+    Type(ToplevelTypeDeclaration),
+    Value(ToplevelValueDeclaration),
+    Information(ToplevelInformationDeclaration),
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -320,11 +298,55 @@ impl From<(Vec<&str>, &str, &str, ASN1Value)> for ToplevelValueDeclaration {
 }
 
 #[derive(Debug, Clone, PartialEq)]
+pub struct ToplevelInformationDeclaration {
+    pub comments: String,
+    pub name: String,
+    pub class: Option<String>,
+    pub value: ASN1Information,
+}
+
+impl From<(Vec<&str>, &str, &str, InformationObjectFields)> for ToplevelInformationDeclaration {
+    fn from(value: (Vec<&str>, &str, &str, InformationObjectFields)) -> Self {
+        Self {
+            comments: value.0.join("\n"),
+            name: value.1.into(),
+            class: Some(value.2.into()),
+            value: ASN1Information::Object(InformationObject {
+                supertype: value.2.into(),
+                fields: value.3,
+            }),
+        }
+    }
+}
+
+impl From<(Vec<&str>, &str, &str, ObjectSet)> for ToplevelInformationDeclaration {
+    fn from(value: (Vec<&str>, &str, &str, ObjectSet)) -> Self {
+        Self {
+            comments: value.0.join("\n"),
+            name: value.1.into(),
+            class: Some(value.2.into()),
+            value: ASN1Information::ObjectSet(value.3),
+        }
+    }
+}
+
+impl From<(Vec<&str>, &str, InformationObjectClass)> for ToplevelInformationDeclaration {
+    fn from(value: (Vec<&str>, &str, InformationObjectClass)) -> Self {
+        Self {
+            comments: value.0.join("\n"),
+            name: value.1.into(),
+            class: None,
+            value: ASN1Information::ObjectClass(value.2),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
 pub struct ToplevelTypeDeclaration {
     pub comments: String,
     pub name: String,
     pub r#type: ASN1Type,
-    pub parameterization: Option<Parameterization>
+    pub parameterization: Option<Parameterization>,
 }
 
 impl From<(Vec<&str>, &str, Option<Parameterization>, ASN1Type)> for ToplevelTypeDeclaration {
@@ -334,20 +356,6 @@ impl From<(Vec<&str>, &str, Option<Parameterization>, ASN1Type)> for ToplevelTyp
             name: value.1.into(),
             parameterization: value.2,
             r#type: value.3,
-        }
-    }
-}
-
-impl From<(Vec<&str>, &str, &str, InformationObjectFields)> for ToplevelTypeDeclaration {
-    fn from(value: (Vec<&str>, &str, &str, InformationObjectFields)) -> Self {
-        Self {
-            comments: value.0.join("\n"),
-            name: value.1.into(),
-            r#type: ASN1Type::InformationObject(InformationObject {
-                supertype: value.2.into(),
-                fields: value.3,
-            }),
-            parameterization: None
         }
     }
 }
@@ -370,9 +378,7 @@ pub enum ASN1Type {
     // Set,
     // SetOf,
     ElsewhereDeclaredType(DeclarationElsewhere),
-    InformationObjectClass(InformationObjectClass),
-    InformationObject(InformationObject),
-    InformationObjectFieldReference(InformationObjectFieldReference)
+    InformationObjectFieldReference(InformationObjectFieldReference),
 }
 
 /// The types of an ASN1 character strings.
@@ -411,26 +417,32 @@ impl From<&str> for CharacterStringType {
     }
 }
 
-impl Quote for ASN1Type {
-    fn quote(&self) -> String {
+impl asnr_traits::Declare for ASN1Type {
+    fn declare(&self) -> String {
         match self {
             ASN1Type::Null => "ASN1Type::Null".into(),
             ASN1Type::Boolean => "ASN1Type::Boolean".into(),
-            ASN1Type::Integer(i) => format!("ASN1Type::Integer({})", i.quote()),
-            ASN1Type::BitString(b) => format!("ASN1Type::BitString({})", b.quote()),
-            ASN1Type::CharacterString(o) => format!("ASN1Type::CharacterString({})", o.quote()),
-            ASN1Type::Enumerated(e) => format!("ASN1Type::Enumerated({})", e.quote()),
-            ASN1Type::SequenceOf(s) => format!("ASN1Type::SequenceOf({})", s.quote()),
-            ASN1Type::Sequence(s) => format!("ASN1Type::Sequence({})", s.quote()),
-            ASN1Type::Choice(c) => format!("ASN1Type::Choice({})", c.quote()),
+            ASN1Type::Integer(i) => format!("ASN1Type::Integer({})", i.declare()),
+            ASN1Type::BitString(b) => format!("ASN1Type::BitString({})", b.declare()),
+            ASN1Type::CharacterString(o) => format!("ASN1Type::CharacterString({})", o.declare()),
+            ASN1Type::Enumerated(e) => format!("ASN1Type::Enumerated({})", e.declare()),
+            ASN1Type::SequenceOf(s) => format!("ASN1Type::SequenceOf({})", s.declare()),
+            ASN1Type::Sequence(s) => format!("ASN1Type::Sequence({})", s.declare()),
+            ASN1Type::Choice(c) => format!("ASN1Type::Choice({})", c.declare()),
             ASN1Type::ElsewhereDeclaredType(els) => {
-                format!("ASN1Type::ElsewhereDeclaredType({})", els.quote())
+                format!("ASN1Type::ElsewhereDeclaredType({})", els.declare())
             }
-            ASN1Type::InformationObjectClass(_) => todo!(),
-            ASN1Type::InformationObject(_) => todo!(),
-            ASN1Type::InformationObjectFieldReference(_) => todo!(),
+            ASN1Type::InformationObjectFieldReference(iofr) => format!("ASN1Type::InformationObjectFieldReference({})", iofr.declare()),
         }
     }
+}
+
+/// The possible types of an ASN1 information object.
+#[derive(Debug, Clone, PartialEq)]
+pub enum ASN1Information {
+    ObjectClass(InformationObjectClass),
+    ObjectSet(ObjectSet),
+    Object(InformationObject),
 }
 
 /// The possible types of an ASN1 value.
@@ -459,8 +471,8 @@ impl ToString for ASN1Value {
     }
 }
 
-impl Quote for ASN1Value {
-    fn quote(&self) -> String {
+impl asnr_traits::Declare for ASN1Value {
+    fn declare(&self) -> String {
         match self {
             ASN1Value::Null => String::from("ASN1Value::Null"),
             ASN1Value::Boolean(b) => format!("ASN1Value::Boolean({})", b),
@@ -507,14 +519,14 @@ impl From<(&str, Option<Vec<Constraint>>)> for DeclarationElsewhere {
     }
 }
 
-impl Quote for DeclarationElsewhere {
-    fn quote(&self) -> String {
+impl asnr_traits::Declare for DeclarationElsewhere {
+    fn declare(&self) -> String {
         format!(
             "DeclarationElsewhere {{ identifier: \"{}\".into(), constraints: vec![{}] }}",
             self.identifier,
             self.constraints
                 .iter()
-                .map(|c| c.quote())
+                .map(|c| c.declare())
                 .collect::<Vec<String>>()
                 .join(", ")
         )
@@ -537,8 +549,8 @@ pub struct AsnTag {
     pub id: u64,
 }
 
-impl Quote for AsnTag {
-    fn quote(&self) -> String {
+impl asnr_traits::Declare for AsnTag {
+    fn declare(&self) -> String {
         format!(
             "AsnTag {{ tag_class: TagClass::{:?}, id: {} }}",
             self.tag_class, self.id

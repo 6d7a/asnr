@@ -11,14 +11,14 @@
 use nom::{
     branch::alt,
     combinator::{into, map, opt},
-    multi::{many0},
+    multi::many0,
     sequence::{pair, preceded, tuple},
     IResult,
 };
 
 use asnr_grammar::{
-    ASN1Type, ASN1Value, ModuleReference, ToplevelDeclaration, ToplevelTypeDeclaration,
-    ToplevelValueDeclaration,
+    ASN1Type, ASN1Value, ModuleReference, ToplevelDeclaration, ToplevelInformationDeclaration,
+    ToplevelTypeDeclaration, ToplevelValueDeclaration, ASSIGN,
 };
 
 use self::{
@@ -34,8 +34,9 @@ use self::{
     integer::*,
     module_reference::module_reference,
     null::*,
+    parameterization::parameterization,
     sequence::sequence,
-    sequence_of::*, parameterization::parameterization,
+    sequence_of::*,
 };
 
 mod bit_string;
@@ -62,10 +63,10 @@ pub fn asn_spec<'a>(
     pair(
         module_reference,
         many0(skip_ws(alt((
-            map(top_level_type_declaration, |m| ToplevelDeclaration::Type(m)),
-            map(top_level_information_object, |m| {
-                ToplevelDeclaration::Type(m)
+            map(top_level_information_declaration, |m| {
+                ToplevelDeclaration::Information(m)
             }),
+            map(top_level_type_declaration, |m| ToplevelDeclaration::Type(m)),
             map(top_level_value_declaration, |m| {
                 ToplevelDeclaration::Value(m)
             }),
@@ -84,11 +85,19 @@ pub fn top_level_type_declaration<'a>(input: &'a str) -> IResult<&'a str, Toplev
     )))(input)
 }
 
+pub fn top_level_information_declaration<'a>(
+    input: &'a str,
+) -> IResult<&'a str, ToplevelInformationDeclaration> {
+    skip_ws(alt((
+        top_level_information_object_declaration,
+        top_level_object_set_declaration,
+        top_level_object_class_declaration,
+    )))(input)
+}
 
 pub fn asn1_type<'a>(input: &'a str) -> IResult<&'a str, ASN1Type> {
     alt((
         null,
-        information_object_class,
         sequence_of,
         sequence,
         choice,
@@ -97,6 +106,9 @@ pub fn asn1_type<'a>(input: &'a str) -> IResult<&'a str, ASN1Type> {
         boolean,
         bit_string,
         character_string,
+        map(information_object_field_reference, |i| {
+            ASN1Type::InformationObjectFieldReference(i)
+        }),
         elsewhere_declared_type,
     ))(input)
 }
@@ -127,15 +139,6 @@ pub fn elsewhere_declared_type<'a>(input: &'a str) -> IResult<&'a str, ASN1Type>
     )(input)
 }
 
-fn top_level_information_object<'a>(input: &'a str) -> IResult<&'a str, ToplevelTypeDeclaration> {
-    into(tuple((
-        skip_ws(many0(comment)),
-        skip_ws(identifier),
-        skip_ws(identifier),
-        preceded(assignment, information_object),
-    )))(input)
-}
-
 fn top_level_value_declaration<'a>(input: &'a str) -> IResult<&'a str, ToplevelValueDeclaration> {
     into(tuple((
         skip_ws(many0(comment)),
@@ -145,12 +148,48 @@ fn top_level_value_declaration<'a>(input: &'a str) -> IResult<&'a str, ToplevelV
     )))(input)
 }
 
+fn top_level_information_object_declaration<'a>(
+    input: &'a str,
+) -> IResult<&'a str, ToplevelInformationDeclaration> {
+    into(tuple((
+        skip_ws(many0(comment)),
+        skip_ws(identifier),
+        skip_ws(uppercase_identifier),
+        preceded(assignment, information_object),
+    )))(input)
+}
+
+fn top_level_object_set_declaration<'a>(
+    input: &'a str,
+) -> IResult<&'a str, ToplevelInformationDeclaration> {
+    into(tuple((
+        skip_ws(many0(comment)),
+        skip_ws(identifier),
+        skip_ws(uppercase_identifier),
+        preceded(assignment, object_set),
+    )))(input)
+}
+
+fn top_level_object_class_declaration<'a>(
+    input: &'a str,
+) -> IResult<&'a str, ToplevelInformationDeclaration> {
+    into(tuple((
+        skip_ws(many0(comment)),
+        skip_ws(uppercase_identifier),
+        preceded(assignment, information_object_class),
+    )))(input)
+}
+
 #[cfg(test)]
 mod tests {
     use core::panic;
     use std::vec;
 
     use asnr_grammar::{subtyping::*, types::*, *};
+
+    use crate::parser::{
+        asn1_value, top_level_information_declaration, top_level_value_declaration,
+    };
 
     use super::top_level_type_declaration;
 
@@ -296,7 +335,7 @@ mod tests {
         assert_eq!(
             tld,
             ToplevelTypeDeclaration {
-              parameterization: None,
+                parameterization: None,
                 comments: " Comments go here".into(),
                 name: "EventZone".into(),
                 r#type: ASN1Type::ElsewhereDeclaredType(DeclarationElsewhere {
@@ -336,7 +375,7 @@ mod tests {
         assert_eq!(
             tld,
             ToplevelTypeDeclaration {
-              parameterization: None,
+                parameterization: None,
                 comments: "Comments".into(),
                 name: "InterferenceManagementZones".into(),
                 r#type: ASN1Type::SequenceOf(SequenceOf {
@@ -352,5 +391,57 @@ mod tests {
                 })
             }
         );
+    }
+
+    #[test]
+    fn parses_object_set_value() {
+        assert_eq!(
+            top_level_information_declaration(
+                r#"--comments
+        CpmContainers CPM-CONTAINER-ID-AND-TYPE ::= {
+        {OriginatingVehicleContainer IDENTIFIED BY originatingVehicleContainer} |
+        {PerceivedObjectContainer IDENTIFIED BY perceivedObjectContainer},
+        ...
+    }"#
+            )
+            .unwrap()
+            .1,
+            ToplevelInformationDeclaration {
+                comments: "comments".into(),
+                name: "CpmContainers".into(),
+                class: Some("CPM-CONTAINER-ID-AND-TYPE".into()),
+                value: ASN1Information::ObjectSet(ObjectSet {
+                    values: vec![
+                        ObjectSetValue::Inline(InformationObjectFields::CustomSyntax(vec![
+                            SyntaxApplication::TypeReference(ASN1Type::ElsewhereDeclaredType(
+                                DeclarationElsewhere {
+                                    identifier: "OriginatingVehicleContainer".into(),
+                                    constraints: vec![]
+                                }
+                            )),
+                            SyntaxApplication::Literal("IDENTIFIED".into()),
+                            SyntaxApplication::Literal("BY".into()),
+                            SyntaxApplication::ValueReference(ASN1Value::ElsewhereDeclaredValue(
+                                "originatingVehicleContainer".into()
+                            ))
+                        ])),
+                        ObjectSetValue::Inline(InformationObjectFields::CustomSyntax(vec![
+                            SyntaxApplication::TypeReference(ASN1Type::ElsewhereDeclaredType(
+                                DeclarationElsewhere {
+                                    identifier: "PerceivedObjectContainer".into(),
+                                    constraints: vec![]
+                                }
+                            )),
+                            SyntaxApplication::Literal("IDENTIFIED".into()),
+                            SyntaxApplication::Literal("BY".into()),
+                            SyntaxApplication::ValueReference(ASN1Value::ElsewhereDeclaredValue(
+                                "perceivedObjectContainer".into()
+                            ))
+                        ]))
+                    ],
+                    extensible: Some(2)
+                })
+            }
+        )
     }
 }

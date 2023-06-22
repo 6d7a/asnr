@@ -2,3 +2,4 @@
 *.asn
 /.vscode
 generated.rs
+test_asn1

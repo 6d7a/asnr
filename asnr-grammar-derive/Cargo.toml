@@ -1,0 +1,13 @@
+[package]
+name = "asnr-grammar-derive"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+proc-macro = true
+
+[dependencies]
+asnr-traits = { path = "../asnr-traits" }
+proc-macro2 = "1"
+quote = "1"
+syn = "2"

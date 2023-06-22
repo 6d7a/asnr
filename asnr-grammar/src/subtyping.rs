@@ -1,12 +1,6 @@
-use alloc::{
-    borrow::ToOwned,
-    format,
-    string::{String},
-    vec,
-    vec::Vec,
-};
+use alloc::{borrow::ToOwned, format, string::String, vec, vec::Vec};
 
-use crate::{Quote, ASN1Value};
+use crate::{types::ObjectSet, ASN1Value, Declare};
 
 #[derive(Debug, PartialEq)]
 pub struct OptionalMarker();
@@ -30,23 +24,27 @@ pub enum Constraint {
     ComponentConstraint(ComponentConstraint),
     Arithmetic(ArithmeticOperator),
     ArrayComponentConstraint(ComponentConstraint),
+    TableConstraint(TableConstraint),
     //CharacterConstraint(CharacterConstraint)
 }
 
-impl Quote for Constraint {
-    fn quote(&self) -> String {
+impl asnr_traits::Declare for Constraint {
+    fn declare(&self) -> String {
         match self {
-            Constraint::ValueConstraint(r) => format!("Constraint::ValueConstraint({})", r.quote()),
-            Constraint::SizeConstraint(r) => format!("Constraint::SizeConstraint({})", r.quote()),
+            Constraint::ValueConstraint(r) => format!("Constraint::ValueConstraint({})", r.declare()),
+            Constraint::SizeConstraint(r) => format!("Constraint::SizeConstraint({})", r.declare()),
             Constraint::ComponentConstraint(c) => {
-                format!("Constraint::ComponentConstraint({})", c.quote())
+                format!("Constraint::ComponentConstraint({})", c.declare())
             }
             Constraint::ArrayComponentConstraint(c) => {
-                format!("Constraint::ArrayComponentConstraint({})", c.quote())
+                format!("Constraint::ArrayComponentConstraint({})", c.declare())
             }
             Constraint::Arithmetic(o) => {
                 format!("Constraint::Arithmetic(ArithmeticOperator::{:?})", o)
             }
+            Constraint::TableConstraint(t) => {
+              format!("Constraint::TableConstraint({})", t.declare())
+          }
         }
     }
 }
@@ -73,14 +71,14 @@ pub struct ComponentConstraint {
     pub constraints: Vec<ConstrainedComponent>,
 }
 
-impl Quote for ComponentConstraint {
-    fn quote(&self) -> String {
+impl asnr_traits::Declare for ComponentConstraint {
+    fn declare(&self) -> String {
         format!(
             "ComponentConstraint {{ is_partial: {}, constraints: vec![{}] }}",
             self.is_partial,
             self.constraints
                 .iter()
-                .map(|c| c.quote())
+                .map(|c| c.declare())
                 .collect::<Vec<String>>()
                 .join(", ")
         )
@@ -123,14 +121,14 @@ pub struct ConstrainedComponent {
     pub presence: ComponentPresence,
 }
 
-impl Quote for ConstrainedComponent {
-    fn quote(&self) -> String {
+impl asnr_traits::Declare for ConstrainedComponent {
+    fn declare(&self) -> String {
         format!(
           "ConstrainedComponent {{ identifier: \"{}\".into(), constraints: vec![{}], presence: ComponentPresence::{:?} }}",
           self.identifier,
           self.constraints
               .iter()
-              .map(|c| c.quote())
+              .map(|c| c.declare())
               .collect::<Vec<String>>()
               .join(", "),
           self.presence
@@ -147,18 +145,16 @@ pub struct ValueConstraint {
     pub extensible: bool,
 }
 
-impl Quote for ValueConstraint {
-    fn quote(&self) -> String {
+impl asnr_traits::Declare for ValueConstraint {
+    fn declare(&self) -> String {
         format!(
             "ValueConstraint {{ min_value: {}, max_value: {}, extensible: {} }}",
-            self.min_value.as_ref()
-                .map_or("None".to_owned(), |m| "Some(".to_owned()
-                    + &m.quote()
-                    + ")"),
-            self.max_value.as_ref()
-                .map_or("None".to_owned(), |m| "Some(".to_owned()
-                    + &m.quote()
-                    + ")"),
+            self.min_value
+                .as_ref()
+                .map_or("None".to_owned(), |m| "Some(".to_owned() + &m.declare() + ")"),
+            self.max_value
+                .as_ref()
+                .map_or("None".to_owned(), |m| "Some(".to_owned() + &m.declare() + ")"),
             self.extensible
         )
     }
@@ -201,5 +197,62 @@ impl<'a> From<(ASN1Value, RangeSeperator, ASN1Value, ExtensionMarker)> for Value
             max_value: Some(value.2),
             extensible: true,
         }
+    }
+}
+
+/// Representation of a table constraint used for subtyping
+/// in ASN1 specifications
+/// _See: ITU-T X.682 (02/2021) 10_
+#[derive(Debug, Clone, PartialEq)]
+pub struct TableConstraint {
+    pub object_set: ObjectSet,
+    pub linked_fields: Vec<RelationalConstraint>,
+}
+
+impl asnr_traits::Declare for TableConstraint {
+    fn declare(&self) -> String {
+        format!(
+            "TableConstraint {{ object_set: {}, linked_fields: vec![{}] }}",
+            self.object_set.declare(),
+            self.linked_fields
+                .iter()
+                .map(|v| v.declare())
+                .collect::<Vec<String>>()
+                .join(", "),
+        )
+    }
+}
+
+impl From<(ObjectSet, Option<Vec<RelationalConstraint>>)> for TableConstraint {
+  fn from(value: (ObjectSet, Option<Vec<RelationalConstraint>>)) -> Self {
+      Self {
+          object_set: value.0,
+          linked_fields: value.1.unwrap_or(vec![]),
+      }
+  }
+}
+
+/// Representation of a table's relational constraint
+/// _See: ITU-T X.682 (02/2021) 10.7_
+#[derive(Debug, Clone, PartialEq)]
+pub struct RelationalConstraint {
+    pub field_name: String,
+    /// The level is null if the field is in the outermost object set of the declaration.
+    /// The level is 1-n counting from the innermost object set of the declaration
+    pub level: usize,
+}
+
+impl From<(usize, &str)> for RelationalConstraint {
+    fn from(value: (usize, &str)) -> Self {
+        Self { field_name: value.1.into(), level: value.0 }
+    }
+}
+
+impl asnr_traits::Declare for RelationalConstraint {
+    fn declare(&self) -> String {
+        format!(
+            "RelationalConstraint {{ field_name: \"{}\".into(), level: {} }}",
+            self.field_name, self.level
+        )
     }
 }

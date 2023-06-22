@@ -1,9 +1,11 @@
+use std::process::Termination;
+
 use nom::{
     branch::alt,
-    bytes::complete::tag,
+    bytes::complete::{is_not, tag},
     character::complete::{alphanumeric1, char, one_of},
-    combinator::{into, map, opt, recognize, value},
-    multi::{many0, many1},
+    combinator::{into, map, opt, peek, recognize, value},
+    multi::{many0, many1, separated_list0, separated_list1},
     sequence::{pair, preceded, terminated, tuple},
     IResult,
 };
@@ -13,31 +15,62 @@ use asnr_grammar::{types::*, *};
 use super::{
     asn1_type, asn1_value,
     common::{
-        default, in_braces, in_brackets, optional_comma,
-        optional_marker, skip_ws_and_comments, value_set,
-    },
+        default, extension_marker, identifier, in_braces, in_brackets, optional_comma,
+        optional_marker, skip_ws_and_comments, uppercase_identifier,
+    }, constraint::constraint,
 };
 
-pub fn information_object_class<'a>(input: &'a str) -> IResult<&'a str, ASN1Type> {
-    map(
-        preceded(
-            skip_ws_and_comments(tag(CLASS)),
-            pair(
-                in_braces(many0(terminated(
-                    skip_ws_and_comments(information_object_field),
-                    optional_comma,
-                ))),
-                opt(preceded(skip_ws_and_comments(tag(WITH_SYNTAX)), syntax)),
-            ),
+pub fn information_object_class<'a>(input: &'a str) -> IResult<&'a str, InformationObjectClass> {
+    into(preceded(
+        skip_ws_and_comments(tag(CLASS)),
+        pair(
+            in_braces(many0(terminated(
+                skip_ws_and_comments(information_object_field),
+                optional_comma,
+            ))),
+            opt(preceded(skip_ws_and_comments(tag(WITH_SYNTAX)), syntax)),
         ),
-        |m| ASN1Type::InformationObjectClass(m.into()),
-    )(input)
+    ))(input)
+}
+
+pub fn information_object_field_reference<'a>(input: &'a str) -> IResult<&'a str, InformationObjectFieldReference> {
+    into(tuple((
+        skip_ws_and_comments(uppercase_identifier),
+        many1(skip_ws_and_comments(preceded(
+            char(DOT),
+            skip_ws_and_comments(object_field_identifier),
+        ))),
+        constraint
+    )))(input)
 }
 
 pub fn information_object<'a>(input: &'a str) -> IResult<&'a str, InformationObjectFields> {
-    skip_ws_and_comments(in_braces(alt((
+    in_braces(alt((
         default_syntax_information_object,
         custom_syntax_information_object,
+    )))(input)
+}
+
+pub fn object_set<'a>(input: &'a str) -> IResult<&'a str, ObjectSet> {
+    into(in_braces(tuple((
+        separated_list0(
+            skip_ws_and_comments(alt((tag(PIPE), tag(UNION)))),
+            skip_ws_and_comments(alt((
+                into(information_object),
+                into(skip_ws_and_comments(identifier)),
+            ))),
+        ),
+        opt(skip_ws_and_comments(preceded(
+            char(COMMA),
+            extension_marker,
+        ))),
+        opt(separated_list1(
+            skip_ws_and_comments(alt((tag(PIPE), tag(UNION)))),
+            skip_ws_and_comments(alt((
+                into(information_object),
+                into(skip_ws_and_comments(identifier)),
+            ))),
+        )),
     ))))(input)
 }
 
@@ -48,9 +81,9 @@ fn custom_syntax_information_object<'a>(
         skip_ws_and_comments(many1(skip_ws_and_comments(alt((
             value(SyntaxApplication::Comma, char(COMMA)),
             map(syntax_literal, |m| SyntaxApplication::Literal(m.into())),
-            map(value_set, |m| SyntaxApplication::ObjectSetDeclaration(m)),
+            map(object_set, |m| SyntaxApplication::ObjectSetDeclaration(m)),
             map(asn1_type, |m| SyntaxApplication::TypeReference(m)),
-            map(asn1_value, |m| SyntaxApplication::ValueReference(m))
+            map(asn1_value, |m| SyntaxApplication::ValueReference(m)),
         ))))),
         |m| InformationObjectFields::CustomSyntax(m),
     )(input)
@@ -66,7 +99,7 @@ fn default_syntax_information_object<'a>(
                     single_value_field_id,
                     skip_ws_and_comments(asn1_value),
                 )),
-                into(pair(multiple_value_field_id, value_set)),
+                into(pair(multiple_value_field_id, object_set)),
                 into(pair(
                     multiple_value_field_id,
                     skip_ws_and_comments(asn1_type),
@@ -115,7 +148,7 @@ fn multiple_value_field_id<'a>(input: &'a str) -> IResult<&'a str, ObjectFieldId
 }
 
 fn syntax<'a>(input: &'a str) -> IResult<&'a str, Vec<SyntaxExpression>> {
-    skip_ws_and_comments(in_braces(many1(syntax_token_or_group_spec)))(input)
+    in_braces(many1(syntax_token_or_group_spec))(input)
 }
 
 fn syntax_token_or_group_spec<'a>(input: &'a str) -> IResult<&'a str, SyntaxExpression> {
@@ -126,9 +159,7 @@ fn syntax_token_or_group_spec<'a>(input: &'a str) -> IResult<&'a str, SyntaxExpr
 }
 
 fn syntax_optional_group<'a>(input: &'a str) -> IResult<&'a str, Vec<SyntaxExpression>> {
-    skip_ws_and_comments(in_brackets(skip_ws_and_comments(many1(
-        syntax_token_or_group_spec,
-    ))))(input)
+    in_brackets(skip_ws_and_comments(many1(syntax_token_or_group_spec)))(input)
 }
 
 fn syntax_token<'a>(input: &'a str) -> IResult<&'a str, SyntaxToken> {
@@ -140,20 +171,14 @@ fn syntax_token<'a>(input: &'a str) -> IResult<&'a str, SyntaxToken> {
 }
 
 fn syntax_literal<'a>(input: &'a str) -> IResult<&'a str, &'a str> {
-    recognize(pair(
-        one_of("ABCDEFGHIJKLMNOPQRSTUVWXYZ"),
-        many0(alt((
-            preceded(char('-'), one_of("ABCDEFGHIJKLMNOPQRSTUVWXYZ")),
-            one_of("ABCDEFGHIJKLMNOPQRSTUVWXYZ"),
-        ))),
-    ))(input)
+    uppercase_identifier(input)
 }
 
 #[cfg(test)]
 mod tests {
     use asnr_grammar::{types::*, *};
 
-    use crate::parser::information_object_class::information_object_class;
+    use crate::parser::information_object_class::{information_object_class, object_set};
 
     #[test]
     fn parses_information_object_class() {
@@ -169,7 +194,7 @@ mod tests {
             )
             .unwrap()
             .1,
-            ASN1Type::InformationObjectClass(InformationObjectClass {
+            InformationObjectClass {
                 syntax: None,
                 fields: vec![
                     InformationObjectClassField {
@@ -227,7 +252,32 @@ mod tests {
                         default: None
                     }
                 ]
-            })
+            }
+        )
+    }
+
+    #[test]
+    fn parses_simple_object_set() {
+        assert_eq!(
+            object_set(r#"{My-ops}"#).unwrap().1,
+            ObjectSet {
+                values: vec![ObjectSetValue::Reference("My-ops".into())],
+                extensible: None
+            }
+        )
+    }
+
+    #[test]
+    fn parses_extended_value_set() {
+        assert_eq!(
+            object_set(r#"{My-ops | Other-ops, ...}"#).unwrap().1,
+            ObjectSet {
+                values: vec![
+                    ObjectSetValue::Reference("My-ops".into()),
+                    ObjectSetValue::Reference("Other-ops".into())
+                ],
+                extensible: Some(2)
+            }
         )
     }
 }

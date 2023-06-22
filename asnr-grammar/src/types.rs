@@ -1,4 +1,4 @@
-use core::fmt::Debug;
+use core::{fmt::Debug};
 
 use alloc::{borrow::ToOwned, boxed::Box, string::ToString, vec};
 
@@ -12,20 +12,20 @@ pub struct Integer {
     pub distinguished_values: Option<Vec<DistinguishedValue>>,
 }
 
-impl Quote for Integer {
-    fn quote(&self) -> String {
+impl asnr_traits::Declare for Integer {
+    fn declare(&self) -> String {
         format!(
             "Integer {{ constraints: vec![{}], distinguished_values: {} }}",
             self.constraints
                 .iter()
-                .map(|c| c.quote())
+                .map(|c| c.declare())
                 .collect::<Vec<String>>()
                 .join(", "),
             self.distinguished_values
                 .as_ref()
                 .map_or("None".to_owned(), |c| "Some(vec![".to_owned()
                     + &c.iter()
-                        .map(|dv| dv.quote())
+                        .map(|dv| dv.declare())
                         .collect::<Vec<String>>()
                         .join(",")
                     + "])"),
@@ -103,20 +103,20 @@ impl From<(Option<Vec<DistinguishedValue>>, Option<ValueConstraint>)> for BitStr
     }
 }
 
-impl Quote for BitString {
-    fn quote(&self) -> String {
+impl asnr_traits::Declare for BitString {
+    fn declare(&self) -> String {
         format!(
             "BitString {{ constraints: vec![{}], distinguished_values: {} }}",
             self.constraints
                 .iter()
-                .map(|c| c.quote())
+                .map(|c| c.declare())
                 .collect::<Vec<String>>()
                 .join(", "),
             self.distinguished_values
                 .as_ref()
                 .map_or("None".to_owned(), |c| "Some(vec![".to_owned()
                     + &c.iter()
-                        .map(|dv| dv.quote())
+                        .map(|dv| dv.declare())
                         .collect::<Vec<String>>()
                         .join(",")
                     + "])"),
@@ -145,13 +145,13 @@ impl From<(&str, Option<ValueConstraint>)> for CharacterString {
     }
 }
 
-impl Quote for CharacterString {
-    fn quote(&self) -> String {
+impl asnr_traits::Declare for CharacterString {
+    fn declare(&self) -> String {
         format!(
             "CharacterString {{ constraints: vec![{}], r#type: CharacterStringType::{:?} }}",
             self.constraints
                 .iter()
-                .map(|c| c.quote())
+                .map(|c| c.declare())
                 .collect::<Vec<String>>()
                 .join(", "),
             self.r#type
@@ -167,16 +167,16 @@ pub struct SequenceOf {
     pub r#type: Box<ASN1Type>,
 }
 
-impl Quote for SequenceOf {
-    fn quote(&self) -> String {
+impl asnr_traits::Declare for SequenceOf {
+    fn declare(&self) -> String {
         format!(
             "SequenceOf {{ constraints: vec![{}], r#type: {} }}",
             self.constraints
                 .iter()
-                .map(|c| c.quote())
+                .map(|c| c.declare())
                 .collect::<Vec<String>>()
                 .join(", "),
-            String::from("Box::new(") + &self.r#type.quote() + ")",
+            String::from("Box::new(") + &self.r#type.declare() + ")",
         )
     }
 }
@@ -229,13 +229,13 @@ impl
     }
 }
 
-impl Quote for Sequence {
-    fn quote(&self) -> String {
+impl asnr_traits::Declare for Sequence {
+    fn declare(&self) -> String {
         format!(
             "Sequence {{ constraints: vec![{}], extensible: {}, members: vec![{}] }}",
             self.constraints
                 .iter()
-                .map(|c| c.quote())
+                .map(|c| c.declare())
                 .collect::<Vec<String>>()
                 .join(", "),
             self.extensible
@@ -243,7 +243,7 @@ impl Quote for Sequence {
                 .map_or("None".to_owned(), |d| format!("Some({})", d)),
             self.members
                 .iter()
-                .map(|m| m.quote())
+                .map(|m| m.declare())
                 .collect::<Vec<String>>()
                 .join(",")
         )
@@ -292,22 +292,22 @@ impl
     }
 }
 
-impl Quote for SequenceMember {
-    fn quote(&self) -> String {
+impl asnr_traits::Declare for SequenceMember {
+    fn declare(&self) -> String {
         format!(
           "SequenceMember {{ name: \"{}\".into(), tag: {}, is_optional: {}, r#type: {}, default_value: {}, constraints: vec![{}] }}",
           self.name,
           self.tag.as_ref().map_or(String::from("None"), |t| {
-            String::from("Some(") + &t.quote() + ")"
+            String::from("Some(") + &t.declare() + ")"
           }),
           self.is_optional,
-          self.r#type.quote(),
+          self.r#type.declare(),
           self.default_value.as_ref().map_or("None".to_string(), |d| "Some(".to_owned()
-          + &d.quote()
+          + &d.declare()
           + ")"),
           self.constraints
           .iter()
-          .map(|c| c.quote())
+          .map(|c| c.declare())
           .collect::<Vec<String>>()
           .join(", "),
       )
@@ -347,8 +347,8 @@ impl
     }
 }
 
-impl Quote for Choice {
-    fn quote(&self) -> String {
+impl asnr_traits::Declare for Choice {
+    fn declare(&self) -> String {
         format!(
             "Choice {{ extensible: {}, options: vec![{}], constraints: vec![{}] }}",
             self.extensible
@@ -356,12 +356,12 @@ impl Quote for Choice {
                 .map_or("None".to_owned(), |d| format!("Some({})", d)),
             self.options
                 .iter()
-                .map(|m| m.quote())
+                .map(|m| m.declare())
                 .collect::<Vec<String>>()
                 .join(","),
             self.constraints
                 .iter()
-                .map(|c| c.quote())
+                .map(|c| c.declare())
                 .collect::<Vec<String>>()
                 .join(", "),
         )
@@ -388,18 +388,18 @@ impl From<(&str, Option<AsnTag>, ASN1Type, Option<Vec<Constraint>>)> for ChoiceO
     }
 }
 
-impl Quote for ChoiceOption {
-    fn quote(&self) -> String {
+impl asnr_traits::Declare for ChoiceOption {
+    fn declare(&self) -> String {
         format!(
             "ChoiceOption {{ name: \"{}\".into(), tag: {}, r#type: {}, constraints: vec![{}] }}",
             self.name,
             self.tag.as_ref().map_or(String::from("None"), |t| {
-                String::from("Some(") + &t.quote() + ")"
+                String::from("Some(") + &t.declare() + ")"
             }),
-            self.r#type.quote(),
+            self.r#type.declare(),
             self.constraints
                 .iter()
-                .map(|c| c.quote())
+                .map(|c| c.declare())
                 .collect::<Vec<String>>()
                 .join(", "),
         )
@@ -415,13 +415,13 @@ pub struct Enumerated {
     pub constraints: Vec<Constraint>,
 }
 
-impl Quote for Enumerated {
-    fn quote(&self) -> String {
+impl asnr_traits::Declare for Enumerated {
+    fn declare(&self) -> String {
         format!(
             "Enumerated {{ members: vec![{}], extensible: {}, constraints: vec![{}] }}",
             self.members
                 .iter()
-                .map(|m| m.quote())
+                .map(|m| m.declare())
                 .collect::<Vec<String>>()
                 .join(","),
             self.extensible
@@ -429,7 +429,7 @@ impl Quote for Enumerated {
                 .map_or("None".to_owned(), |d| format!("Some({})", d)),
             self.constraints
                 .iter()
-                .map(|c| c.quote())
+                .map(|c| c.declare())
                 .collect::<Vec<String>>()
                 .join(", "),
         )
@@ -469,8 +469,8 @@ pub struct Enumeral {
     pub index: u64,
 }
 
-impl Quote for Enumeral {
-    fn quote(&self) -> String {
+impl asnr_traits::Declare for Enumeral {
+    fn declare(&self) -> String {
         format!(
             "Enumeral {{ name: \"{}\".into(), description: {}, index: {} }}",
             self.name,
@@ -492,8 +492,8 @@ pub struct DistinguishedValue {
     pub value: i128,
 }
 
-impl Quote for DistinguishedValue {
-    fn quote(&self) -> String {
+impl asnr_traits::Declare for DistinguishedValue {
+    fn declare(&self) -> String {
         format!(
             "DistinguishedValue {{ name: \"{}\".into(), value: {} }}",
             self.name, self.value
@@ -516,14 +516,14 @@ pub enum SyntaxExpression {
     Optional(Vec<SyntaxExpression>),
 }
 
-impl Quote for SyntaxExpression {
-    fn quote(&self) -> String {
+impl asnr_traits::Declare for SyntaxExpression {
+    fn declare(&self) -> String {
         match self {
-            SyntaxExpression::Required(r) => format!("SyntaxExpression::Required({})", r.quote()),
+            SyntaxExpression::Required(r) => format!("SyntaxExpression::Required({})", r.declare()),
             SyntaxExpression::Optional(o) => format!(
                 "SyntaxExpression::Optional(vec![{}])",
                 o.iter()
-                    .map(|s| s.quote())
+                    .map(|s| s.declare())
                     .collect::<Vec<String>>()
                     .join(", ")
             ),
@@ -533,11 +533,29 @@ impl Quote for SyntaxExpression {
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum SyntaxApplication {
-    ObjectSetDeclaration(ValueSet),
+    ObjectSetDeclaration(ObjectSet),
     ValueReference(ASN1Value),
     TypeReference(ASN1Type),
     Comma,
     Literal(String),
+}
+
+impl asnr_traits::Declare for SyntaxApplication {
+    fn declare(&self) -> String {
+        match self {
+            SyntaxApplication::ObjectSetDeclaration(o) => {
+                format!("SyntaxApplication::ObjectSetDeclaration({})", o.declare())
+            }
+            SyntaxApplication::ValueReference(v) => {
+                format!("SyntaxApplication::ValueReference({})", v.declare())
+            }
+            SyntaxApplication::TypeReference(t) => {
+                format!("SyntaxApplication::TypeReference({})", t.declare())
+            }
+            SyntaxApplication::Comma => "SyntaxApplication::Comma".into(),
+            SyntaxApplication::Literal(s) => format!("SyntaxApplication::Literal(\"{s}\".into())"),
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -547,12 +565,12 @@ pub enum SyntaxToken {
     Field(ObjectFieldIdentifier),
 }
 
-impl Quote for SyntaxToken {
-    fn quote(&self) -> String {
+impl asnr_traits::Declare for SyntaxToken {
+    fn declare(&self) -> String {
         match self {
             SyntaxToken::Literal(l) => format!("SyntaxToken::Literal(\"{l}\".into())"),
             SyntaxToken::Comma => "SyntaxToken::Comma".to_owned(),
-            SyntaxToken::Field(o) => format!("SyntaxToken::Field({})", o.quote()),
+            SyntaxToken::Field(o) => format!("SyntaxToken::Field({})", o.declare()),
         }
     }
 }
@@ -578,13 +596,13 @@ pub struct InformationObjectSyntax {
     pub expressions: Vec<SyntaxExpression>,
 }
 
-impl Quote for InformationObjectSyntax {
-    fn quote(&self) -> String {
+impl asnr_traits::Declare for InformationObjectSyntax {
+    fn declare(&self) -> String {
         format!(
             "InformationObjectSyntax {{ expressions: vec![{}] }}",
             self.expressions
                 .iter()
-                .map(|s| s.quote())
+                .map(|s| s.declare())
                 .collect::<Vec<String>>()
                 .join(", ")
         )
@@ -597,18 +615,19 @@ pub struct InformationObjectClass {
     pub syntax: Option<InformationObjectSyntax>,
 }
 
-impl Quote for InformationObjectClass {
-    fn quote(&self) -> String {
+impl asnr_traits::Declare for InformationObjectClass {
+    fn declare(&self) -> String {
         format!(
             "InformationObjectClass {{ fields: vec![{}], syntax: {} }}",
             self.fields
                 .iter()
-                .map(|f| f.quote())
+                .map(|f| f.declare())
                 .collect::<Vec<String>>()
                 .join(", "),
-            self.syntax.as_ref()
+            self.syntax
+                .as_ref()
                 .map_or("None".to_owned(), |d| String::from("Some(")
-                    + &d.quote()
+                    + &d.declare()
                     + ")")
         )
     }
@@ -644,13 +663,13 @@ pub struct InformationObjectClassField {
     pub is_unique: bool,
 }
 
-impl Quote for InformationObjectClassField {
-    fn quote(&self) -> String {
+impl asnr_traits::Declare for InformationObjectClassField {
+    fn declare(&self) -> String {
         format!("InformationObjectClassField {{ identifier: {}, r#type: {}, is_optional: {}, default: {}, is_unique: {} }}",
-        self.identifier.quote(),
-        self.r#type.as_ref().map_or("None".to_owned(), |t| String::from("Some(") + &t.quote() + ")" ),
+        self.identifier.declare(),
+        self.r#type.as_ref().map_or("None".to_owned(), |t| String::from("Some(") + &t.declare() + ")" ),
         self.is_optional,
-        self.default.as_ref().map_or("None".to_owned(), |d| String::from("Some(") + &d.quote() + ")" ),
+        self.default.as_ref().map_or("None".to_owned(), |d| String::from("Some(") + &d.declare() + ")" ),
         self.is_unique
       )
     }
@@ -690,8 +709,8 @@ pub enum ObjectFieldIdentifier {
     MultipleValue(String),
 }
 
-impl Quote for ObjectFieldIdentifier {
-    fn quote(&self) -> String {
+impl asnr_traits::Declare for ObjectFieldIdentifier {
+    fn declare(&self) -> String {
         match self {
             ObjectFieldIdentifier::SingleValue(s) => {
                 format!("ObjectFieldIdentifier::SingleValue(\"{s}\".into())")
@@ -718,35 +737,108 @@ pub struct InformationObject {
     pub fields: InformationObjectFields,
 }
 
+impl asnr_traits::Declare for InformationObject {
+    fn declare(&self) -> String {
+        format!(
+            "InformationObject {{ supertype: \"{}\".into(), fields: {} }}",
+            self.supertype,
+            self.fields.declare()
+        )
+    }
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub enum InformationObjectFields {
     DefaultSyntax(Vec<InformationObjectField>),
     CustomSyntax(Vec<SyntaxApplication>),
 }
 
+impl asnr_traits::Declare for InformationObjectFields {
+    fn declare(&self) -> String {
+        match self {
+            InformationObjectFields::DefaultSyntax(d) => format!(
+                "InformationObjectFields::DefaultSyntax(vec![{}])",
+                d.iter()
+                    .map(|s| s.declare())
+                    .collect::<Vec<String>>()
+                    .join(", ")
+            ),
+            InformationObjectFields::CustomSyntax(c) => format!(
+                "InformationObjectFields::CustomSyntax(vec![{}])",
+                c.iter()
+                    .map(|s| s.declare())
+                    .collect::<Vec<String>>()
+                    .join(", ")
+            ),
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq)]
-pub struct ValueSet {
-    pub values: Vec<ASN1Value>,
+pub enum ObjectSetValue {
+    Reference(String),
+    Inline(InformationObjectFields),
+}
+
+impl From<&str> for ObjectSetValue {
+    fn from(value: &str) -> Self {
+        Self::Reference(value.into())
+    }
+}
+
+impl From<InformationObjectFields> for ObjectSetValue {
+    fn from(value: InformationObjectFields) -> Self {
+        Self::Inline(value)
+    }
+}
+
+impl asnr_traits::Declare for ObjectSetValue {
+    fn declare(&self) -> String {
+        match self {
+            ObjectSetValue::Reference(r) => format!("ObjectSetValue::Reference(\"{r}\".into())"),
+            ObjectSetValue::Inline(i) => format!("ObjectSetValue::Inline({})", i.declare()),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct ObjectSet {
+    pub values: Vec<ObjectSetValue>,
     pub extensible: Option<usize>,
+}
+
+impl asnr_traits::Declare for ObjectSet {
+    fn declare(&self) -> String {
+        format!(
+            "ValueSet {{ values: vec![{}], extensible: {} }}",
+            self.values
+                .iter()
+                .map(|v| v.declare())
+                .collect::<Vec<String>>()
+                .join(", "),
+            self.extensible
+                .map_or("None".to_owned(), |e| format!("Some({e})"))
+        )
+    }
 }
 
 impl
     From<(
-        Vec<ASN1Value>,
+        Vec<ObjectSetValue>,
         Option<ExtensionMarker>,
-        Option<Vec<ASN1Value>>,
-    )> for ValueSet
+        Option<Vec<ObjectSetValue>>,
+    )> for ObjectSet
 {
     fn from(
         mut value: (
-            Vec<ASN1Value>,
+            Vec<ObjectSetValue>,
             Option<ExtensionMarker>,
-            Option<Vec<ASN1Value>>,
+            Option<Vec<ObjectSetValue>>,
         ),
     ) -> Self {
         let index_of_first_extension = value.0.len();
         value.0.append(&mut value.2.unwrap_or(vec![]));
-        ValueSet {
+        ObjectSet {
             values: value.0,
             extensible: value.1.map(|_| index_of_first_extension),
         }
@@ -760,10 +852,36 @@ pub enum InformationObjectField {
     ObjectSetField(ObjectSetField),
 }
 
+impl asnr_traits::Declare for InformationObjectField {
+    fn declare(&self) -> String {
+        match self {
+            InformationObjectField::TypeField(t) => {
+                format!("InformationObjectField::TypeField({})", t.declare())
+            }
+            InformationObjectField::FixedValueField(f) => {
+                format!("InformationObjectField::FixedValueField({})", f.declare())
+            }
+            InformationObjectField::ObjectSetField(o) => {
+                format!("InformationObjectField::ObjectSetField({})", o.declare())
+            }
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct FixedValueField {
     pub identifier: String,
     pub value: ASN1Value,
+}
+
+impl asnr_traits::Declare for FixedValueField {
+    fn declare(&self) -> String {
+        format!(
+            "FixedValueField {{ identifier: \"{}\".into(), value: {} }}",
+            self.identifier,
+            self.value.declare()
+        )
+    }
 }
 
 impl From<(ObjectFieldIdentifier, ASN1Value)> for InformationObjectField {
@@ -781,6 +899,16 @@ pub struct TypeField {
     pub r#type: ASN1Type,
 }
 
+impl asnr_traits::Declare for TypeField {
+    fn declare(&self) -> String {
+        format!(
+            "TypeField {{ identifier: \"{}\".into(), r#type: {} }}",
+            self.identifier,
+            self.r#type.declare()
+        )
+    }
+}
+
 impl From<(ObjectFieldIdentifier, ASN1Type)> for InformationObjectField {
     fn from(value: (ObjectFieldIdentifier, ASN1Type)) -> Self {
         Self::TypeField(TypeField {
@@ -793,11 +921,21 @@ impl From<(ObjectFieldIdentifier, ASN1Type)> for InformationObjectField {
 #[derive(Debug, Clone, PartialEq)]
 pub struct ObjectSetField {
     pub identifier: String,
-    pub value: ValueSet,
+    pub value: ObjectSet,
 }
 
-impl From<(ObjectFieldIdentifier, ValueSet)> for InformationObjectField {
-    fn from(value: (ObjectFieldIdentifier, ValueSet)) -> Self {
+impl asnr_traits::Declare for ObjectSetField {
+    fn declare(&self) -> String {
+        format!(
+            "ObjectSetField {{ identifier: \"{}\".into(), value: {} }}",
+            self.identifier,
+            self.value.declare()
+        )
+    }
+}
+
+impl From<(ObjectFieldIdentifier, ObjectSet)> for InformationObjectField {
+    fn from(value: (ObjectFieldIdentifier, ObjectSet)) -> Self {
         Self::ObjectSetField(ObjectSetField {
             identifier: value.0.identifier(),
             value: value.1,
@@ -808,10 +946,30 @@ impl From<(ObjectFieldIdentifier, ValueSet)> for InformationObjectField {
 #[derive(Debug, Clone, PartialEq)]
 pub struct InformationObjectFieldReference {
     pub class: String,
-    pub field_name: ObjectFieldIdentifier,
+    pub field_path: Vec<ObjectFieldIdentifier>,
+    pub constraints: Vec<Constraint>,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+impl asnr_traits::Declare for InformationObjectFieldReference {
+    fn declare(&self) -> String {
+        format!("InformationObjectFieldReference {{ class: \"{}\".into(), field_path: vec![{}], constraints: vec![{}] }}",
+      self.class,
+    self.field_path.iter().map(|f| f.declare()).collect::<Vec<String>>().join(", "),
+    self.constraints.iter().map(|c| c.declare()).collect::<Vec<String>>().join(", "))
+    }
+}
+
+impl From<(&str, Vec<ObjectFieldIdentifier>, Vec<Constraint>)> for InformationObjectFieldReference {
+    fn from(value: (&str, Vec<ObjectFieldIdentifier>, Vec<Constraint>)) -> Self {
+        Self {
+            class: value.0.into(),
+            field_path: value.1,
+            constraints: value.2,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Declare)]
 pub struct Parameterization {
     pub parameters: Vec<ParameterizationArgument>,
 }
@@ -830,7 +988,7 @@ impl From<Vec<(&str, &str)>> for Parameterization {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Declare)]
 pub struct ParameterizationArgument {
     pub r#type: String,
     pub name: String,

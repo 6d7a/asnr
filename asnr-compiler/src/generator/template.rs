@@ -384,6 +384,20 @@ pub trait {name} {{
 "#)
 }
 
+// pub fn information_object_set(
+//   comments: String,
+//   name: String,
+//   information_object_class_descriptor: String,
+// ) -> String {
+//   format!(r#"{comments}
+// pub enum {name} {{
+    
+// }}
+
+// impl {supertype} for {name};
+// "#)
+// }
+
 // pub fn information_object_template(
 //   comments: String,
 //   name: String,

@@ -1,11 +1,11 @@
 use nom::{
     branch::alt,
-    bytes::complete::{tag},
+    bytes::complete::{tag, is_not},
     character::complete::{
-        alpha1, alphanumeric1, char, i128, multispace0, multispace1, u64, one_of,
+        alpha1, alphanumeric1, char, i128, multispace0, multispace1, one_of, u64,
     },
-    combinator::{into, opt, recognize},
-    multi::{many0, separated_list1},
+    combinator::{into, opt, recognize, peek},
+    multi::{many0, separated_list0, separated_list1, many1},
     sequence::{delimited, pair, preceded, terminated, tuple},
     IResult,
 };
@@ -191,21 +191,20 @@ pub fn default<'a>(input: &'a str) -> IResult<&'a str, Option<ASN1Value>> {
     ))(input)
 }
 
-pub fn value_set<'a>(input: &'a str) -> IResult<&'a str, ValueSet> {
-    into(skip_ws_and_comments(in_braces(tuple((
-        separated_list1(
-            skip_ws_and_comments(alt((tag(PIPE), tag(UNION)))),
-            skip_ws_and_comments(asn1_value),
-        ),
-        opt(skip_ws_and_comments(preceded(
-            char(COMMA),
-            extension_marker,
-        ))),
-        opt(separated_list1(
-            skip_ws_and_comments(alt((tag(PIPE), tag(UNION)))),
-            skip_ws_and_comments(asn1_value),
-        )),
-    )))))(input)
+pub fn uppercase_identifier<'a>(input: &'a str) -> IResult<&'a str, &'a str> {
+  alt((
+      recognize(pair(
+          one_of("ABCDEFGHIJKLMNOPQRSTUVWXYZ"),
+          many1(alt((
+              preceded(char('-'), one_of("ABCDEFGHIJKLMNOPQRSTUVWXYZ")),
+              one_of("ABCDEFGHIJKLMNOPQRSTUVWXYZ"),
+          ))),
+      )),
+      terminated(
+          recognize(one_of("ABCDEFGHIJKLMNOPQRSTUVWXYZ")),
+          peek(is_not("abcdefghijklmnopqrstuvwxyz-")),
+      ),
+  ))(input)
 }
 
 #[cfg(test)]
@@ -392,4 +391,4 @@ and one */"#
             ]
         )
     }
-}
+  }

@@ -29,10 +29,10 @@ use super::common::{identifier, in_braces, in_parentheses, skip_ws, skip_ws_and_
 pub fn object_identifier<'a>(input: &'a str) -> IResult<&'a str, ObjectIdentifier> {
     into(skip_ws_and_comments(preceded(
         opt(tag(OBJECT_IDENTIFIER)),
-        skip_ws_and_comments(in_braces(
+        in_braces(
           many1(skip_ws(object_identifier_arc))
         )),
-    )))(input)
+    ))(input)
 }
 
 fn object_identifier_arc<'a>(input: &'a str) -> IResult<&'a str, ObjectIdentifierArc> {
