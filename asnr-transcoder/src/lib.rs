@@ -12,6 +12,8 @@ pub mod error;
 //#[cfg(feature = "uper")]
 pub mod uper;
 
+use core::any::Any;
+
 use alloc::{string::String, vec::Vec};
 use asnr_grammar::{types::*, ASN1Type};
 use error::DecodingError;
@@ -47,6 +49,16 @@ pub trait DecoderForIndex {
     where
         D: Decoder,
         Self: Sized;
+}
+
+pub trait DecoderForKey<T> {
+  fn decoder_for_key<'a, D>(
+      key: T,
+  ) -> Result<fn(&D, &'a [u8]) -> IResult<&'a [u8], Self>, DecodingError>
+  where
+      D: Decoder,
+      T: PartialEq,
+      Self: Sized;
 }
 
 pub trait Decoder {

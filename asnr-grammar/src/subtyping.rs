@@ -1,6 +1,6 @@
 use alloc::{borrow::ToOwned, format, string::String, vec, vec::Vec};
 
-use crate::{types::ObjectSet, ASN1Value, Declare};
+use crate::{ASN1Value, Declare, information_object::ObjectSet};
 
 #[derive(Debug, PartialEq)]
 pub struct OptionalMarker();
@@ -234,7 +234,7 @@ impl From<(ObjectSet, Option<Vec<RelationalConstraint>>)> for TableConstraint {
 
 /// Representation of a table's relational constraint
 /// _See: ITU-T X.682 (02/2021) 10.7_
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Declare)]
 pub struct RelationalConstraint {
     pub field_name: String,
     /// The level is null if the field is in the outermost object set of the declaration.
@@ -245,14 +245,5 @@ pub struct RelationalConstraint {
 impl From<(usize, &str)> for RelationalConstraint {
     fn from(value: (usize, &str)) -> Self {
         Self { field_name: value.1.into(), level: value.0 }
-    }
-}
-
-impl asnr_traits::Declare for RelationalConstraint {
-    fn declare(&self) -> String {
-        format!(
-            "RelationalConstraint {{ field_name: \"{}\".into(), level: {} }}",
-            self.field_name, self.level
-        )
     }
 }

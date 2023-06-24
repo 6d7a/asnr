@@ -190,7 +190,7 @@ fn relational_constraint<'a>(input: &'a str) -> IResult<&'a str, RelationalConst
 
 #[cfg(test)]
 mod tests {
-    use asnr_grammar::{subtyping::*, types::*, *};
+    use asnr_grammar::{subtyping::*, types::*, information_object::*, *};
 
     use crate::parser::constraint::{component_constraint, constraint, simple_value_constraint};
 

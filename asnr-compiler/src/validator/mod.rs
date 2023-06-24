@@ -7,9 +7,76 @@
 //! constraints and value definitions.
 pub(crate) mod error;
 
-use asnr_grammar::{subtyping::*, types::*, *};
+use std::{collections::HashMap, error::Error};
+
+use asnr_grammar::{
+    information_object::{ASN1Information, ClassLink, InformationObjectClass},
+    subtyping::*,
+    types::*,
+    *,
+};
 
 use self::error::{ValidatorError, ValidatorErrorType};
+
+pub struct Validator {
+    tlds: Vec<ToplevelDeclaration>,
+}
+
+impl Validator {
+    pub fn new(tlds: Vec<ToplevelDeclaration>) -> Validator {
+        Self { tlds }
+    }
+
+    fn link(mut self) -> Result<Self, ValidatorError> {
+        let class_clones = self
+            .tlds
+            .iter()
+            .filter_map(|tld| match tld {
+                ToplevelDeclaration::Information(i) => match &i.value {
+                    ASN1Information::ObjectClass(c) => Some((i.name.clone(), c.clone())),
+                    _ => None,
+                },
+                _ => None,
+            })
+            .collect::<HashMap<String, InformationObjectClass>>();
+        'io_link: while let Some(ToplevelDeclaration::Information(info)) =
+            self.tlds.iter_mut().next()
+        {
+            match &info.value {
+                ASN1Information::ObjectClass(_) => (),
+                _ => {
+                    let class_name = match &info.class {
+                        Some(ClassLink::ByName(n)) => n.clone(),
+                        Some(ClassLink::ByReference(_)) => continue 'io_link,
+                        None => unreachable!(),
+                    };
+                    let class_copy = class_clones.get(class_name.as_str()).ok_or(ValidatorError { data_element: Some(info.name.clone()), details: format!("Linker Error: Cannot find Information Object Class \"{class_name}\" in parsed sources!"), kind: ValidatorErrorType::MissingDependencyError })?.clone();
+                    info.class = Some(ClassLink::ByReference(class_copy.clone()))
+                }
+            }
+        }
+        Ok(self)
+    }
+
+    pub fn validate(
+        mut self,
+    ) -> Result<(Vec<ToplevelDeclaration>, Vec<Box<dyn Error>>), Box<dyn Error>> {
+        self = self.link()?;
+        Ok(self.tlds.into_iter().fold(
+            (
+                Vec::<ToplevelDeclaration>::new(),
+                Vec::<Box<dyn Error>>::new(),
+            ),
+            |(mut tlds, mut errors), tld| {
+                match tld.validate() {
+                    Ok(_) => tlds.push(tld),
+                    Err(e) => errors.push(Box::new(e)),
+                }
+                (tlds, errors)
+            },
+        ))
+    }
+}
 
 pub trait Validate {
     fn validate(&self) -> Result<(), ValidatorError>;

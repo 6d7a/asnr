@@ -1,23 +1,22 @@
-use std::process::Termination;
-
 use nom::{
     branch::alt,
-    bytes::complete::{is_not, tag},
+    bytes::complete::tag,
     character::complete::{alphanumeric1, char, one_of},
-    combinator::{into, map, opt, peek, recognize, value},
+    combinator::{into, map, opt, recognize, value},
     multi::{many0, many1, separated_list0, separated_list1},
     sequence::{pair, preceded, terminated, tuple},
     IResult,
 };
 
-use asnr_grammar::{types::*, *};
+use asnr_grammar::{information_object::*, *};
 
 use super::{
     asn1_type, asn1_value,
     common::{
         default, extension_marker, identifier, in_braces, in_brackets, optional_comma,
         optional_marker, skip_ws_and_comments, uppercase_identifier,
-    }, constraint::constraint,
+    },
+    constraint::constraint,
 };
 
 pub fn information_object_class<'a>(input: &'a str) -> IResult<&'a str, InformationObjectClass> {
@@ -33,14 +32,16 @@ pub fn information_object_class<'a>(input: &'a str) -> IResult<&'a str, Informat
     ))(input)
 }
 
-pub fn information_object_field_reference<'a>(input: &'a str) -> IResult<&'a str, InformationObjectFieldReference> {
+pub fn information_object_field_reference<'a>(
+    input: &'a str,
+) -> IResult<&'a str, InformationObjectFieldReference> {
     into(tuple((
         skip_ws_and_comments(uppercase_identifier),
         many1(skip_ws_and_comments(preceded(
             char(DOT),
             skip_ws_and_comments(object_field_identifier),
         ))),
-        constraint
+        constraint,
     )))(input)
 }
 
@@ -176,7 +177,7 @@ fn syntax_literal<'a>(input: &'a str) -> IResult<&'a str, &'a str> {
 
 #[cfg(test)]
 mod tests {
-    use asnr_grammar::{types::*, *};
+    use asnr_grammar::{information_object::*, *, types::*};
 
     use crate::parser::information_object_class::{information_object_class, object_set};
 

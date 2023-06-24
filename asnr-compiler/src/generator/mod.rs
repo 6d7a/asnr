@@ -5,7 +5,7 @@
 
 use std::ffi::OsStr;
 
-use asnr_grammar::{ASN1Type, ToplevelDeclaration};
+use asnr_grammar::{*, information_object::*};
 
 use self::{
     builder::{
@@ -53,16 +53,16 @@ pub fn generate<'a>(
             _ => Ok("".into()),
         },
         ToplevelDeclaration::Value(v) => match v.value {
-            asnr_grammar::ASN1Value::Null => generate_null_value(v),
-            asnr_grammar::ASN1Value::Boolean(_) => todo!(),
-            asnr_grammar::ASN1Value::Integer(_) => generate_integer_value(v),
-            asnr_grammar::ASN1Value::String(_) => todo!(),
-            asnr_grammar::ASN1Value::BitString(_) => todo!(),
-            asnr_grammar::ASN1Value::EnumeratedValue(_) => todo!(),
-            asnr_grammar::ASN1Value::ElsewhereDeclaredValue(_) => todo!(),
+            ASN1Value::Null => generate_null_value(v),
+            ASN1Value::Boolean(_) => todo!(),
+            ASN1Value::Integer(_) => generate_integer_value(v),
+            ASN1Value::String(_) => todo!(),
+            ASN1Value::BitString(_) => todo!(),
+            ASN1Value::EnumeratedValue(_) => todo!(),
+            ASN1Value::ElsewhereDeclaredValue(_) => todo!(),
         },
         ToplevelDeclaration::Information(i) => match i.value {
-            asnr_grammar::ASN1Information::ObjectClass(_) => {
+            ASN1Information::ObjectClass(_) => {
                 generate_information_object_class(i, custom_derive)
             }
             _ => Ok("".into()),

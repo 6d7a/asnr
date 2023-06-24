@@ -1,4 +1,4 @@
-use asnr_grammar::*;
+use asnr_grammar::{*, information_object::*};
 use asnr_traits::*;
 
 use super::{

@@ -11,15 +11,12 @@
 use nom::{
     branch::alt,
     combinator::{into, map, opt},
-    multi::many0,
-    sequence::{pair, preceded, tuple},
-    IResult,
+    multi::{many0, many1},
+    sequence::{pair, preceded, tuple, terminated},
+    IResult, bytes::complete::tag,
 };
 
-use asnr_grammar::{
-    ASN1Type, ASN1Value, ModuleReference, ToplevelDeclaration, ToplevelInformationDeclaration,
-    ToplevelTypeDeclaration, ToplevelValueDeclaration, ASSIGN,
-};
+use asnr_grammar::{information_object::*, *};
 
 use self::{
     bit_string::{bit_string, bit_string_value},
@@ -59,19 +56,22 @@ mod util;
 
 pub fn asn_spec<'a>(
     input: &'a str,
-) -> Result<(ModuleReference, Vec<ToplevelDeclaration>), ParserError> {
-    pair(
+) -> Result<Vec<(ModuleReference, Vec<ToplevelDeclaration>)>, ParserError> {
+    many1(pair(
         module_reference,
-        many0(skip_ws(alt((
-            map(top_level_information_declaration, |m| {
-                ToplevelDeclaration::Information(m)
-            }),
-            map(top_level_type_declaration, |m| ToplevelDeclaration::Type(m)),
-            map(top_level_value_declaration, |m| {
-                ToplevelDeclaration::Value(m)
-            }),
-        )))),
-    )(input)
+        terminated(
+            many0(skip_ws(alt((
+                map(top_level_information_declaration, |m| {
+                    ToplevelDeclaration::Information(m)
+                }),
+                map(top_level_type_declaration, |m| ToplevelDeclaration::Type(m)),
+                map(top_level_value_declaration, |m| {
+                    ToplevelDeclaration::Value(m)
+                }),
+            )))),
+            skip_ws_and_comments(tag(END)),
+        ),
+    ))(input)
     .map(|(_, res)| res)
     .map_err(|e| e.into())
 }
@@ -185,11 +185,9 @@ mod tests {
     use core::panic;
     use std::vec;
 
-    use asnr_grammar::{subtyping::*, types::*, *};
+    use asnr_grammar::{information_object::*, subtyping::*, types::*, *};
 
-    use crate::parser::{
-        asn1_value, top_level_information_declaration, top_level_value_declaration,
-    };
+    use crate::parser::top_level_information_declaration;
 
     use super::top_level_type_declaration;
 
@@ -409,7 +407,7 @@ mod tests {
             ToplevelInformationDeclaration {
                 comments: "comments".into(),
                 name: "CpmContainers".into(),
-                class: Some("CPM-CONTAINER-ID-AND-TYPE".into()),
+                class: Some(ClassLink::ByName("CPM-CONTAINER-ID-AND-TYPE".into())),
                 value: ASN1Information::ObjectSet(ObjectSet {
                     values: vec![
                         ObjectSetValue::Inline(InformationObjectFields::CustomSyntax(vec![

@@ -40,10 +40,10 @@ use std::{
     process::{Command, Stdio},
 };
 
-use asnr_grammar::{ToplevelDeclaration};
-use generator::{generate, template::RUST_IMPORTS_TEMPLATE, spec_section};
+use asnr_grammar::ToplevelDeclaration;
+use generator::{generate, spec_section, template::RUST_IMPORTS_TEMPLATE};
 use parser::asn_spec;
-use validator::Validate;
+use validator::{Validate, Validator};
 
 /// The ASNR compiler
 #[derive(Debug, PartialEq)]
@@ -119,39 +119,31 @@ impl AsnrCompiler {
     pub fn compile(self) -> Result<Vec<Box<dyn Error>>, Box<dyn Error>> {
         let mut result = String::from(RUST_IMPORTS_TEMPLATE);
         let mut warnings = Vec::<Box<dyn Error>>::new();
+        let mut modules: Vec<ToplevelDeclaration> = vec![];
         for src in self.sources {
-          let file_name = &spec_section(src.file_name());
-          let (_header, toplevel_declarations) = asn_spec(&read_to_string(src)?)?;
-            let (valid_tlds, mut validator_errors) = toplevel_declarations.into_iter().fold(
-                (
-                    Vec::<ToplevelDeclaration>::new(),
-                    Vec::<Box<dyn Error>>::new(),
-                ),
-                |(mut tlds, mut errors), tld| {
-                    match tld.validate() {
-                        Ok(_) => tlds.push(tld),
-                        Err(e) => errors.push(Box::new(e)),
-                    }
-                    (tlds, errors)
-                },
+            modules.append(
+                &mut asn_spec(&read_to_string(src)?)?
+                    .into_iter()
+                    .flat_map(|(_, tld)| tld)
+                    .collect(),
             );
-            let (generated, mut generator_errors) = valid_tlds.into_iter().fold(
-                (String::new(), Vec::<Box<dyn Error>>::new()),
-                |(mut rust, mut errors), tld| {
-                    match generate(tld, None) {
-                        Ok(r) => {
-                            rust = rust + &r + "\n";
-                        }
-                        Err(e) => errors.push(Box::new(e)),
-                    }
-                    (rust, errors)
-                },
-            );
-            result += file_name;
-            result += &generated;
-            warnings.append(&mut validator_errors);
-            warnings.append(&mut generator_errors);
         }
+        let (valid_tlds, mut validator_errors) = Validator::new(modules).validate()?;
+        let (generated, mut generator_errors) = valid_tlds.into_iter().fold(
+            (String::new(), Vec::<Box<dyn Error>>::new()),
+            |(mut rust, mut errors), tld| {
+                match generate(tld, None) {
+                    Ok(r) => {
+                        rust = rust + &r + "\n";
+                    }
+                    Err(e) => errors.push(Box::new(e)),
+                }
+                (rust, errors)
+            },
+        );
+        result += &generated;
+        warnings.append(&mut validator_errors);
+        warnings.append(&mut generator_errors);
 
         result = format_bindings(&result).unwrap_or(result);
 
@@ -205,17 +197,14 @@ fn format_bindings(bindings: &String) -> Result<String, Box<dyn Error>> {
         Ok(bindings) => match status.code() {
             Some(0) => Ok(bindings),
             Some(2) => Err(Box::new(io::Error::new(
-                    io::ErrorKind::Other,
-                    "Rustfmt parsing errors.".to_string(),
-                )),
-            ),
+                io::ErrorKind::Other,
+                "Rustfmt parsing errors.".to_string(),
+            ))),
             Some(3) => Ok(bindings),
-            _ => Err(
-                Box::new(io::Error::new(
-                    io::ErrorKind::Other,
-                    "Internal rustfmt error".to_string(),
-                )),
-            ),
+            _ => Err(Box::new(io::Error::new(
+                io::ErrorKind::Other,
+                "Internal rustfmt error".to_string(),
+            ))),
         },
         _ => Ok(bindings.into()),
     }
@@ -233,10 +222,14 @@ mod tests {
             "{:#?}",
             Asnr::compiler()
                 .add_asn_source(PathBuf::from("test_asn1/ETSI-ITS-CDD.asn"))
-                .add_asn_source(PathBuf::from("test_asn1/CPM-OriginatingStationContainers.asn"))
+                .add_asn_source(PathBuf::from(
+                    "test_asn1/CPM-OriginatingStationContainers.asn"
+                ))
                 .add_asn_source(PathBuf::from("test_asn1/CPM-PerceivedObjectContainer.asn"))
                 .add_asn_source(PathBuf::from("test_asn1/CPM-PerceptionRegionContainer.asn"))
-                .add_asn_source(PathBuf::from("test_asn1/CPM-SensorInformationContainer.asn"))
+                .add_asn_source(PathBuf::from(
+                    "test_asn1/CPM-SensorInformationContainer.asn"
+                ))
                 .add_asn_source(PathBuf::from("test_asn1/CPM-PDU-Descriptions.asn"))
                 .set_output_path(PathBuf::from("./test_asn1/generated.rs"))
                 .compile()

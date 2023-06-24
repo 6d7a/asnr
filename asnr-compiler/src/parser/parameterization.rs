@@ -6,7 +6,7 @@ use nom::{
     IResult,
 };
 
-use asnr_grammar::{types::*, *};
+use asnr_grammar::{*, parameterization::*};
 
 use super::common::{identifier, in_braces, skip_ws_and_comments};
 

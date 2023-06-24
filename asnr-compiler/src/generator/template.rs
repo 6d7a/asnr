@@ -1,6 +1,4 @@
-
-
-use asnr_grammar::ASN1Value;
+use asnr_grammar::{information_object::*, *};
 
 use crate::generator::util::int_type_token;
 
@@ -375,39 +373,75 @@ pub fn information_object_class_template(
     name: String,
     information_object_class_descriptor: String,
 ) -> String {
-    format!(r#"{comments}
+    format!(
+        r#"{comments}
 pub trait {name} {{
   fn descriptor() -> InformationObjectClass {{
     {information_object_class_descriptor}
   }}
 }}
-"#)
+"#
+    )
 }
 
-// pub fn information_object_set(
-//   comments: String,
-//   name: String,
-//   information_object_class_descriptor: String,
-// ) -> String {
-//   format!(r#"{comments}
-// pub enum {name} {{
-    
-// }}
+pub fn information_object_set_template(
+    comments: String,
+    name: String,
+    options: String,
+    unknown_extension: String,
+    key_type: String,
+    for_key_branches: String,
+    for_key_branch_extension: String,
+) -> String {
+    format!(
+        r#"{comments}
+pub enum {name} {{
+  {options}{unknown_extension}
+}}
 
-// impl {supertype} for {name};
-// "#)
-// }
+impl DecoderForKey<{key_type}> for {name} {{
+  fn decoder_for_key<'a, D>(
+    key: {key_type},
+  ) -> Result<fn(&D, &'a [u8]) -> IResult<&'a [u8], Self>, DecodingError>
+  where
+    D: Decoder,
+    T: PartialEq,
+    Self: Sized, 
+  {{
+    match {key_type} {{
+      {for_key_branches}{for_key_branch_extension}
+    }}
+  }}
+}}
+"#
+    )
+}
 
-// pub fn information_object_template(
-//   comments: String,
-//   name: String,
-//   information_object_class_descriptor: String,
-// ) -> String {
-//   format!(r#"{comments}
-// pub struct {name} {{
+pub fn generate_information_object_set<'a>(
+    tld: ToplevelInformationDeclaration,
+    custom_derive: Option<&'a str>,
+) -> Result<String, String> {
+    if let ASN1Information::ObjectSet(o) = &tld.value {
+        let key = match tld.class {
+            Some(ClassLink::ByReference(ref c)) => c
+                .fields
+                .iter()
+                .find_map(|f| f.is_unique.then(|| f.identifier.clone()))
+                .ok_or("err")?,
+            _ => return Err("".into()),
+        };
+        let options = o.values.iter().map(|v| {
+            match v {
+                ObjectSetValue::Reference(_) => todo!(),
+                // basically, an information object specifies a sequence implementing a class. So we sould treat information objects like sequences
+                ObjectSetValue::Inline(InformationObjectFields::CustomSyntax(s)) => {
+                  todo!()
+                }
+                ObjectSetValue::Inline(InformationObjectFields::DefaultSyntax(s)) => {
 
-// }}
-
-// impl {supertype} for {name};
-// "#)
-// }
+                }
+            }
+        });
+    }
+    Ok("".into())
+}

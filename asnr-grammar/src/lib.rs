@@ -13,6 +13,8 @@ extern crate asnr_grammar_derive;
 
 use asnr_traits::Declare;
 
+pub mod information_object;
+pub mod parameterization;
 pub mod subtyping;
 pub mod types;
 
@@ -23,6 +25,8 @@ use alloc::{
   vec,
   vec::Vec,
 };
+use information_object::{ToplevelInformationDeclaration, InformationObjectFieldReference};
+use parameterization::Parameterization;
 use subtyping::Constraint;
 use types::*;
 
@@ -298,50 +302,6 @@ impl From<(Vec<&str>, &str, &str, ASN1Value)> for ToplevelValueDeclaration {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct ToplevelInformationDeclaration {
-    pub comments: String,
-    pub name: String,
-    pub class: Option<String>,
-    pub value: ASN1Information,
-}
-
-impl From<(Vec<&str>, &str, &str, InformationObjectFields)> for ToplevelInformationDeclaration {
-    fn from(value: (Vec<&str>, &str, &str, InformationObjectFields)) -> Self {
-        Self {
-            comments: value.0.join("\n"),
-            name: value.1.into(),
-            class: Some(value.2.into()),
-            value: ASN1Information::Object(InformationObject {
-                supertype: value.2.into(),
-                fields: value.3,
-            }),
-        }
-    }
-}
-
-impl From<(Vec<&str>, &str, &str, ObjectSet)> for ToplevelInformationDeclaration {
-    fn from(value: (Vec<&str>, &str, &str, ObjectSet)) -> Self {
-        Self {
-            comments: value.0.join("\n"),
-            name: value.1.into(),
-            class: Some(value.2.into()),
-            value: ASN1Information::ObjectSet(value.3),
-        }
-    }
-}
-
-impl From<(Vec<&str>, &str, InformationObjectClass)> for ToplevelInformationDeclaration {
-    fn from(value: (Vec<&str>, &str, InformationObjectClass)) -> Self {
-        Self {
-            comments: value.0.join("\n"),
-            name: value.1.into(),
-            class: None,
-            value: ASN1Information::ObjectClass(value.2),
-        }
-    }
-}
-
-#[derive(Debug, Clone, PartialEq)]
 pub struct ToplevelTypeDeclaration {
     pub comments: String,
     pub name: String,
@@ -435,14 +395,6 @@ impl asnr_traits::Declare for ASN1Type {
             ASN1Type::InformationObjectFieldReference(iofr) => format!("ASN1Type::InformationObjectFieldReference({})", iofr.declare()),
         }
     }
-}
-
-/// The possible types of an ASN1 information object.
-#[derive(Debug, Clone, PartialEq)]
-pub enum ASN1Information {
-    ObjectClass(InformationObjectClass),
-    ObjectSet(ObjectSet),
-    Object(InformationObject),
 }
 
 /// The possible types of an ASN1 value.
