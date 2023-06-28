@@ -21,26 +21,12 @@ use super::{
 pub fn constraint<'a>(input: &'a str) -> IResult<&'a str, Vec<Constraint>> {
     alt((
         many1(single_constraint),
-        map(
-            in_parentheses(pair(
-                single_constraint,
-                many1(pair(arithmetic_operator, single_constraint)),
-            )),
-            |(f, ac)| {
-                let mut first = vec![f];
-                for (a, c) in ac {
-                    first.push(a);
-                    first.push(c);
-                }
-                first
-            },
-        ),
-        composed_value_constraint,
     ))(input)
 }
 
 pub fn single_constraint<'a>(input: &'a str) -> IResult<&'a str, Constraint> {
     skip_ws_and_comments(alt((
+        map(composite_constraint, |c| Constraint::CompositeConstraint(c)),
         map(size_constraint, |c| Constraint::SizeConstraint(c)),
         map(table_constraint, |t| Constraint::TableConstraint(t)),
         map(simple_value_constraint, |v| Constraint::ValueConstraint(v)),
@@ -51,23 +37,23 @@ pub fn single_constraint<'a>(input: &'a str) -> IResult<&'a str, Constraint> {
     )))(input)
 }
 
-pub fn arithmetic_operator<'a>(input: &'a str) -> IResult<&'a str, Constraint> {
+pub fn arithmetic_operator<'a>(input: &'a str) -> IResult<&'a str, SetOperation> {
     skip_ws_and_comments(alt((
         value(
-            Constraint::Arithmetic(ArithmeticOperator::Intersection),
+            SetOperation::Intersection,
             tag(INTERSECTION),
         ),
         value(
-            Constraint::Arithmetic(ArithmeticOperator::Intersection),
+            SetOperation::Intersection,
             tag(CARET),
         ),
         value(
-            Constraint::Arithmetic(ArithmeticOperator::Union),
+            SetOperation::Union,
             tag(UNION),
         ),
-        value(Constraint::Arithmetic(ArithmeticOperator::Union), tag(PIPE)),
+        value(SetOperation::Union, tag(PIPE)),
         value(
-            Constraint::Arithmetic(ArithmeticOperator::Except),
+            SetOperation::Except,
             tag(EXCEPT),
         ),
     )))(input)
@@ -93,20 +79,13 @@ fn value_constraint<'a>(input: &'a str) -> IResult<&'a str, ValueConstraint> {
     ))(input)
 }
 
-pub fn composed_value_constraint<'a>(input: &'a str) -> IResult<&'a str, Vec<Constraint>> {
-    map(
-        in_parentheses(pair(
-            value_constraint,
-            many1(pair(arithmetic_operator, value_constraint)),
-        )),
-        |(f, ac)| {
-            let mut first = vec![Constraint::ValueConstraint(f)];
-            for (a, c) in ac {
-                first.push(a);
-                first.push(Constraint::ValueConstraint(c));
-            }
-            first
-        },
+pub fn composite_constraint<'a>(input: &'a str) -> IResult<&'a str, CompositeConstraint> {
+    into(
+        opt_parentheses(tuple((
+            single_constraint,
+            opt(pair(arithmetic_operator, single_constraint)),
+            opt(extension_marker)
+        ))),
     )(input)
 }
 
@@ -190,7 +169,7 @@ fn relational_constraint<'a>(input: &'a str) -> IResult<&'a str, RelationalConst
 
 #[cfg(test)]
 mod tests {
-    use asnr_grammar::{subtyping::*, types::*, information_object::*, *};
+    use asnr_grammar::{information_object::*, subtyping::*, types::*, *};
 
     use crate::parser::constraint::{component_constraint, constraint, simple_value_constraint};
 
@@ -277,6 +256,61 @@ mod tests {
                 max_value: Some(ASN1Value::Integer(16)),
                 extensible: true
             })]
+        )
+    }
+
+    #[test]
+    fn parses_complex_arithmetic() {
+        assert_eq!(
+            constraint(
+                r#"((WITH COMPONENT (WITH COMPONENTS {..., containerId (ALL EXCEPT 1)})) |
+      (WITH COMPONENT (WITH COMPONENTS {..., containerId (ALL EXCEPT 2)})))"#
+            )
+            .unwrap()
+            .1,
+            vec![
+                Constraint::ArrayComponentConstraint(ComponentConstraint {
+                    is_partial: true,
+                    constraints: vec![ConstrainedComponent {
+                        identifier: "containerId".into(),
+                        constraints: vec![
+                            Constraint::ValueConstraint(ValueConstraint {
+                                min_value: Some(ASN1Value::All),
+                                max_value: Some(ASN1Value::All),
+                                extensible: false
+                            }),
+                            Constraint::Arithmetic(SetOperation::Except),
+                            Constraint::ValueConstraint(ValueConstraint {
+                                min_value: Some(ASN1Value::Integer(1)),
+                                max_value: Some(ASN1Value::Integer(1)),
+                                extensible: false
+                            })
+                        ],
+                        presence: ComponentPresence::Unspecified
+                    }]
+                }),
+                Constraint::Arithmetic(SetOperation::Union),
+                Constraint::ArrayComponentConstraint(ComponentConstraint {
+                    is_partial: true,
+                    constraints: vec![ConstrainedComponent {
+                        identifier: "containerId".into(),
+                        constraints: vec![
+                            Constraint::ValueConstraint(ValueConstraint {
+                                min_value: Some(ASN1Value::All),
+                                max_value: Some(ASN1Value::All),
+                                extensible: false
+                            }),
+                            Constraint::Arithmetic(SetOperation::Except),
+                            Constraint::ValueConstraint(ValueConstraint {
+                                min_value: Some(ASN1Value::Integer(2)),
+                                max_value: Some(ASN1Value::Integer(2)),
+                                extensible: false
+                            })
+                        ],
+                        presence: ComponentPresence::Unspecified
+                    }]
+                })
+            ]
         )
     }
 
@@ -370,7 +404,7 @@ mod tests {
                         presence: ComponentPresence::Present
                     }]
                 }),
-                Constraint::Arithmetic(ArithmeticOperator::Union),
+                Constraint::Arithmetic(SetOperation::Union),
                 Constraint::ArrayComponentConstraint(ComponentConstraint {
                     is_partial: true,
                     constraints: vec![ConstrainedComponent {
@@ -409,7 +443,7 @@ mod tests {
                         }
                     ]
                 }),
-                Constraint::Arithmetic(ArithmeticOperator::Union),
+                Constraint::Arithmetic(SetOperation::Union),
                 Constraint::ComponentConstraint(ComponentConstraint {
                     is_partial: true,
                     constraints: vec![
@@ -444,13 +478,13 @@ mod tests {
                     max_value: Some(ASN1Value::Integer(3)),
                     extensible: false
                 }),
-                Constraint::Arithmetic(ArithmeticOperator::Union),
+                Constraint::Arithmetic(SetOperation::Union),
                 Constraint::ValueConstraint(ValueConstraint {
                     min_value: Some(ASN1Value::Integer(5)),
                     max_value: Some(ASN1Value::Integer(8)),
                     extensible: false
                 }),
-                Constraint::Arithmetic(ArithmeticOperator::Union),
+                Constraint::Arithmetic(SetOperation::Union),
                 Constraint::ValueConstraint(ValueConstraint {
                     min_value: Some(ASN1Value::Integer(10)),
                     max_value: Some(ASN1Value::Integer(10)),
@@ -475,13 +509,13 @@ mod tests {
                     max_value: Some(ASN1Value::ElsewhereDeclaredValue("unknown".into())),
                     extensible: false
                 }),
-                Constraint::Arithmetic(ArithmeticOperator::Union),
+                Constraint::Arithmetic(SetOperation::Union),
                 Constraint::ValueConstraint(ValueConstraint {
                     min_value: Some(ASN1Value::ElsewhereDeclaredValue("passengerCar".into())),
                     max_value: Some(ASN1Value::ElsewhereDeclaredValue("tram".into())),
                     extensible: false
                 }),
-                Constraint::Arithmetic(ArithmeticOperator::Union),
+                Constraint::Arithmetic(SetOperation::Union),
                 Constraint::ValueConstraint(ValueConstraint {
                     min_value: Some(ASN1Value::ElsewhereDeclaredValue("agricultural".into())),
                     max_value: Some(ASN1Value::ElsewhereDeclaredValue("agricultural".into())),

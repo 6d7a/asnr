@@ -5,13 +5,13 @@ use asnr_grammar::ToplevelDeclaration;
 
 #[derive(Debug, Clone)]
 pub struct GeneratorError {
-    pub top_level_declaration: ToplevelDeclaration,
+    pub top_level_declaration: Option<ToplevelDeclaration>,
     pub details: String,
     pub kind: GeneratorErrorType,
 }
 
 impl GeneratorError {
-    pub fn new(tld: ToplevelDeclaration, details: &str, kind: GeneratorErrorType) -> Self {
+    pub fn new(tld: Option<ToplevelDeclaration>, details: &str, kind: GeneratorErrorType) -> Self {
         GeneratorError {
             top_level_declaration: tld,
             details: details.into(),
@@ -24,16 +24,28 @@ impl GeneratorError {
 pub enum GeneratorErrorType {
     Asn1TypeMismatch,
     EmptyChoiceType,
+    MissingCustomSyntax,
+    SyntaxMismatch,
+    MissingClassKey,
+    MissingClassLink,
+    Unidentified
 }
 
 impl Error for GeneratorError {}
 
+impl Default for GeneratorError {
+    fn default() -> Self {
+        Self { top_level_declaration: Default::default(), details: Default::default(), kind: GeneratorErrorType::Unidentified }
+    }
+}
+
 impl Display for GeneratorError {
     fn fmt(&self, f: &mut Formatter) -> Result {
        let name = match &self.top_level_declaration {
-        ToplevelDeclaration::Type(t) => &t.name,
-        ToplevelDeclaration::Value(v) => &v.name,
-        ToplevelDeclaration::Information(i) => &i.name,
+        Some(ToplevelDeclaration::Type(t)) => &t.name,
+        Some(ToplevelDeclaration::Value(v)) => &v.name,
+        Some(ToplevelDeclaration::Information(i)) => &i.name,
+        None => ""
     };
         write!(
             f,

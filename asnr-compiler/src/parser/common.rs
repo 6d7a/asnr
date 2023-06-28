@@ -1,11 +1,11 @@
 use nom::{
     branch::alt,
-    bytes::complete::{tag, is_not},
+    bytes::complete::{is_not, tag},
     character::complete::{
         alpha1, alphanumeric1, char, i128, multispace0, multispace1, one_of, u64,
     },
-    combinator::{into, opt, recognize, peek},
-    multi::{many0, separated_list0, separated_list1, many1},
+    combinator::{into, opt, peek, recognize, value},
+    multi::{many0, many1, separated_list0, separated_list1},
     sequence::{delimited, pair, preceded, terminated, tuple},
     IResult,
 };
@@ -138,6 +138,10 @@ where
     )
 }
 
+pub fn all_value<'a>(input: &'a str) -> IResult<&'a str, ASN1Value> {
+    value(ASN1Value::All, skip_ws_and_comments(tag(ALL)))(input)
+}
+
 pub fn asn_tag<'a>(input: &'a str) -> IResult<&'a str, AsnTag> {
     into(in_brackets(pair(
         opt(skip_ws_and_comments(alt((
@@ -192,19 +196,19 @@ pub fn default<'a>(input: &'a str) -> IResult<&'a str, Option<ASN1Value>> {
 }
 
 pub fn uppercase_identifier<'a>(input: &'a str) -> IResult<&'a str, &'a str> {
-  alt((
-      recognize(pair(
-          one_of("ABCDEFGHIJKLMNOPQRSTUVWXYZ"),
-          many1(alt((
-              preceded(char('-'), one_of("ABCDEFGHIJKLMNOPQRSTUVWXYZ")),
-              one_of("ABCDEFGHIJKLMNOPQRSTUVWXYZ"),
-          ))),
-      )),
-      terminated(
-          recognize(one_of("ABCDEFGHIJKLMNOPQRSTUVWXYZ")),
-          peek(is_not("abcdefghijklmnopqrstuvwxyz-")),
-      ),
-  ))(input)
+    alt((
+        recognize(pair(
+            one_of("ABCDEFGHIJKLMNOPQRSTUVWXYZ"),
+            many1(alt((
+                preceded(char('-'), one_of("ABCDEFGHIJKLMNOPQRSTUVWXYZ")),
+                one_of("ABCDEFGHIJKLMNOPQRSTUVWXYZ"),
+            ))),
+        )),
+        terminated(
+            recognize(one_of("ABCDEFGHIJKLMNOPQRSTUVWXYZ")),
+            peek(is_not("abcdefghijklmnopqrstuvwxyz-")),
+        ),
+    ))(input)
 }
 
 #[cfg(test)]
@@ -391,4 +395,4 @@ and one */"#
             ]
         )
     }
-  }
+}

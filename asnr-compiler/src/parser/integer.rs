@@ -26,7 +26,7 @@ pub fn integer<'a>(input: &'a str) -> IResult<&'a str, ASN1Type> {
         tuple((
             skip_ws_and_comments(tag(INTEGER)),
             opt(skip_ws_and_comments(distinguished_values)),
-            opt(skip_ws_and_comments(simple_value_constraint)),
+            opt(skip_ws_and_comments(constraint)),
         )),
         |m| ASN1Type::Integer(m.into()),
     )(input)

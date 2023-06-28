@@ -17,18 +17,23 @@ pub mod information_object;
 pub mod parameterization;
 pub mod subtyping;
 pub mod types;
+pub mod utils;
 
 use alloc::{
-  borrow::ToOwned,
-  format,
-  string::{String, ToString},
-  vec,
-  vec::Vec,
+    borrow::ToOwned,
+    boxed::Box,
+    format,
+    string::{String, ToString},
+    vec,
+    vec::Vec,
 };
-use information_object::{ToplevelInformationDeclaration, InformationObjectFieldReference};
+use information_object::{
+    InformationObjectClass, InformationObjectFieldReference, ToplevelInformationDeclaration,
+};
 use parameterization::Parameterization;
 use subtyping::Constraint;
 use types::*;
+use utils::int_type_token;
 
 // Comment tokens
 pub const BLOCK_COMMENT_START: &'static str = "/*";
@@ -67,6 +72,7 @@ pub const ENUMERATED: &'static str = "ENUMERATED";
 pub const CHOICE: &'static str = "CHOICE";
 pub const SEQUENCE: &'static str = "SEQUENCE";
 pub const OF: &'static str = "OF";
+pub const ALL: &'static str = "ALL";
 pub const SET: &'static str = "SET";
 pub const SET_OF: &'static str = "SET OF";
 pub const OBJECT_IDENTIFIER: &'static str = "OBJECT IDENTIFIER";
@@ -282,6 +288,20 @@ pub enum ToplevelDeclaration {
     Information(ToplevelInformationDeclaration),
 }
 
+impl ToplevelDeclaration {
+    pub fn is_class_with_name(&self, name: &String) -> Option<&InformationObjectClass> {
+        match self {
+            ToplevelDeclaration::Information(info) => match &info.value {
+                information_object::ASN1Information::ObjectClass(class) => {
+                    (&info.name == name).then(|| class)
+                }
+                _ => None,
+            },
+            _ => None,
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct ToplevelValueDeclaration {
     pub comments: String,
@@ -341,6 +361,92 @@ pub enum ASN1Type {
     InformationObjectFieldReference(InformationObjectFieldReference),
 }
 
+impl ASN1Type {
+    pub fn contains_class_field_reference(&self) -> bool {
+        match self {
+            ASN1Type::Choice(c) => c
+                .options
+                .iter()
+                .any(|o| o.r#type.contains_class_field_reference()),
+            ASN1Type::Sequence(s) => s
+                .members
+                .iter()
+                .any(|m| m.r#type.contains_class_field_reference()),
+            ASN1Type::SequenceOf(so) => so.r#type.contains_class_field_reference(),
+            ASN1Type::InformationObjectFieldReference(_) => true,
+            _ => false,
+        }
+    }
+
+    pub fn resolve_class_field_reference(self, tlds: &Vec<ToplevelDeclaration>) -> Self {
+        match self {
+            ASN1Type::Choice(c) => ASN1Type::Choice(Choice {
+                extensible: c.extensible,
+                options: c
+                    .options
+                    .into_iter()
+                    .map(|option| ChoiceOption {
+                        name: option.name,
+                        tag: option.tag,
+                        r#type: option.r#type.resolve_class_field_reference(tlds),
+                        constraints: vec![],
+                    })
+                    .collect(),
+                constraints: c.constraints,
+            }),
+            ASN1Type::Sequence(s) => ASN1Type::Sequence(Sequence {
+                extensible: s.extensible,
+                constraints: s.constraints,
+                members: s.members.into_iter().map(|mut member| {
+                  member.constraints = vec![];
+                  member.r#type = member.r#type.resolve_class_field_reference(tlds);
+                  member
+                }).collect()
+            }),
+            ASN1Type::InformationObjectFieldReference(_) => {
+                self.reassign_type_for_ref(tlds)
+            }
+            _ => self,
+        }
+    }
+
+    fn reassign_type_for_ref(mut self, tlds: &Vec<ToplevelDeclaration>) -> Self {
+        if let Self::InformationObjectFieldReference(ref ior) = self {
+            if let Some(t) = tlds
+                .iter()
+                .find_map(|c| {
+                    c.is_class_with_name(&ior.class)
+                        .map(|clazz| clazz.get_field(&ior.field_path))
+                })
+                .flatten()
+                .map(|class_field| class_field.r#type.clone())
+                .flatten()
+            {
+                self = t;
+            }
+        }
+        self
+    }
+}
+
+impl ToString for ASN1Type {
+    fn to_string(&self) -> String {
+        match self {
+            ASN1Type::Null => "ASN1_NULL".to_owned(),
+            ASN1Type::Boolean => "bool".to_owned(),
+            ASN1Type::Integer(i) => i.type_token(),
+            ASN1Type::BitString(_) => "Vec<bool>".to_owned(),
+            ASN1Type::CharacterString(_) => "String".to_owned(),
+            ASN1Type::Enumerated(_) => todo!(),
+            ASN1Type::Choice(_) => todo!(),
+            ASN1Type::Sequence(_) => todo!(),
+            ASN1Type::SequenceOf(_) => todo!(),
+            ASN1Type::ElsewhereDeclaredType(e) => e.identifier.clone(),
+            ASN1Type::InformationObjectFieldReference(_) => todo!(),
+        }
+    }
+}
+
 /// The types of an ASN1 character strings.
 #[derive(Debug, Clone, PartialEq)]
 pub enum CharacterStringType {
@@ -392,7 +498,10 @@ impl asnr_traits::Declare for ASN1Type {
             ASN1Type::ElsewhereDeclaredType(els) => {
                 format!("ASN1Type::ElsewhereDeclaredType({})", els.declare())
             }
-            ASN1Type::InformationObjectFieldReference(iofr) => format!("ASN1Type::InformationObjectFieldReference({})", iofr.declare()),
+            ASN1Type::InformationObjectFieldReference(iofr) => format!(
+                "ASN1Type::InformationObjectFieldReference({})",
+                iofr.declare()
+            ),
         }
     }
 }
@@ -400,6 +509,7 @@ impl asnr_traits::Declare for ASN1Type {
 /// The possible types of an ASN1 value.
 #[derive(Debug, Clone, PartialEq)]
 pub enum ASN1Value {
+    All,
     Null,
     Boolean(bool),
     Integer(i128),
@@ -412,6 +522,7 @@ pub enum ASN1Value {
 impl ToString for ASN1Value {
     fn to_string(&self) -> String {
         match self {
+            ASN1Value::All => "ASN1_ALL".to_owned(),
             ASN1Value::Null => "ASN1_NULL".to_owned(),
             ASN1Value::Boolean(b) => format!("{}", b),
             ASN1Value::Integer(i) => format!("{}", i),
@@ -426,6 +537,7 @@ impl ToString for ASN1Value {
 impl asnr_traits::Declare for ASN1Value {
     fn declare(&self) -> String {
         match self {
+            ASN1Value::All => String::from("ASN1Value::All"),
             ASN1Value::Null => String::from("ASN1Value::Null"),
             ASN1Value::Boolean(b) => format!("ASN1Value::Boolean({})", b),
             ASN1Value::Integer(i) => format!("ASN1Value::Integer({})", i),

@@ -1,6 +1,13 @@
-use alloc::{borrow::ToOwned, format, string::String, vec, vec::Vec};
+use alloc::{
+    borrow::ToOwned,
+    boxed::Box,
+    format,
+    string::{String, ToString},
+    vec,
+    vec::Vec,
+};
 
-use crate::{ASN1Value, Declare, information_object::ObjectSet};
+use crate::{information_object::ObjectSet, ASN1Value, Declare};
 
 #[derive(Debug, PartialEq)]
 pub struct OptionalMarker();
@@ -19,10 +26,10 @@ pub struct ExtensionMarker();
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Constraint {
+    CompositeConstraint(CompositeConstraint),
     ValueConstraint(ValueConstraint),
     SizeConstraint(ValueConstraint),
     ComponentConstraint(ComponentConstraint),
-    Arithmetic(ArithmeticOperator),
     ArrayComponentConstraint(ComponentConstraint),
     TableConstraint(TableConstraint),
     //CharacterConstraint(CharacterConstraint)
@@ -31,7 +38,9 @@ pub enum Constraint {
 impl asnr_traits::Declare for Constraint {
     fn declare(&self) -> String {
         match self {
-            Constraint::ValueConstraint(r) => format!("Constraint::ValueConstraint({})", r.declare()),
+            Constraint::ValueConstraint(r) => {
+                format!("Constraint::ValueConstraint({})", r.declare())
+            }
             Constraint::SizeConstraint(r) => format!("Constraint::SizeConstraint({})", r.declare()),
             Constraint::ComponentConstraint(c) => {
                 format!("Constraint::ComponentConstraint({})", c.declare())
@@ -39,21 +48,67 @@ impl asnr_traits::Declare for Constraint {
             Constraint::ArrayComponentConstraint(c) => {
                 format!("Constraint::ArrayComponentConstraint({})", c.declare())
             }
-            Constraint::Arithmetic(o) => {
-                format!("Constraint::Arithmetic(ArithmeticOperator::{:?})", o)
+            Constraint::CompositeConstraint(o) => {
+                format!("Constraint::CompositeConstraint({})", o.declare())
             }
             Constraint::TableConstraint(t) => {
-              format!("Constraint::TableConstraint({})", t.declare())
-          }
+                format!("Constraint::TableConstraint({})", t.declare())
+            }
         }
     }
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub enum ArithmeticOperator {
+pub enum SetOperation {
     Intersection,
     Union,
     Except,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct CompositeConstraint {
+    pub base_constraint: Box<Constraint>,
+    pub operation: Option<(SetOperation, Box<Constraint>)>,
+    pub extensible: bool,
+}
+
+impl
+    From<(
+        Constraint,
+        Option<(SetOperation, Constraint)>,
+        Option<ExtensionMarker>,
+    )> for CompositeConstraint
+{
+    fn from(
+        value: (
+            Constraint,
+            Option<(SetOperation, Constraint)>,
+            Option<ExtensionMarker>,
+        ),
+    ) -> Self {
+        Self {
+            base_constraint: Box::new(value.0),
+            operation: value.1.map(|(op, c)| (op, Box::new(c))),
+            extensible: value.2.is_some(),
+        }
+    }
+}
+
+impl asnr_traits::Declare for CompositeConstraint {
+    fn declare(&self) -> String {
+        format!(
+            "CompositeConstraint {{ extensible: {}, base_constraint: {}, operation: {} }}",
+            self.extensible,
+            self.base_constraint.declare(),
+            self.operation
+                .as_ref()
+                .map_or("None".to_owned(), |(op, c)| format!(
+                    "Some((SetOperation::{:?},{}))",
+                    op,
+                    c.declare()
+                )),
+        )
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -151,10 +206,14 @@ impl asnr_traits::Declare for ValueConstraint {
             "ValueConstraint {{ min_value: {}, max_value: {}, extensible: {} }}",
             self.min_value
                 .as_ref()
-                .map_or("None".to_owned(), |m| "Some(".to_owned() + &m.declare() + ")"),
+                .map_or("None".to_owned(), |m| "Some(".to_owned()
+                    + &m.declare()
+                    + ")"),
             self.max_value
                 .as_ref()
-                .map_or("None".to_owned(), |m| "Some(".to_owned() + &m.declare() + ")"),
+                .map_or("None".to_owned(), |m| "Some(".to_owned()
+                    + &m.declare()
+                    + ")"),
             self.extensible
         )
     }
@@ -224,12 +283,12 @@ impl asnr_traits::Declare for TableConstraint {
 }
 
 impl From<(ObjectSet, Option<Vec<RelationalConstraint>>)> for TableConstraint {
-  fn from(value: (ObjectSet, Option<Vec<RelationalConstraint>>)) -> Self {
-      Self {
-          object_set: value.0,
-          linked_fields: value.1.unwrap_or(vec![]),
-      }
-  }
+    fn from(value: (ObjectSet, Option<Vec<RelationalConstraint>>)) -> Self {
+        Self {
+            object_set: value.0,
+            linked_fields: value.1.unwrap_or(vec![]),
+        }
+    }
 }
 
 /// Representation of a table's relational constraint
@@ -244,6 +303,9 @@ pub struct RelationalConstraint {
 
 impl From<(usize, &str)> for RelationalConstraint {
     fn from(value: (usize, &str)) -> Self {
-        Self { field_name: value.1.into(), level: value.0 }
+        Self {
+            field_name: value.1.into(),
+            level: value.0,
+        }
     }
 }

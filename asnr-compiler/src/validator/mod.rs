@@ -28,33 +28,32 @@ impl Validator {
     }
 
     fn link(mut self) -> Result<Self, ValidatorError> {
-        let class_clones = self
-            .tlds
-            .iter()
-            .filter_map(|tld| match tld {
-                ToplevelDeclaration::Information(i) => match &i.value {
-                    ASN1Information::ObjectClass(c) => Some((i.name.clone(), c.clone())),
-                    _ => None,
-                },
-                _ => None,
-            })
-            .collect::<HashMap<String, InformationObjectClass>>();
-        'io_link: while let Some(ToplevelDeclaration::Information(info)) =
-            self.tlds.iter_mut().next()
-        {
-            match &info.value {
-                ASN1Information::ObjectClass(_) => (),
-                _ => {
-                    let class_name = match &info.class {
-                        Some(ClassLink::ByName(n)) => n.clone(),
-                        Some(ClassLink::ByReference(_)) => continue 'io_link,
-                        None => unreachable!(),
-                    };
-                    let class_copy = class_clones.get(class_name.as_str()).ok_or(ValidatorError { data_element: Some(info.name.clone()), details: format!("Linker Error: Cannot find Information Object Class \"{class_name}\" in parsed sources!"), kind: ValidatorErrorType::MissingDependencyError })?.clone();
-                    info.class = Some(ClassLink::ByReference(class_copy.clone()))
-                }
+        let mut with_field_ref = vec![];
+        let mut i = 0;
+        while i < self.tlds.len() {
+            if self
+                .tlds
+                .get(i)
+                .map(|t| match t {
+                    ToplevelDeclaration::Type(t) => t.r#type.contains_class_field_reference(),
+                    _ => false,
+                })
+                .unwrap_or(false)
+            {
+                with_field_ref.push(self.tlds.remove(i));
+            } else {
+                i += 1;
             }
         }
+        for r in with_field_ref {
+            if let ToplevelDeclaration::Type(mut t) = r {
+                println!("BEFORE {:?}", t.r#type);
+                t.r#type = t.r#type.resolve_class_field_reference(&self.tlds);
+                println!("AFTER {:?}", t.r#type);
+                self.tlds.push(ToplevelDeclaration::Type(t))
+            }
+        }
+
         Ok(self)
     }
 

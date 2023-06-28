@@ -41,6 +41,7 @@ version = "0.1.0"
 dependencies = [
  "asnr-grammar",
  "bitvec",
+ "bitvec-nom",
  "nom",
  "num",
 ]
@@ -61,6 +62,16 @@ dependencies = [
  "radium",
  "tap",
  "wyz",
+]
+
+[[package]]
+name = "bitvec-nom"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b5bcd41dad4e05fbacd367e8965f94606e4be4efd2be0a7d0dc0e368e123722d"
+dependencies = [
+ "bitvec",
+ "nom",
 ]
 
 [[package]]

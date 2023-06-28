@@ -1,18 +1,142 @@
-use asnr_grammar::{types::*, *};
+use asnr_grammar::{
+    information_object::{
+        InformationObjectClass, InformationObjectFieldReference, ObjectFieldIdentifier,
+        SyntaxApplication, SyntaxExpression, SyntaxToken,
+    },
+    types::*,
+    *,
+};
 
-use super::{builder::StringifiedNameType, error::GeneratorError, generate};
+use super::{
+    builder::StringifiedNameType,
+    error::{GeneratorError, GeneratorErrorType},
+    generate,
+};
 
-pub fn int_type_token<'a>(min: i128, max: i128) -> &'a str {
-    match max - min {
-        r if r <= u8::MAX.into() && min >= 0 => "u8",
-        r if r <= u8::MAX.into() => "i8",
-        r if r <= u16::MAX.into() && min >= 0 => "u16",
-        r if r <= u16::MAX.into() => "i16",
-        r if r <= u32::MAX.into() && min >= 0 => "u32",
-        r if r <= u32::MAX.into() => "i32",
-        r if r <= u64::MAX.into() && min >= 0 => "u64",
-        r if r <= u64::MAX.into() => "i64",
-        _ => "i128",
+pub fn resolve_syntax(
+    class: &InformationObjectClass,
+    application: &Vec<SyntaxApplication>,
+) -> Result<(ASN1Value, Vec<ASN1Type>), GeneratorError> {
+    let expressions = match &class.syntax {
+        Some(s) => &s.expressions,
+        None => {
+            return Err(GeneratorError {
+                top_level_declaration: None,
+                details: "No syntax definition for information object class found!".into(),
+                kind: GeneratorErrorType::MissingCustomSyntax,
+            })
+        }
+    };
+
+    let tokens = flatten_tokens(&expressions);
+
+    let mut key = None;
+    let mut field_index_map = Vec::<(usize, ASN1Type)>::new();
+
+    let mut appl_iter = application.iter();
+    'syntax_matching: for (required, token) in tokens {
+        if let Some(expr) = appl_iter.next() {
+            if compare_tokens(&token, expr) {
+                match expr {
+                    SyntaxApplication::ObjectSetDeclaration(_) => todo!(),
+                    SyntaxApplication::TypeReference(t) => {
+                        if let Some(index) = class.fields.iter().enumerate().find_map(|(i, v)| {
+                            (v.identifier
+                                == ObjectFieldIdentifier::MultipleValue(
+                                    token.name_or_empty().to_owned(),
+                                ))
+                            .then(|| i)
+                        }) {
+                            field_index_map.push((index, t.clone()))
+                        }
+                    }
+                    SyntaxApplication::ValueReference(v) => {
+                        if let Some(_) = class.fields.iter().find(|v| {
+                            v.identifier
+                                == ObjectFieldIdentifier::SingleValue(
+                                    token.name_or_empty().to_owned(),
+                                )
+                                && v.is_unique
+                        }) {
+                            key = Some(v.clone())
+                        }
+                    }
+                    _ => continue 'syntax_matching,
+                }
+            } else if required {
+                return Err(GeneratorError {
+                    top_level_declaration: None,
+                    details: format!("Syntax mismatch while resolving information object."),
+                    kind: GeneratorErrorType::SyntaxMismatch,
+                });
+            } else {
+                continue 'syntax_matching;
+            }
+        } else if required {
+            return Err(GeneratorError {
+                top_level_declaration: None,
+                details: format!("Syntax mismatch while resolving information object."),
+                kind: GeneratorErrorType::SyntaxMismatch,
+            });
+        } else {
+            continue 'syntax_matching;
+        }
+    }
+    field_index_map.sort_by(|&(a, _), &(b, _)| a.cmp(&b));
+    let types = field_index_map.into_iter().map(|(_, t)| t).collect();
+    match key {
+        Some(k) => Ok((k, types)),
+        None => Err(GeneratorError {
+            top_level_declaration: None,
+            details: "Could not find class key!".into(),
+            kind: GeneratorErrorType::MissingClassKey,
+        }),
+    }
+}
+
+fn flatten_tokens(expressions: &Vec<SyntaxExpression>) -> Vec<(bool, SyntaxToken)> {
+    iter_expressions(expressions, false)
+        .into_iter()
+        .map(|x| match x {
+            (is_required, SyntaxExpression::Required(r)) => (is_required, r.clone()),
+            _ => unreachable!(),
+        })
+        .collect()
+}
+
+fn iter_expressions(
+    expressions: &Vec<SyntaxExpression>,
+    optional_recursion: bool,
+) -> Vec<(bool, &SyntaxExpression)> {
+    expressions
+        .iter()
+        .flat_map(|x| match x {
+            SyntaxExpression::Optional(o) => iter_expressions(o, true),
+            r => vec![(!optional_recursion, r)],
+        })
+        .collect()
+}
+
+fn compare_tokens(token: &SyntaxToken, application: &SyntaxApplication) -> bool {
+    match token {
+        SyntaxToken::Comma => application == &SyntaxApplication::Comma,
+        SyntaxToken::Literal(l) => application == &SyntaxApplication::Literal(l.clone()),
+        SyntaxToken::Field(ObjectFieldIdentifier::MultipleValue(m)) => match application {
+            SyntaxApplication::ObjectSetDeclaration(_) | SyntaxApplication::TypeReference(_) => {
+                true
+            }
+            _ => false,
+        },
+        SyntaxToken::Field(ObjectFieldIdentifier::SingleValue(s)) => {
+            if let SyntaxApplication::ValueReference(_) = application {
+                true
+            } else {
+                false
+            }
+        }
+        o => {
+            todo!()
+        }
     }
 }
 
@@ -107,15 +231,15 @@ pub fn format_distinguished_int_value(value: &DistinguishedValue) -> String {
 pub fn flatten_nested_sequence_members(
     members: &Vec<SequenceMember>,
     parent_name: &String,
-) -> Vec<String> {
+) -> Result<Vec<String>, GeneratorError> {
     members
         .iter()
-        .filter(|m| match m.r#type {
-            ASN1Type::ElsewhereDeclaredType(_) => false,
-            _ => true,
+        .filter_map(|i| match i.r#type {
+            ASN1Type::ElsewhereDeclaredType(_) => None,
+            ASN1Type::InformationObjectFieldReference(_) => None,
+            _ => Some(declare_inner_sequence_member(i, parent_name)),
         })
-        .map(|i| declare_inner_sequence_member(i, parent_name).unwrap())
-        .collect::<Vec<String>>()
+        .collect::<Result<Vec<String>, GeneratorError>>()
 }
 
 pub fn flatten_nested_choice_options(
@@ -170,6 +294,9 @@ pub fn extract_sequence_members(
             let name = rustify_name(&m.name);
             let rtype = match &m.r#type {
                 ASN1Type::ElsewhereDeclaredType(d) => rustify_name(&d.identifier),
+                ASN1Type::InformationObjectFieldReference(_) => {
+                  "ASN1_OPEN".to_string()
+                }
                 _ => inner_name(&m.name, parent_name),
             };
             StringifiedNameType {
@@ -196,7 +323,7 @@ pub fn format_extensible_sequence<'a>(name: &String, extensible: bool) -> (Strin
             "".into()
         },
         if extensible {
-            "decoder.decode_unknown_extension(input).map(|(r, v)| {{ input = r; self.unknown_extension = v.to_vec(); }})?,".into()
+            "{{ (input, self.unknown_extension) = decoder.decode_unknown_extension(input)? }},".into()
         } else {
             format!(
                 r#"return Err(
@@ -215,7 +342,7 @@ pub fn format_decode_member_body(members: &Vec<StringifiedNameType>) -> String {
         .enumerate()
         .map(|(i, m)| {
             format!(
-                "{i} => {t}::decode(decoder, input).map(|(r,v)| {{ self.{name} = v; input = r; }})?,",
+                "{i} => {{ (input, self.{name}) = {t}::decode(decoder, input)? }},",
                 t = m.r#type,
                 name = m.name
             )
@@ -245,8 +372,8 @@ fn declare_inner_choice_option(
 ) -> Result<String, GeneratorError> {
     generate(
         ToplevelDeclaration::Type(ToplevelTypeDeclaration {
-          parameterization: None,
-          comments: " Inner type ".into(),
+            parameterization: None,
+            comments: " Inner type ".into(),
             name: inner_name(&option.name, parent_name),
             r#type: option.r#type.clone(),
         }),

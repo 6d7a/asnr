@@ -1,6 +1,10 @@
-use core::{fmt::{Display, Formatter, Result}};
+use core::fmt::{Display, Formatter, Result};
 
-use alloc::string::{String, ToString};
+use alloc::{
+    format,
+    string::{String, ToString},
+};
+use nom::AsBytes;
 
 #[derive(Debug, Clone)]
 pub struct DecodingError {
@@ -10,9 +14,11 @@ pub struct DecodingError {
 
 impl DecodingError {
     pub fn new(details: &str, kind: DecodingErrorType) -> Self {
-      DecodingError { details: details.into(), kind }
+        DecodingError {
+            details: details.into(),
+            kind,
+        }
     }
-
 }
 
 #[derive(Debug, Clone)]
@@ -23,9 +29,19 @@ pub enum DecodingErrorType {
     GenericParsingError,
 }
 
-impl From<nom::Err<nom::error::Error<&[u8]>>> for DecodingError {
-    fn from(value: nom::Err<nom::error::Error<&[u8]>>) -> Self {
-        DecodingError { details: value.to_string(), kind: DecodingErrorType::GenericParsingError }
+impl<I: AsBytes> From<nom::Err<nom::error::Error<I>>> for DecodingError {
+    fn from(value: nom::Err<nom::error::Error<I>>) -> Self {
+        let error = match value {
+            nom::Err::Incomplete(req) => format!("Incomplete input. Needs {:?}", req),
+            nom::Err::Error(e) => {
+                format!("Encountered error with code {:?} while parsing.", e.code)
+            }
+            nom::Err::Failure(e) => format!("Encountered unrecoverable error with code {:?} while parsing.", e.code),
+        };
+        DecodingError {
+            details: error,
+            kind: DecodingErrorType::GenericParsingError,
+        }
     }
 }
 

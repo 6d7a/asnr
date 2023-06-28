@@ -117,11 +117,11 @@ mod tests {
                     extensible: true
                 })],
                 r#type: Box::new(ASN1Type::Integer(Integer {
-                    constraints: vec![ValueConstraint {
+                    constraints: vec![Constraint::ValueConstraint(ValueConstraint {
                         min_value: Some(ASN1Value::Integer(1)),
                         max_value: Some(ASN1Value::Integer(13)),
                         extensible: true
-                    }],
+                    })],
                     distinguished_values: Some(vec![DistinguishedValue {
                         name: "one-distinguished-value".into(),
                         value: 12

@@ -12,7 +12,7 @@ use self::{
         character_string_template, generate_bit_string, generate_boolean, generate_choice,
         generate_enumerated, generate_information_object_class, generate_integer,
         generate_integer_value, generate_null, generate_null_value, generate_sequence,
-        generate_sequence_of, generate_typealias,
+        generate_sequence_of, generate_typealias, generate_information_object_set,
     },
     error::GeneratorError,
 };
@@ -60,12 +60,18 @@ pub fn generate<'a>(
             ASN1Value::BitString(_) => todo!(),
             ASN1Value::EnumeratedValue(_) => todo!(),
             ASN1Value::ElsewhereDeclaredValue(_) => todo!(),
+            ASN1Value::All => todo!(),
         },
         ToplevelDeclaration::Information(i) => match i.value {
             ASN1Information::ObjectClass(_) => {
                 generate_information_object_class(i, custom_derive)
             }
-            _ => Ok("".into()),
+            // ASN1Information::ObjectSet(_) => {
+            //   generate_information_object_set(i)
+            // }
+            _ => {
+              Ok("".into())
+            },
         },
     }
 }

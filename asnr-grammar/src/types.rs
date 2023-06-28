@@ -1,4 +1,4 @@
-use core::{fmt::Debug};
+use core::fmt::Debug;
 
 use alloc::{borrow::ToOwned, boxed::Box, string::ToString, vec};
 
@@ -8,8 +8,32 @@ use crate::{subtyping::*, *};
 /// with corresponding constraints and distinguished values
 #[derive(Debug, Clone, PartialEq)]
 pub struct Integer {
-    pub constraints: Vec<ValueConstraint>,
+    pub constraints: Vec<Constraint>,
     pub distinguished_values: Option<Vec<DistinguishedValue>>,
+}
+
+impl Integer {
+    pub fn type_token(&self) -> String {
+        let (min, max) =
+            self.constraints
+                .iter()
+                .fold((i128::MAX, i128::MIN), |(mut min, mut max), c| {
+                    if let Constraint::ValueConstraint(vc) = c {
+                        if let Some(ASN1Value::Integer(i)) = vc.min_value {
+                            min = i.min(min);
+                        };
+                        if let Some(ASN1Value::Integer(i)) = vc.max_value {
+                            max = i.max(max);
+                        };
+                    };
+                    (min, max)
+                });
+        if min > max {
+            "i128".to_owned()
+        } else {
+            int_type_token(min, max).to_owned()
+        }
+    }
 }
 
 impl asnr_traits::Declare for Integer {
@@ -45,7 +69,7 @@ impl Default for Integer {
 impl From<ValueConstraint> for Integer {
     fn from(value: ValueConstraint) -> Self {
         Self {
-            constraints: vec![value],
+            constraints: vec![Constraint::ValueConstraint(value)],
             distinguished_values: None,
         }
     }
@@ -54,11 +78,11 @@ impl From<ValueConstraint> for Integer {
 impl From<(Option<i128>, Option<i128>, bool)> for Integer {
     fn from(value: (Option<i128>, Option<i128>, bool)) -> Self {
         Self {
-            constraints: vec![ValueConstraint {
+            constraints: vec![Constraint::ValueConstraint(ValueConstraint {
                 min_value: value.0.map(|v| ASN1Value::Integer(v)),
                 max_value: value.1.map(|v| ASN1Value::Integer(v)),
                 extensible: value.2,
-            }],
+            })],
             distinguished_values: None,
         }
     }
@@ -68,18 +92,18 @@ impl
     From<(
         &str,
         Option<Vec<DistinguishedValue>>,
-        Option<ValueConstraint>,
+        Option<Vec<Constraint>>,
     )> for Integer
 {
     fn from(
         value: (
             &str,
             Option<Vec<DistinguishedValue>>,
-            Option<ValueConstraint>,
+            Option<Vec<Constraint>>,
         ),
     ) -> Self {
         Self {
-            constraints: value.2.map_or(vec![], |r| vec![r]),
+            constraints: value.2.unwrap_or(vec![]),
             distinguished_values: value.1,
         }
     }

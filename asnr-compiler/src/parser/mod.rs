@@ -10,10 +10,11 @@
 //! contains helper parsers not specific to ASN1's notation.
 use nom::{
     branch::alt,
+    bytes::complete::tag,
     combinator::{into, map, opt},
     multi::{many0, many1},
-    sequence::{pair, preceded, tuple, terminated},
-    IResult, bytes::complete::tag,
+    sequence::{pair, preceded, terminated, tuple},
+    IResult,
 };
 
 use asnr_grammar::{information_object::*, *};
@@ -115,6 +116,7 @@ pub fn asn1_type<'a>(input: &'a str) -> IResult<&'a str, ASN1Type> {
 
 pub fn asn1_value<'a>(input: &'a str) -> IResult<&'a str, ASN1Value> {
     alt((
+        all_value,
         null_value,
         bit_string_value,
         boolean_value,
@@ -209,14 +211,13 @@ mod tests {
         if let ASN1Type::Integer(int) = tld.r#type {
             assert!(!int.constraints.is_empty());
             assert_eq!(
-                int.constraints.first().unwrap().min_value,
-                Some(ASN1Value::Integer(1))
-            );
-            assert_eq!(
-                int.constraints.first().unwrap().max_value,
-                Some(ASN1Value::Integer(8))
-            );
-            assert_eq!(int.constraints.first().unwrap().extensible, false);
+              *int.constraints.first().unwrap(),
+              Constraint::ValueConstraint(ValueConstraint {
+                  min_value: Some(ASN1Value::Integer(1)),
+                  max_value: Some(ASN1Value::Integer(8)),
+                  extensible: false
+              })
+          );
         } else {
             panic!("Top-level declaration contains other type than integer.")
         }
@@ -245,14 +246,14 @@ mod tests {
         assert!(tld.comments.contains("@unit 0,1 m/s^2"));
         if let ASN1Type::Integer(int) = tld.r#type {
             assert_eq!(
-                int.constraints.first().unwrap().min_value,
-                Some(ASN1Value::Integer(0))
+                *int.constraints.first().unwrap(),
+                Constraint::ValueConstraint(ValueConstraint {
+                    min_value: Some(ASN1Value::Integer(0)),
+                    max_value: Some(ASN1Value::Integer(161)),
+                    extensible: true
+                })
             );
-            assert_eq!(
-                int.constraints.first().unwrap().max_value,
-                Some(ASN1Value::Integer(161))
-            );
-            assert_eq!(int.constraints.first().unwrap().extensible, true);
+            
             assert_eq!(int.distinguished_values.as_ref().unwrap().len(), 2);
             assert_eq!(
                 int.distinguished_values.as_ref().unwrap()[0],
@@ -347,7 +348,7 @@ mod tests {
                                 presence: ComponentPresence::Present
                             }]
                         }),
-                        Constraint::Arithmetic(ArithmeticOperator::Union),
+                        Constraint::Arithmetic(SetOperation::Union),
                         Constraint::ArrayComponentConstraint(ComponentConstraint {
                             is_partial: true,
                             constraints: vec![ConstrainedComponent {

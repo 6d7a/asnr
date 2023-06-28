@@ -1,4 +1,4 @@
-use asnr_grammar::{*, information_object::*};
+use asnr_grammar::{information_object::*, utils::int_type_token, *};
 use asnr_traits::*;
 
 use super::{
@@ -15,14 +15,24 @@ pub struct StringifiedNameType {
 
 pub fn generate_integer_value(tld: ToplevelValueDeclaration) -> Result<String, GeneratorError> {
     if let ASN1Value::Integer(i) = tld.value {
-        Ok(integer_value_template(
-            format_comments(&tld.comments),
-            rustify_name(&tld.name),
-            i,
-        ))
+        if tld.type_name == INTEGER {
+            Ok(integer_value_template(
+                format_comments(&tld.comments),
+                rustify_name(&tld.name),
+                int_type_token(i, i),
+                i.to_string(),
+            ))
+        } else {
+            Ok(integer_value_template(
+                format_comments(&tld.comments),
+                rustify_name(&tld.name),
+                tld.type_name.as_str(),
+                format!("{}({})", tld.type_name, i),
+            ))
+        }
     } else {
         Err(GeneratorError::new(
-            ToplevelDeclaration::Value(tld),
+            Some(ToplevelDeclaration::Value(tld)),
             "Expected INTEGER value top-level declaration",
             GeneratorErrorType::Asn1TypeMismatch,
         ))
@@ -43,18 +53,17 @@ pub fn generate_integer<'a>(
                 acc
             }
         });
-        let integer_type = int_type_token(integer_min_max.0, integer_min_max.1);
         Ok(integer_template(
             format_comments(&tld.comments),
             custom_derive.unwrap_or(DERIVE_DEFAULT),
             rustify_name(&tld.name),
-            integer_type,
+            int.type_token(),
             format_distinguished_values(&tld),
             int.declare(),
         ))
     } else {
         Err(GeneratorError::new(
-            ToplevelDeclaration::Type(tld),
+            Some(ToplevelDeclaration::Type(tld)),
             "Expected INTEGER top-level declaration",
             GeneratorErrorType::Asn1TypeMismatch,
         ))
@@ -75,7 +84,7 @@ pub fn generate_bit_string<'a>(
         ))
     } else {
         Err(GeneratorError::new(
-            ToplevelDeclaration::Type(tld),
+            Some(ToplevelDeclaration::Type(tld)),
             "Expected BIT STRING top-level declaration",
             GeneratorErrorType::Asn1TypeMismatch,
         ))
@@ -95,7 +104,7 @@ pub fn character_string_template<'a>(
         ))
     } else {
         Err(GeneratorError::new(
-            ToplevelDeclaration::Type(tld),
+            Some(ToplevelDeclaration::Type(tld)),
             "Expected Character String top-level declaration",
             GeneratorErrorType::Asn1TypeMismatch,
         ))
@@ -114,7 +123,7 @@ pub fn generate_boolean<'a>(
         ))
     } else {
         Err(GeneratorError::new(
-            ToplevelDeclaration::Type(tld),
+            Some(ToplevelDeclaration::Type(tld)),
             "Expected BOOLEAN top-level declaration",
             GeneratorErrorType::Asn1TypeMismatch,
         ))
@@ -135,7 +144,7 @@ pub fn generate_typealias<'a>(
         ))
     } else {
         Err(GeneratorError::new(
-            ToplevelDeclaration::Type(tld),
+            Some(ToplevelDeclaration::Type(tld)),
             "Expected type alias top-level declaration",
             GeneratorErrorType::Asn1TypeMismatch,
         ))
@@ -150,7 +159,7 @@ pub fn generate_null_value(tld: ToplevelValueDeclaration) -> Result<String, Gene
         ))
     } else {
         Err(GeneratorError::new(
-            ToplevelDeclaration::Value(tld),
+            Some(ToplevelDeclaration::Value(tld)),
             "Expected NULL value top-level declaration",
             GeneratorErrorType::Asn1TypeMismatch,
         ))
@@ -169,7 +178,7 @@ pub fn generate_null<'a>(
         ))
     } else {
         Err(GeneratorError::new(
-            ToplevelDeclaration::Type(tld),
+            Some(ToplevelDeclaration::Type(tld)),
             "Expected NULL top-level declaration",
             GeneratorErrorType::Asn1TypeMismatch,
         ))
@@ -203,7 +212,7 @@ pub fn generate_enumerated<'a>(
         ))
     } else {
         Err(GeneratorError::new(
-            ToplevelDeclaration::Type(tld),
+            Some(ToplevelDeclaration::Type(tld)),
             "Expected ENUMERATED top-level declaration",
             GeneratorErrorType::Asn1TypeMismatch,
         ))
@@ -223,7 +232,7 @@ pub fn generate_choice<'a>(
             Some(o) => default_choice(o),
             None => {
                 return Err(GeneratorError {
-                    top_level_declaration: ToplevelDeclaration::Type(tld),
+                    top_level_declaration: Some(ToplevelDeclaration::Type(tld)),
                     details: "Empty CHOICE types are not yet supported!".into(),
                     kind: GeneratorErrorType::EmptyChoiceType,
                 })
@@ -247,7 +256,7 @@ pub fn generate_choice<'a>(
         ))
     } else {
         Err(GeneratorError::new(
-            ToplevelDeclaration::Type(tld),
+            Some(ToplevelDeclaration::Type(tld)),
             "Expected CHOICE top-level declaration",
             GeneratorErrorType::Asn1TypeMismatch,
         ))
@@ -255,18 +264,22 @@ pub fn generate_choice<'a>(
 }
 
 pub fn generate_information_object_class<'a>(
-  tld: ToplevelInformationDeclaration,
-  _custom_derive: Option<&'a str>,
+    tld: ToplevelInformationDeclaration,
+    _custom_derive: Option<&'a str>,
 ) -> Result<String, GeneratorError> {
-  if let ASN1Information::ObjectClass(ref ioc) = tld.value {      
-      Ok(information_object_class_template(format_comments(&tld.comments), rustify_name(&tld.name), ioc.declare()))
-  } else {
-      Err(GeneratorError::new(
-          ToplevelDeclaration::Information(tld),
-          "Expected CLASS top-level declaration",
-          GeneratorErrorType::Asn1TypeMismatch,
-      ))
-  }
+    if let ASN1Information::ObjectClass(ref ioc) = tld.value {
+        Ok(information_object_class_template(
+            format_comments(&tld.comments),
+            rustify_name(&tld.name),
+            ioc.declare(),
+        ))
+    } else {
+        Err(GeneratorError::new(
+            Some(ToplevelDeclaration::Information(tld)),
+            "Expected CLASS top-level declaration",
+            GeneratorErrorType::Asn1TypeMismatch,
+        ))
+    }
 }
 
 pub fn generate_sequence<'a>(
@@ -282,7 +295,7 @@ pub fn generate_sequence<'a>(
         Ok(sequence_template(
             format_comments(&tld.comments),
             custom_derive.unwrap_or(DERIVE_DEFAULT),
-            flatten_nested_sequence_members(&seq.members, &name).join("\n"),
+            flatten_nested_sequence_members(&seq.members, &name)?.join("\n"),
             name,
             format_member_declaration(&members),
             extension_decl,
@@ -292,7 +305,7 @@ pub fn generate_sequence<'a>(
         ))
     } else {
         Err(GeneratorError::new(
-            ToplevelDeclaration::Type(tld),
+            Some(ToplevelDeclaration::Type(tld)),
             "Expected SEQUENCE top-level declaration",
             GeneratorErrorType::Asn1TypeMismatch,
         ))
@@ -332,8 +345,98 @@ pub fn generate_sequence_of<'a>(
         ))
     } else {
         Err(GeneratorError::new(
-            ToplevelDeclaration::Type(tld),
+            Some(ToplevelDeclaration::Type(tld)),
             "Expected SEQUENCE OF top-level declaration",
+            GeneratorErrorType::Asn1TypeMismatch,
+        ))
+    }
+}
+
+pub fn generate_information_object_set<'a>(
+    tld: ToplevelInformationDeclaration,
+) -> Result<String, GeneratorError> {
+    if let ASN1Information::ObjectSet(o) = &tld.value {
+        let class: &InformationObjectClass = match tld.class {
+            Some(ClassLink::ByReference(ref c)) => c,
+            _ => {
+                return Err(GeneratorError::new(
+                    None,
+                    "Missing class link in Information Object Set",
+                    GeneratorErrorType::MissingClassLink,
+                ))
+            }
+        };
+        let keys_to_types = o
+            .values
+            .iter()
+            .map(|v| {
+                match v {
+                    ObjectSetValue::Reference(_) => todo!(),
+                    // basically, an information object specifies a sequence implementing a class. So we sould treat information objects like sequences
+                    ObjectSetValue::Inline(InformationObjectFields::CustomSyntax(s)) => {
+                        resolve_syntax(class, s)
+                    }
+                    ObjectSetValue::Inline(InformationObjectFields::DefaultSyntax(s)) => {
+                        todo!()
+                    }
+                }
+            })
+            .collect::<Result<Vec<(ASN1Value, Vec<ASN1Type>)>, GeneratorError>>()?;
+        let mut options = keys_to_types
+            .iter()
+            .map(|(k, types)| {
+                format!(
+                    "_{}({})",
+                    k.to_string(),
+                    types
+                        .iter()
+                        .map(|t| format!("pub {}", t.to_string()))
+                        .collect::<Vec<String>>()
+                        .join(", ")
+                )
+            })
+            .collect::<Vec<String>>()
+            .join(",\n\t");
+        if o.extensible.is_some() {
+            options.push_str(",\n\tUnknownClassImplementation(pub Vec<u8>)");
+        }
+        let key_type = match class
+            .fields
+            .iter()
+            .find_map(|f| {
+                f.is_unique
+                    .then(|| f.r#type.as_ref().map(|t| t.to_string()))
+            })
+            .flatten()
+        {
+            Some(key_type) => key_type,
+            None => {
+                return Err(GeneratorError::new(
+                    None,
+                    "Could not determine class key type!",
+                    GeneratorErrorType::MissingClassKey,
+                ))
+            }
+        };
+        let mut branches = keys_to_types
+            .iter()
+            .map(|(k, _)| format!("{} => todo!()", k.to_string(),))
+            .collect::<Vec<String>>()
+            .join(",\n\t");
+        if o.extensible.is_some() {
+            branches.push_str(",\n\t_ => todo!()");
+        }
+        Ok(information_object_set_template(
+            format_comments(&tld.comments),
+            rustify_name(&tld.name),
+            options,
+            key_type,
+            branches,
+        ))
+    } else {
+        Err(GeneratorError::new(
+            Some(ToplevelDeclaration::Information(tld)),
+            "Expected Object Set top-level declaration",
             GeneratorErrorType::Asn1TypeMismatch,
         ))
     }
@@ -381,7 +484,8 @@ mod tests {
 
     #[test]
     fn generates_bitstring_from_template() {
-        let bs_tld = ToplevelTypeDeclaration {              parameterization: None,
+        let bs_tld = ToplevelTypeDeclaration {
+            parameterization: None,
             name: "BitString".into(),
             comments: "".into(),
             r#type: ASN1Type::BitString(BitString {
@@ -411,7 +515,8 @@ mod tests {
 
     #[test]
     fn generates_integer_from_template() {
-        let int_tld = ToplevelTypeDeclaration {              parameterization: None,
+        let int_tld = ToplevelTypeDeclaration {
+            parameterization: None,
             name: "TestInt".into(),
             comments: "".into(),
             r#type: ASN1Type::Integer(Integer {
@@ -441,7 +546,8 @@ mod tests {
 
     #[test]
     fn generates_sequence_from_template() {
-        let seq_tld = ToplevelTypeDeclaration {              parameterization: None,
+        let seq_tld = ToplevelTypeDeclaration {
+            parameterization: None,
             name: "Sequence".into(),
             comments: "".into(),
             r#type: ASN1Type::Sequence(Sequence {

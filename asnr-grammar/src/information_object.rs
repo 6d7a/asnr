@@ -1,13 +1,7 @@
 use asnr_traits::Declare;
 
-use alloc::{
-  borrow::ToOwned,
-  format,
-  string::{String},
-  vec,
-  vec::Vec,
-};
-use crate::{*, subtyping::*};
+use crate::{subtyping::*, *, utils::walk_object_field_ref_path};
+use alloc::{borrow::ToOwned, boxed::Box, format, string::String, vec, vec::Vec};
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct ToplevelInformationDeclaration {
@@ -19,8 +13,8 @@ pub struct ToplevelInformationDeclaration {
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum ClassLink {
-  ByName(String),
-  ByReference(InformationObjectClass)
+    ByName(String),
+    ByReference(InformationObjectClass),
 }
 
 impl From<(Vec<&str>, &str, &str, InformationObjectFields)> for ToplevelInformationDeclaration {
@@ -66,7 +60,6 @@ pub enum ASN1Information {
     ObjectSet(ObjectSet),
     Object(InformationObject),
 }
-
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum SyntaxExpression {
@@ -123,6 +116,16 @@ pub enum SyntaxToken {
     Field(ObjectFieldIdentifier),
 }
 
+impl SyntaxToken {
+    pub fn name_or_empty(&self) -> &str {
+        match self {
+            SyntaxToken::Field(ObjectFieldIdentifier::SingleValue(v))
+            | SyntaxToken::Field(ObjectFieldIdentifier::MultipleValue(v)) => v.as_str(),
+            _ => "",
+        }
+    }
+}
+
 impl asnr_traits::Declare for SyntaxToken {
     fn declare(&self) -> String {
         match self {
@@ -171,6 +174,15 @@ impl asnr_traits::Declare for InformationObjectSyntax {
 pub struct InformationObjectClass {
     pub fields: Vec<InformationObjectClassField>,
     pub syntax: Option<InformationObjectSyntax>,
+}
+
+impl InformationObjectClass {
+    pub fn get_field<'a>(
+        &'a self,
+        path: &'a Vec<ObjectFieldIdentifier>,
+    ) -> Option<&InformationObjectClassField> {
+        walk_object_field_ref_path(&self.fields, path, 0)
+    }
 }
 
 impl asnr_traits::Declare for InformationObjectClass {
@@ -368,7 +380,7 @@ pub struct ObjectSet {
 impl asnr_traits::Declare for ObjectSet {
     fn declare(&self) -> String {
         format!(
-            "ValueSet {{ values: vec![{}], extensible: {} }}",
+            "ObjectSet {{ values: vec![{}], extensible: {} }}",
             self.values
                 .iter()
                 .map(|v| v.declare())

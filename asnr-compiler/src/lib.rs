@@ -41,9 +41,9 @@ use std::{
 };
 
 use asnr_grammar::ToplevelDeclaration;
-use generator::{generate, spec_section, template::RUST_IMPORTS_TEMPLATE};
+use generator::{generate, template::imports_and_generic_types};
 use parser::asn_spec;
-use validator::{Validate, Validator};
+use validator::{Validator};
 
 /// The ASNR compiler
 #[derive(Debug, PartialEq)]
@@ -117,7 +117,7 @@ impl AsnrCompiler {
     /// * _Ok_  - Vector of warnings raised during the compilation
     /// * _Err_ - Unrecoverable error, no rust representations were generated
     pub fn compile(self) -> Result<Vec<Box<dyn Error>>, Box<dyn Error>> {
-        let mut result = String::from(RUST_IMPORTS_TEMPLATE);
+        let mut result = imports_and_generic_types(None);
         let mut warnings = Vec::<Box<dyn Error>>::new();
         let mut modules: Vec<ToplevelDeclaration> = vec![];
         for src in self.sources {
@@ -230,7 +230,7 @@ mod tests {
                 .add_asn_source(PathBuf::from(
                     "test_asn1/CPM-SensorInformationContainer.asn"
                 ))
-                .add_asn_source(PathBuf::from("test_asn1/CPM-PDU-Descriptions.asn"))
+               .add_asn_source(PathBuf::from("test_asn1/CPM-PDU-Descriptions.asn"))
                 .set_output_path(PathBuf::from("./test_asn1/generated.rs"))
                 .compile()
                 .unwrap()

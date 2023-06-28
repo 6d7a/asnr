@@ -9,7 +9,7 @@ use nom::{
 
 use asnr_grammar::{types::*, *};
 
-use super::{constraint::constraint, *, common::optional_comma};
+use super::{common::optional_comma, constraint::constraint, *};
 
 /// Tries to parse an ASN1 SEQUENCE
 ///
@@ -54,7 +54,6 @@ fn sequence_member<'a>(input: &'a str) -> IResult<&'a str, SequenceMember> {
         default,
     )))(input)
 }
-
 
 #[cfg(test)]
 mod tests {
@@ -333,14 +332,14 @@ mod tests {
                         name: "unNumber".into(),
 
                         tag: None,
-                        r#type: ASN1Type::Integer(Integer {
-                            constraints: vec![ValueConstraint {
+                        r#type: ASN1Type::Integer(
+                            ValueConstraint {
                                 min_value: Some(ASN1Value::Integer(0)),
                                 max_value: Some(ASN1Value::Integer(9999)),
                                 extensible: false
-                            }],
-                            distinguished_values: None
-                        }),
+                            }
+                            .into()
+                        ),
                         default_value: None,
                         is_optional: false,
                         constraints: vec![],
