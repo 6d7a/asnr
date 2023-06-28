@@ -1,4 +1,4 @@
-use std::{cmp::min};
+use std::cmp::min;
 
 use nom::{
     bytes::complete::tag,
@@ -105,3 +105,142 @@ pub fn take_until_unbalanced<'a>(
     }
 }
 
+pub fn opt_delimited<'a, O1, O2, O3, E: ParseError<&'a str>, F, G, H>(
+    mut first: F,
+    mut second: G,
+    mut third: H,
+) -> impl FnMut(&'a str) -> IResult<&'a str, O2, Error<&'a str>>
+where
+    F: Parser<&'a str, O1, Error<&'a str>>,
+    G: Parser<&'a str, O2, Error<&'a str>>,
+    H: Parser<&'a str, O3, Error<&'a str>>,
+    O1: std::fmt::Debug,
+{
+    move |input| {
+        let (input, expect_closing) = match first.parse(input) {
+            Ok((i, _)) => (i, true),
+            Err(Err::Error(e)) => (e.input, false),
+            Err(e) => return Err(e),
+        };
+        let (input, o2) = second.parse(input)?;
+        if expect_closing {
+            third.parse(input).map(|(i, _)| (i, o2))
+        } else {
+            Ok((input, o2))
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+
+    use crate::parser::asn1_value;
+    use crate::parser::common::{
+        extension_marker, in_parentheses, opt_parentheses, skip_ws_and_comments,
+    };
+    use crate::parser::integer::integer_value;
+    use crate::parser::util::opt_delimited;
+    use asnr_grammar::constraints::{
+        Constraint, ElementOrSetOperation, ElementSet, SubtypeElement,
+    };
+    use asnr_grammar::{ASN1Value, COMMA, LEFT_PARENTHESIS, RIGHT_PARENTHESIS};
+    use nom::character::streaming::char;
+    use nom::combinator::{into, map, opt, value};
+    use nom::multi::many1;
+    use nom::sequence::{pair, preceded};
+    use nom::{bytes::complete::tag, error::Error};
+
+    #[test]
+    fn optional_delimiter() {
+        assert_eq!(
+            opt_delimited::<&str, &str, &str, Error<&str>, _, _, _>(
+                skip_ws_and_comments(tag("1")),
+                skip_ws_and_comments(tag("ab")),
+                skip_ws_and_comments(tag("2"))
+            )("1ab2"),
+            Ok(("", "ab"))
+        );
+        assert_eq!(
+            opt_delimited::<char, &str, char, Error<&str>, _, _, _>(
+                skip_ws_and_comments(char('(')),
+                skip_ws_and_comments(tag("ab")),
+                skip_ws_and_comments(char(')'))
+            )("ab"),
+            Ok(("", "ab"))
+        );
+        assert_eq!(
+            opt_delimited::<char, &str, char, Error<&str>, _, _, _>(
+                skip_ws_and_comments(char('(')),
+                skip_ws_and_comments(tag("ab")),
+                skip_ws_and_comments(char(')'))
+            )("( abc"),
+            Err(nom::Err::Error(Error {
+                input: "c",
+                code: nom::error::ErrorKind::Char
+            }))
+        );
+        assert_eq!(
+            opt_delimited::<char, &str, char, Error<&str>, _, _, _>(
+                skip_ws_and_comments(char('(')),
+                skip_ws_and_comments(tag("ab")),
+                skip_ws_and_comments(char(')'))
+            )(" ab )"),
+            Ok((" )", "ab"))
+        );
+        assert_eq!(
+            in_parentheses(opt_delimited::<char, &str, char, Error<&str>, _, _, _>(
+                skip_ws_and_comments(char('(')),
+                skip_ws_and_comments(tag("ab")),
+                skip_ws_and_comments(char(')'))
+            ))("(( ab ))"),
+            Ok(("", "ab"))
+        );
+        assert_eq!(
+            many1(in_parentheses(opt_delimited::<
+                char,
+                ASN1Value,
+                char,
+                Error<&str>,
+                _,
+                _,
+                _,
+            >(
+                skip_ws_and_comments(char(LEFT_PARENTHESIS)),
+                skip_ws_and_comments(asn1_value),
+                skip_ws_and_comments(char(RIGHT_PARENTHESIS))
+            )))("((5))"),
+            Ok(("", vec![ASN1Value::Integer(5)]))
+        );
+    }
+
+    #[test]
+    fn x() {
+        assert_eq!(
+            skip_ws_and_comments(in_parentheses(map(
+                into(pair(
+                    value(
+                        ElementOrSetOperation::Element(SubtypeElement::SingleValue {
+                            value: ASN1Value::Integer(5),
+                            extensible: false
+                        }),
+                        opt_parentheses(integer_value),
+                    ),
+                    opt(skip_ws_and_comments(preceded(
+                        char(COMMA),
+                        extension_marker,
+                    ))),
+                )),
+                |set| Constraint::SubtypeConstraint(set)
+            ),))("((5))")
+            .unwrap()
+            .1,
+            Constraint::SubtypeConstraint(ElementSet {
+                set: ElementOrSetOperation::Element(SubtypeElement::SingleValue {
+                    value: ASN1Value::Integer(5),
+                    extensible: false
+                }),
+                extensible: false
+            })
+        );
+    }
+}

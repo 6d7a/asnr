@@ -31,7 +31,7 @@ pub fn sequence_of<'a>(input: &'a str) -> IResult<&'a str, ASN1Type> {
 
 #[cfg(test)]
 mod tests {
-    use asnr_grammar::{subtyping::*, types::*, *};
+    use asnr_grammar::{constraints::*, types::*, *};
 
     use crate::parser::sequence_of;
 
@@ -67,11 +67,16 @@ mod tests {
                 .unwrap()
                 .1,
             ASN1Type::SequenceOf(SequenceOf {
-                constraints: vec![Constraint::SizeConstraint(ValueConstraint {
-                    min_value: Some(ASN1Value::Integer(1)),
-                    max_value: Some(ASN1Value::Integer(13)),
-                    extensible: true
-                })],
+                constraints: vec![Constraint::SubtypeConstraint(ElementSet {
+                  set: ElementOrSetOperation::Element(SubtypeElement::SizeConstraint(
+                      Box::new(ElementOrSetOperation::Element(SubtypeElement::ValueRange {
+                          min: Some(ASN1Value::Integer(1)),
+                          max: Some(ASN1Value::Integer(13)),
+                          extensible: true
+                      }))
+                  )),
+                  extensible: false
+              })],
                 r#type: Box::new(ASN1Type::ElsewhereDeclaredType(DeclarationElsewhere {
                     identifier: "CorrelationCellValue".into(),
                     constraints: vec![]
@@ -87,11 +92,16 @@ mod tests {
                 .unwrap()
                 .1,
             ASN1Type::SequenceOf(SequenceOf {
-                constraints: vec![Constraint::SizeConstraint(ValueConstraint {
-                    min_value: Some(ASN1Value::Integer(1)),
-                    max_value: Some(ASN1Value::Integer(13)),
-                    extensible: true
-                })],
+                constraints: vec![Constraint::SubtypeConstraint(ElementSet {
+                  set: ElementOrSetOperation::Element(SubtypeElement::SizeConstraint(
+                      Box::new(ElementOrSetOperation::Element(SubtypeElement::ValueRange {
+                          min: Some(ASN1Value::Integer(1)),
+                          max: Some(ASN1Value::Integer(13)),
+                          extensible: true
+                      }))
+                  )),
+                  extensible: false
+              })],
                 r#type: Box::new(ASN1Type::ElsewhereDeclaredType(DeclarationElsewhere {
                     identifier: "CorrelationCellValue".into(),
                     constraints: vec![]
@@ -111,11 +121,16 @@ mod tests {
             .unwrap()
             .1,
             ASN1Type::SequenceOf(SequenceOf {
-                constraints: vec![Constraint::SizeConstraint(ValueConstraint {
-                    min_value: Some(ASN1Value::Integer(1)),
-                    max_value: Some(ASN1Value::Integer(13)),
-                    extensible: true
-                })],
+                constraints: vec![Constraint::SubtypeConstraint(ElementSet {
+                  set: ElementOrSetOperation::Element(SubtypeElement::SizeConstraint(
+                      Box::new(ElementOrSetOperation::Element(SubtypeElement::ValueRange {
+                          min: Some(ASN1Value::Integer(1)),
+                          max: Some(ASN1Value::Integer(13)),
+                          extensible: true
+                      }))
+                  )),
+                  extensible: false
+              })],
                 r#type: Box::new(ASN1Type::Integer(Integer {
                     constraints: vec![Constraint::ValueConstraint(ValueConstraint {
                         min_value: Some(ASN1Value::Integer(1)),

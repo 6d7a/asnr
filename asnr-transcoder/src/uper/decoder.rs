@@ -25,7 +25,7 @@ impl Decoder for Uper {
         &self,
         integer: asnr_grammar::types::Integer,
     ) -> fn(I) -> IResult<I, O> {
-        let constraints = PerVisibleIntegerConstraints::from(&integer.constraints);
+        // let constraints = PerVisibleIntegerConstraints::from(&integer.constraints);
       todo!()
     }
 

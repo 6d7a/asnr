@@ -187,7 +187,7 @@ mod tests {
     use core::panic;
     use std::vec;
 
-    use asnr_grammar::{information_object::*, subtyping::*, types::*, *};
+    use asnr_grammar::{constraints::*, information_object::*, types::*, *};
 
     use crate::parser::top_level_information_declaration;
 
@@ -211,13 +211,16 @@ mod tests {
         if let ASN1Type::Integer(int) = tld.r#type {
             assert!(!int.constraints.is_empty());
             assert_eq!(
-              *int.constraints.first().unwrap(),
-              Constraint::ValueConstraint(ValueConstraint {
-                  min_value: Some(ASN1Value::Integer(1)),
-                  max_value: Some(ASN1Value::Integer(8)),
-                  extensible: false
-              })
-          );
+                *int.constraints.first().unwrap(),
+                Constraint::SubtypeConstraint(ElementSet {
+                    set: ElementOrSetOperation::Element(SubtypeElement::ValueRange {
+                        min: Some(ASN1Value::Integer(1)),
+                        max: Some(ASN1Value::Integer(8)),
+                        extensible: false
+                    }),
+                    extensible: false
+                })
+            );
         } else {
             panic!("Top-level declaration contains other type than integer.")
         }
@@ -247,13 +250,16 @@ mod tests {
         if let ASN1Type::Integer(int) = tld.r#type {
             assert_eq!(
                 *int.constraints.first().unwrap(),
-                Constraint::ValueConstraint(ValueConstraint {
-                    min_value: Some(ASN1Value::Integer(0)),
-                    max_value: Some(ASN1Value::Integer(161)),
-                    extensible: true
+                Constraint::SubtypeConstraint(ElementSet {
+                    set: ElementOrSetOperation::Element(SubtypeElement::ValueRange {
+                        min: Some(ASN1Value::Integer(0)),
+                        max: Some(ASN1Value::Integer(161)),
+                        extensible: true
+                    }),
+                    extensible: false
                 })
             );
-            
+
             assert_eq!(int.distinguished_values.as_ref().unwrap().len(), 2);
             assert_eq!(
                 int.distinguished_values.as_ref().unwrap()[0],
@@ -339,25 +345,30 @@ mod tests {
                 name: "EventZone".into(),
                 r#type: ASN1Type::ElsewhereDeclaredType(DeclarationElsewhere {
                     identifier: "EventHistory".into(),
-                    constraints: vec![
-                        Constraint::ArrayComponentConstraint(ComponentConstraint {
-                            is_partial: true,
-                            constraints: vec![ConstrainedComponent {
-                                identifier: "eventDeltaTime".into(),
-                                constraints: vec![],
-                                presence: ComponentPresence::Present
-                            }]
+                    constraints: vec![Constraint::SubtypeConstraint(ElementSet {
+                        set: ElementOrSetOperation::SetOperation(SetOperation {
+                            base: SubtypeElement::MultipleTypeConstraints(InnerTypeConstraint {
+                                is_partial: true,
+                                constraints: vec![ConstrainedComponent {
+                                    identifier: "eventDeltaTime".into(),
+                                    constraints: vec![],
+                                    presence: ComponentPresence::Present
+                                }]
+                            }),
+                            operator: SetOperator::Union,
+                            operant: Box::new(ElementOrSetOperation::Element(
+                                SubtypeElement::MultipleTypeConstraints(InnerTypeConstraint {
+                                    is_partial: true,
+                                    constraints: vec![ConstrainedComponent {
+                                        identifier: "eventDeltaTime".into(),
+                                        constraints: vec![],
+                                        presence: ComponentPresence::Absent
+                                    }]
+                                })
+                            ))
                         }),
-                        Constraint::Arithmetic(SetOperation::Union),
-                        Constraint::ArrayComponentConstraint(ComponentConstraint {
-                            is_partial: true,
-                            constraints: vec![ConstrainedComponent {
-                                identifier: "eventDeltaTime".into(),
-                                constraints: vec![],
-                                presence: ComponentPresence::Absent
-                            }]
-                        })
-                    ]
+                        extensible: false
+                    })]
                 })
             }
         );
@@ -367,7 +378,7 @@ mod tests {
     fn parses_anonymous_sequence_of_declaration() {
         let tld = top_level_type_declaration(
             r#"--Comments
-        InterferenceManagementZones ::= SEQUENCE (SIZE(1..16, ...)) OF InterferenceManagementZone"#,
+        InterferenceManagementZones ::= SEQUENCE (SIZE(1..16), ...) OF InterferenceManagementZone"#,
         )
         .unwrap()
         .1;
@@ -378,9 +389,14 @@ mod tests {
                 comments: "Comments".into(),
                 name: "InterferenceManagementZones".into(),
                 r#type: ASN1Type::SequenceOf(SequenceOf {
-                    constraints: vec![Constraint::SizeConstraint(ValueConstraint {
-                        min_value: Some(ASN1Value::Integer(1)),
-                        max_value: Some(ASN1Value::Integer(16)),
+                    constraints: vec![Constraint::SubtypeConstraint(ElementSet {
+                        set: ElementOrSetOperation::Element(SubtypeElement::SizeConstraint(
+                            Box::new(ElementOrSetOperation::Element(SubtypeElement::ValueRange {
+                                min: Some(ASN1Value::Integer(1)),
+                                max: Some(ASN1Value::Integer(16)),
+                                extensible: false
+                            }))
+                        )),
                         extensible: true
                     })],
                     r#type: Box::new(ASN1Type::ElsewhereDeclaredType(DeclarationElsewhere {

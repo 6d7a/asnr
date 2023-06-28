@@ -1,22 +1,23 @@
 use nom::{
     bytes::complete::tag,
+    character::complete::i128,
     combinator::{map, opt},
     sequence::tuple,
-    IResult, character::complete::i128,
+    IResult,
 };
 
-use asnr_grammar::{ASN1Type, INTEGER, ASN1Value};
+use asnr_grammar::{ASN1Type, ASN1Value, INTEGER};
 
-use super::{*, constraint::simple_value_constraint};
+use super::{constraint::*, *};
 
 pub fn integer_value<'a>(input: &'a str) -> IResult<&'a str, ASN1Value> {
-  map(skip_ws_and_comments(i128), |m| ASN1Value::Integer(m))(input)
+    map(skip_ws_and_comments(i128), |m| ASN1Value::Integer(m))(input)
 }
 
 /// Tries to parse an ASN1 INTEGER
-/// 
+///
 /// *`input` - string slice to be matched against
-/// 
+///
 /// `integer` will try to match an INTEGER declaration in the `input` string.
 /// If the match succeeds, the parser will consume the match and return the remaining string
 /// and a wrapped `Integer` value representing the ASN1 declaration.
@@ -35,8 +36,7 @@ pub fn integer<'a>(input: &'a str) -> IResult<&'a str, ASN1Type> {
 #[cfg(test)]
 mod tests {
 
-  use asnr_grammar::{*, subtyping::*, types::*};
-
+    use asnr_grammar::{constraints::*, types::*, *};
 
     use super::*;
 
@@ -47,32 +47,32 @@ mod tests {
             Ok(("", ASN1Type::Integer(Integer::default())))
         );
         assert_eq!(
-            integer("INTEGER  (-9..-4, ...)"),
-            Ok((
-                "",
-                ASN1Type::Integer(
-                    ValueConstraint {
-                        min_value: Some(ASN1Value::Integer(-9)),
-                        max_value: Some(ASN1Value::Integer(-4)),
+            integer("INTEGER  (-9..-4, ...)").unwrap().1,
+            ASN1Type::Integer(Integer {
+                constraints: vec![Constraint::SubtypeConstraint(ElementSet {
+                    set: ElementOrSetOperation::Element(SubtypeElement::ValueRange {
+                        min: Some(ASN1Value::Integer(-9)),
+                        max: Some(ASN1Value::Integer(-4)),
                         extensible: true
-                    }
-                    .into()
-                )
-            ))
+                    }),
+                    extensible: false
+                })],
+                distinguished_values: None
+            })
         );
         assert_eq!(
-            integer("\r\nINTEGER(-9..-4)"),
-            Ok((
-                "",
-                ASN1Type::Integer(
-                    ValueConstraint {
-                        min_value: Some(ASN1Value::Integer(-9)),
-                        max_value: Some(ASN1Value::Integer(-4)),
-                        extensible: false
-                    }
-                    .into()
-                )
-            ))
+            integer("\r\nINTEGER(-9..-4)").unwrap().1,
+            ASN1Type::Integer(Integer {
+              constraints: vec![Constraint::SubtypeConstraint(ElementSet {
+                  set: ElementOrSetOperation::Element(SubtypeElement::ValueRange {
+                      min: Some(ASN1Value::Integer(-9)),
+                      max: Some(ASN1Value::Integer(-4)),
+                      extensible: false
+                  }),
+                  extensible: false
+              })],
+              distinguished_values: None
+          })
         );
     }
 }

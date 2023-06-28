@@ -2,7 +2,7 @@ use core::fmt::Debug;
 
 use alloc::{borrow::ToOwned, boxed::Box, string::ToString, vec};
 
-use crate::{subtyping::*, *};
+use crate::{constraints::*, error::GrammarError, *};
 
 /// Representation of an ASN1 INTEGER data element
 /// with corresponding constraints and distinguished values
@@ -18,12 +18,12 @@ impl Integer {
             self.constraints
                 .iter()
                 .fold((i128::MAX, i128::MIN), |(mut min, mut max), c| {
-                    if let Constraint::ValueConstraint(vc) = c {
-                        if let Some(ASN1Value::Integer(i)) = vc.min_value {
-                            min = i.min(min);
+                    if let Ok((cmin, cmax, _)) = c.unpack_as_value_range() {
+                        if let Some(ASN1Value::Integer(i)) = cmin {
+                            min = (*i).min(min);
                         };
-                        if let Some(ASN1Value::Integer(i)) = vc.max_value {
-                            max = i.max(max);
+                        if let Some(ASN1Value::Integer(i)) = cmax {
+                            max = (*i).max(max);
                         };
                     };
                     (min, max)
@@ -66,10 +66,17 @@ impl Default for Integer {
     }
 }
 
-impl From<ValueConstraint> for Integer {
-    fn from(value: ValueConstraint) -> Self {
+impl From<(i128, i128, bool)> for Integer {
+    fn from(value: (i128, i128, bool)) -> Self {
         Self {
-            constraints: vec![Constraint::ValueConstraint(value)],
+            constraints: vec![Constraint::SubtypeConstraint(ElementSet {
+                set: ElementOrSetOperation::Element(SubtypeElement::ValueRange {
+                    min: Some(ASN1Value::Integer(value.0)),
+                    max: Some(ASN1Value::Integer(value.1)),
+                    extensible: value.2
+                }),
+                extensible: value.2,
+            })],
             distinguished_values: None,
         }
     }
@@ -78,9 +85,12 @@ impl From<ValueConstraint> for Integer {
 impl From<(Option<i128>, Option<i128>, bool)> for Integer {
     fn from(value: (Option<i128>, Option<i128>, bool)) -> Self {
         Self {
-            constraints: vec![Constraint::ValueConstraint(ValueConstraint {
-                min_value: value.0.map(|v| ASN1Value::Integer(v)),
-                max_value: value.1.map(|v| ASN1Value::Integer(v)),
+            constraints: vec![Constraint::SubtypeConstraint(ElementSet {
+                set: ElementOrSetOperation::Element(SubtypeElement::ValueRange {
+                    min: value.0.map(|v| ASN1Value::Integer(v)),
+                    max: value.1.map(|v| ASN1Value::Integer(v)),
+                    extensible: value.2
+                }),
                 extensible: value.2,
             })],
             distinguished_values: None,
@@ -114,14 +124,14 @@ impl
 /// defining the individual bits
 #[derive(Debug, Clone, PartialEq)]
 pub struct BitString {
-    pub constraints: Vec<ValueConstraint>,
+    pub constraints: Vec<Constraint>,
     pub distinguished_values: Option<Vec<DistinguishedValue>>,
 }
 
-impl From<(Option<Vec<DistinguishedValue>>, Option<ValueConstraint>)> for BitString {
-    fn from(value: (Option<Vec<DistinguishedValue>>, Option<ValueConstraint>)) -> Self {
+impl From<(Option<Vec<DistinguishedValue>>, Option<Vec<Constraint>>)> for BitString {
+    fn from(value: (Option<Vec<DistinguishedValue>>, Option<Vec<Constraint>>)) -> Self {
         BitString {
-            constraints: value.1.map_or(vec![], |r| vec![r]),
+            constraints: value.1.unwrap_or(vec![]),
             distinguished_values: value.0,
         }
     }
@@ -158,12 +168,10 @@ pub struct CharacterString {
     pub r#type: CharacterStringType,
 }
 
-impl From<(&str, Option<ValueConstraint>)> for CharacterString {
-    fn from(value: (&str, Option<ValueConstraint>)) -> Self {
+impl From<(&str, Option<Vec<Constraint>>)> for CharacterString {
+    fn from(value: (&str, Option<Vec<Constraint>>)) -> Self {
         CharacterString {
-            constraints: value
-                .1
-                .map_or(vec![], |r| vec![Constraint::ValueConstraint(r)]),
+            constraints: value.1.unwrap_or(vec![]),
             r#type: value.0.into(),
         }
     }

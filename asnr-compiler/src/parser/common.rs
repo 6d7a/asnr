@@ -5,16 +5,17 @@ use nom::{
         alpha1, alphanumeric1, char, i128, multispace0, multispace1, one_of, u64,
     },
     combinator::{into, opt, peek, recognize, value},
+    error::Error,
     multi::{many0, many1, separated_list0, separated_list1},
     sequence::{delimited, pair, preceded, terminated, tuple},
     IResult,
 };
 
-use asnr_grammar::{subtyping::*, types::*, *};
+use asnr_grammar::{constraints::*, types::*, *};
 
 use super::{
     asn1_value,
-    util::{map_into, take_until_or, take_until_unbalanced},
+    util::{map_into, opt_delimited, take_until_or, take_until_unbalanced},
 };
 
 /// Parses an ASN1 comment.
@@ -120,10 +121,10 @@ pub fn opt_parentheses<'a, F, O>(inner: F) -> impl FnMut(&'a str) -> IResult<&'a
 where
     F: FnMut(&'a str) -> IResult<&'a str, O>,
 {
-    delimited(
-        opt(skip_ws_and_comments(char(LEFT_PARENTHESIS))),
+    opt_delimited::<char, O, char, Error<&str>, _, _, _>(
+        skip_ws_and_comments(char(LEFT_BRACKET)),
         skip_ws_and_comments(inner),
-        opt(skip_ws_and_comments(char(RIGHT_PARENTHESIS))),
+        skip_ws_and_comments(char(RIGHT_BRACKET)),
     )
 }
 

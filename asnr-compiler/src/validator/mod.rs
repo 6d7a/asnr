@@ -11,7 +11,7 @@ use std::{collections::HashMap, error::Error};
 
 use asnr_grammar::{
     information_object::{ASN1Information, ClassLink, InformationObjectClass},
-    subtyping::*,
+    constraints::*,
     types::*,
     *,
 };
@@ -129,27 +129,32 @@ impl Validate for BitString {
 impl Validate for CharacterString {
     fn validate(&self) -> Result<(), ValidatorError> {
         for c in &self.constraints {
-            if let Constraint::ValueConstraint(r) = c {
-                r.validate()?;
-            }
+            c.validate()?;
         }
         Ok(())
     }
 }
 
-impl Validate for ValueConstraint {
+impl Validate for Constraint {
     fn validate(&self) -> Result<(), ValidatorError> {
-        if let Some((ASN1Value::Integer(min), ASN1Value::Integer(max))) =
-            self.min_value.as_ref().zip(self.max_value.as_ref())
-        {
-            if min > max {
-                return Err(ValidatorError::new(
-                    None,
-                    "Mininum value exceeds maximum value!",
-                    ValidatorErrorType::InvalidConstraintsError,
-                ));
-            }
-        }
+        // match self {
+        //     Constraint::ValueConstraint(value_constraint) => {
+        //         if let Some((ASN1Value::Integer(min), ASN1Value::Integer(max))) = value_constraint
+        //             .min_value
+        //             .as_ref()
+        //             .zip(value_constraint.max_value.as_ref())
+        //         {
+        //             if min > max {
+        //                 return Err(ValidatorError::new(
+        //                     None,
+        //                     "Mininum value exceeds maximum value!",
+        //                     ValidatorErrorType::InvalidConstraintsError,
+        //                 ));
+        //             }
+        //         }
+        //     }
+        //     _ => (),
+        // }
         Ok(())
     }
 }

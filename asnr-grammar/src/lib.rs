@@ -15,7 +15,8 @@ use asnr_traits::Declare;
 
 pub mod information_object;
 pub mod parameterization;
-pub mod subtyping;
+pub mod constraints;
+pub mod error;
 pub mod types;
 pub mod utils;
 
@@ -31,7 +32,7 @@ use information_object::{
     InformationObjectClass, InformationObjectFieldReference, ToplevelInformationDeclaration,
 };
 use parameterization::Parameterization;
-use subtyping::Constraint;
+use constraints::Constraint;
 use types::*;
 use utils::int_type_token;
 
@@ -117,11 +118,16 @@ pub const WITH_COMPONENTS: &'static str = "WITH COMPONENTS";
 pub const WITH_COMPONENT: &'static str = "WITH COMPONENT";
 pub const UNION: &'static str = "UNION";
 pub const PIPE: &'static str = "|";
+pub const LESS_THAN: char = '<';
+pub const GREATER_THAN: char = '>';
 pub const EXCEPT: &'static str = "EXCEPT";
 pub const INTERSECTION: &'static str = "INTERSECTION";
 pub const CARET: &'static str = "^";
 pub const ABSENT: &'static str = "ABSENT";
 pub const PRESENT: &'static str = "PRESENT";
+pub const INCLUDES: &'static str = "INCLUDES";
+pub const MIN: &'static str = "MIN";
+pub const MAX: &'static str = "MAX";
 
 pub const ASSIGN: &'static str = "::=";
 pub const RANGE: &'static str = "..";

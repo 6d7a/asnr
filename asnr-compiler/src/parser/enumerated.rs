@@ -7,7 +7,7 @@ use nom::{
     IResult,
 };
 
-use asnr_grammar::{subtyping::*, types::*, *};
+use asnr_grammar::{constraints::*, types::*, *};
 
 use super::common::*;
 
