@@ -13,10 +13,10 @@ extern crate asnr_grammar_derive;
 
 use asnr_traits::Declare;
 
-pub mod information_object;
-pub mod parameterization;
 pub mod constraints;
 pub mod error;
+pub mod information_object;
+pub mod parameterization;
 pub mod types;
 pub mod utils;
 
@@ -28,11 +28,11 @@ use alloc::{
     vec,
     vec::Vec,
 };
+use constraints::Constraint;
 use information_object::{
     InformationObjectClass, InformationObjectFieldReference, ToplevelInformationDeclaration,
 };
 use parameterization::Parameterization;
-use constraints::Constraint;
 use types::*;
 use utils::int_type_token;
 
@@ -306,6 +306,27 @@ impl ToplevelDeclaration {
             _ => None,
         }
     }
+
+    /// Traverses a top-level declaration to check for references to other top-level declarations
+    /// in a constraint. An example would be the constraint of the `intercontinental` field in the
+    /// following example.
+    /// ```ignore
+    /// fifteen INTEGER = 15
+    ///
+    /// Departures ::= SEQUENCE {
+    ///   local SEQUENCE (SIZE(0..999)) OF Local,
+    ///   continental SEQUENCE (SIZE(0..99)) OF Continental,
+    ///   intercontinental SEQUENCE (SIZE(0..fifteen)) OF Intercontinental
+    /// }
+    /// ```
+    pub fn has_constraint_reference(&self) -> bool {
+        match self {
+            ToplevelDeclaration::Type(t) => t.r#type.contains_constraint_reference(),
+            ToplevelDeclaration::Value(v) => v.value.is_elsewhere_declared(),
+            // TODO: Cover constraint references in other types of top-level declarations
+            _ => false,
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -368,6 +389,39 @@ pub enum ASN1Type {
 }
 
 impl ASN1Type {
+    pub fn contains_constraint_reference(&self) -> bool {
+        match self {
+            ASN1Type::Null => false,
+            ASN1Type::Boolean => false,
+            ASN1Type::Integer(i) => i.constraints.iter().any(|c| c.has_cross_reference()),
+            ASN1Type::BitString(b) => b.constraints.iter().any(|c| c.has_cross_reference()),
+            ASN1Type::CharacterString(c) => c.constraints.iter().any(|c| c.has_cross_reference()),
+            ASN1Type::Enumerated(e) => e.constraints.iter().any(|c| c.has_cross_reference()),
+            ASN1Type::Choice(c) => {
+                c.constraints.iter().any(|c| c.has_cross_reference())
+                    && c.options.iter().any(|o| {
+                        o.r#type.contains_constraint_reference()
+                            && o.constraints.iter().any(|c| c.has_cross_reference())
+                    })
+            }
+            ASN1Type::Sequence(s) => {
+                s.constraints.iter().any(|c| c.has_cross_reference())
+                    && s.members.iter().any(|m| {
+                        m.r#type.contains_constraint_reference()
+                            && m.constraints.iter().any(|c| c.has_cross_reference())
+                    })
+            }
+            ASN1Type::SequenceOf(s) => {
+                s.constraints.iter().any(|c| c.has_cross_reference())
+                    && s.r#type.contains_constraint_reference()
+            }
+            ASN1Type::ElsewhereDeclaredType(e) => {
+                e.constraints.iter().any(|c| c.has_cross_reference())
+            }
+            _ => false,
+        }
+    }
+
     pub fn contains_class_field_reference(&self) -> bool {
         match self {
             ASN1Type::Choice(c) => c
@@ -403,15 +457,17 @@ impl ASN1Type {
             ASN1Type::Sequence(s) => ASN1Type::Sequence(Sequence {
                 extensible: s.extensible,
                 constraints: s.constraints,
-                members: s.members.into_iter().map(|mut member| {
-                  member.constraints = vec![];
-                  member.r#type = member.r#type.resolve_class_field_reference(tlds);
-                  member
-                }).collect()
+                members: s
+                    .members
+                    .into_iter()
+                    .map(|mut member| {
+                        member.constraints = vec![];
+                        member.r#type = member.r#type.resolve_class_field_reference(tlds);
+                        member
+                    })
+                    .collect(),
             }),
-            ASN1Type::InformationObjectFieldReference(_) => {
-                self.reassign_type_for_ref(tlds)
-            }
+            ASN1Type::InformationObjectFieldReference(_) => self.reassign_type_for_ref(tlds),
             _ => self,
         }
     }
@@ -523,6 +579,19 @@ pub enum ASN1Value {
     BitString(Vec<bool>),
     EnumeratedValue(String),
     ElsewhereDeclaredValue(String),
+}
+
+impl ASN1Value {
+    pub fn is_elsewhere_declared(&self) -> bool {
+        match self {
+            Self::ElsewhereDeclaredValue(_) | Self::EnumeratedValue(_) => true,
+            _ => false,
+        }
+    }
+
+    pub fn link_elsewhere_declared(&mut self, new_value: ASN1Value) {
+        *self = new_value
+    }
 }
 
 impl ToString for ASN1Value {

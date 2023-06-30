@@ -29,6 +29,14 @@ pub enum Constraint {
 }
 
 impl Constraint {
+    pub fn has_cross_reference(&self) -> bool {
+        if let Self::SubtypeConstraint(c) = self {
+            c.set.has_cross_reference()
+        } else {
+            false
+        }
+    }
+
     pub fn unpack_as_value_range(
         &self,
     ) -> Result<(&Option<ASN1Value>, &Option<ASN1Value>, bool), GrammarError> {
@@ -319,6 +327,36 @@ pub enum SubtypeElement {
     // RecurrenceRange
 }
 
+impl SubtypeElement {
+    pub(super) fn has_cross_reference(&self) -> bool {
+        match self {
+            SubtypeElement::SingleValue {
+                value,
+                extensible: _,
+            } => value.is_elsewhere_declared(),
+            SubtypeElement::ContainedSubtype {
+                subtype,
+                extensible: _,
+            } => subtype.contains_constraint_reference(),
+            SubtypeElement::ValueRange {
+                min,
+                max,
+                extensible: _,
+            } => {
+                min.as_ref().map_or(false, |s| s.is_elsewhere_declared())
+                    && max.as_ref().map_or(false, |s| s.is_elsewhere_declared())
+            }
+            SubtypeElement::SizeConstraint(s) => s.has_cross_reference(),
+            SubtypeElement::TypeConstraint(t) => t.contains_class_field_reference(),
+            SubtypeElement::MultipleTypeConstraints(s) |
+            SubtypeElement::SingleTypeConstraint(s) => s
+                .constraints
+                .iter()
+                .any(|cc| cc.constraints.iter().any(|c| c.has_cross_reference())),
+        }
+    }
+}
+
 impl From<(ASN1Value, Option<ExtensionMarker>)> for SubtypeElement {
     fn from(value: (ASN1Value, Option<ExtensionMarker>)) -> Self {
         Self::SingleValue {
@@ -440,6 +478,17 @@ impl Declare for ElementSet {
 pub enum ElementOrSetOperation {
     Element(SubtypeElement),
     SetOperation(SetOperation),
+}
+
+impl ElementOrSetOperation {
+    pub(super) fn has_cross_reference(&self) -> bool {
+        match self {
+            ElementOrSetOperation::Element(e) => e.has_cross_reference(),
+            ElementOrSetOperation::SetOperation(s) => {
+                s.base.has_cross_reference() && s.operant.has_cross_reference()
+            }
+        }
+    }
 }
 
 impl Declare for ElementOrSetOperation {

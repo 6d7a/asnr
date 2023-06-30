@@ -473,138 +473,153 @@ mod tests {
         println!("{}", generate_enumerated(enum_tld, None).unwrap())
     }
 
-    // #[test]
-    // fn generates_bitstring_from_template() {
-    //     let bs_tld = ToplevelTypeDeclaration {
-    //         parameterization: None,
-    //         name: "BitString".into(),
-    //         comments: "".into(),
-    //         r#type: ASN1Type::BitString(BitString {
-    //             constraints: vec![Constraint::ValueConstraint(ValueConstraint {
-    //                 max_value: Some(ASN1Value::Integer(8)),
-    //                 min_value: Some(ASN1Value::Integer(8)),
-    //                 extensible: true,
-    //             })],
-    //             distinguished_values: Some(vec![
-    //                 DistinguishedValue {
-    //                     name: "firstBit".into(),
-    //                     value: 0,
-    //                 },
-    //                 DistinguishedValue {
-    //                     name: "secondBit".into(),
-    //                     value: 0,
-    //                 },
-    //                 DistinguishedValue {
-    //                     name: "thirdBit".into(),
-    //                     value: 0,
-    //                 },
-    //             ]),
-    //         }),
-    //     };
-    //     println!("{}", generate_bit_string(bs_tld, None).unwrap())
-    // }
+    #[test]
+    fn generates_bitstring_from_template() {
+        let bs_tld = ToplevelTypeDeclaration {
+            parameterization: None,
+            name: "BitString".into(),
+            comments: "".into(),
+            r#type: ASN1Type::BitString(BitString {
+                constraints: vec![Constraint::SubtypeConstraint(ElementSet {
+                    set: ElementOrSetOperation::Element(SubtypeElement::SizeConstraint(Box::new(
+                        ElementOrSetOperation::Element(SubtypeElement::ValueRange {
+                            min: Some(ASN1Value::Integer(8)),
+                            max: Some(ASN1Value::Integer(18)),
+                            extensible: false,
+                        }),
+                    ))),
+                    extensible: false,
+                })],
+                distinguished_values: Some(vec![
+                    DistinguishedValue {
+                        name: "firstBit".into(),
+                        value: 0,
+                    },
+                    DistinguishedValue {
+                        name: "secondBit".into(),
+                        value: 0,
+                    },
+                    DistinguishedValue {
+                        name: "thirdBit".into(),
+                        value: 0,
+                    },
+                ]),
+            }),
+        };
+        println!("{}", generate_bit_string(bs_tld, None).unwrap())
+    }
 
-    // #[test]
-    // fn generates_integer_from_template() {
-    //     let int_tld = ToplevelTypeDeclaration {
-    //         parameterization: None,
-    //         name: "TestInt".into(),
-    //         comments: "".into(),
-    //         r#type: ASN1Type::Integer(Integer {
-    //             constraints: vec![Constraint::ValueConstraint(ValueConstraint {
-    //                 max_value: Some(ASN1Value::Integer(1)),
-    //                 min_value: Some(ASN1Value::Integer(8)),
-    //                 extensible: false,
-    //             })],
-    //             distinguished_values: Some(vec![
-    //                 DistinguishedValue {
-    //                     name: "negativeOutOfRange".into(),
-    //                     value: -16898,
-    //                 },
-    //                 DistinguishedValue {
-    //                     name: "positiveOutOfRange".into(),
-    //                     value: 16898,
-    //                 },
-    //                 DistinguishedValue {
-    //                     name: "invalid".into(),
-    //                     value: 16899,
-    //                 },
-    //             ]),
-    //         }),
-    //     };
-    //     println!("{}", generate_integer(int_tld, None).unwrap())
-    // }
+    #[test]
+    fn generates_integer_from_template() {
+        let int_tld = ToplevelTypeDeclaration {
+            parameterization: None,
+            name: "TestInt".into(),
+            comments: "".into(),
+            r#type: ASN1Type::Integer(Integer {
+                constraints: vec![Constraint::SubtypeConstraint(ElementSet {
+                    set: ElementOrSetOperation::Element(SubtypeElement::ValueRange {
+                        min: Some(ASN1Value::Integer(8)),
+                        max: Some(ASN1Value::Integer(18)),
+                        extensible: false,
+                    }),
+                    extensible: false,
+                })],
+                distinguished_values: Some(vec![
+                    DistinguishedValue {
+                        name: "negativeOutOfRange".into(),
+                        value: -16898,
+                    },
+                    DistinguishedValue {
+                        name: "positiveOutOfRange".into(),
+                        value: 16898,
+                    },
+                    DistinguishedValue {
+                        name: "invalid".into(),
+                        value: 16899,
+                    },
+                ]),
+            }),
+        };
+        println!("{}", generate_integer(int_tld, None).unwrap())
+    }
 
-    // #[test]
-    // fn generates_sequence_from_template() {
-    //     let seq_tld = ToplevelTypeDeclaration {
-    //         parameterization: None,
-    //         name: "Sequence".into(),
-    //         comments: "".into(),
-    //         r#type: ASN1Type::Sequence(Sequence {
-    //             constraints: vec![],
-    //             extensible: Some(1),
-    //             members: vec![SequenceMember {
-    //                 name: "nested".into(),
-    //                 tag: None,
-    //                 r#type: ASN1Type::Sequence(Sequence {
-    //                     extensible: Some(3),
-    //                     constraints: vec![],
-    //                     members: vec![
-    //                         SequenceMember {
-    //                             name: "wow".into(),
-    //                             tag: None,
-    //                             r#type: ASN1Type::ElsewhereDeclaredType(DeclarationElsewhere {
-    //                                 identifier: "Wow".into(),
-    //                                 constraints: vec![],
-    //                             }),
-    //                             default_value: None,
-    //                             is_optional: false,
-    //                             constraints: vec![],
-    //                         },
-    //                         SequenceMember {
-    //                             name: "this-is-annoying".into(),
-    //                             tag: None,
-    //                             r#type: ASN1Type::Boolean,
-    //                             default_value: Some(ASN1Value::Boolean(true)),
-    //                             is_optional: true,
-    //                             constraints: vec![],
-    //                         },
-    //                         SequenceMember {
-    //                             name: "another".into(),
-    //                             tag: None,
-    //                             r#type: ASN1Type::Sequence(Sequence {
-    //                                 extensible: None,
-    //                                 constraints: vec![],
-    //                                 members: vec![SequenceMember {
-    //                                     name: "inner".into(),
+    #[test]
+    fn generates_sequence_from_template() {
+        let seq_tld = ToplevelTypeDeclaration {
+            parameterization: None,
+            name: "Sequence".into(),
+            comments: "".into(),
+            r#type: ASN1Type::Sequence(Sequence {
+                constraints: vec![],
+                extensible: Some(1),
+                members: vec![SequenceMember {
+                    name: "nested".into(),
+                    tag: None,
+                    r#type: ASN1Type::Sequence(Sequence {
+                        extensible: Some(3),
+                        constraints: vec![],
+                        members: vec![
+                            SequenceMember {
+                                name: "wow".into(),
+                                tag: None,
+                                r#type: ASN1Type::ElsewhereDeclaredType(DeclarationElsewhere {
+                                    identifier: "Wow".into(),
+                                    constraints: vec![],
+                                }),
+                                default_value: None,
+                                is_optional: false,
+                                constraints: vec![],
+                            },
+                            SequenceMember {
+                                name: "this-is-annoying".into(),
+                                tag: None,
+                                r#type: ASN1Type::Boolean,
+                                default_value: Some(ASN1Value::Boolean(true)),
+                                is_optional: true,
+                                constraints: vec![],
+                            },
+                            SequenceMember {
+                                name: "another".into(),
+                                tag: None,
+                                r#type: ASN1Type::Sequence(Sequence {
+                                    extensible: None,
+                                    constraints: vec![],
+                                    members: vec![SequenceMember {
+                                        name: "inner".into(),
 
-    //                                     tag: None,
-    //                                     r#type: ASN1Type::BitString(BitString {
-    //                                         constraints: vec![Constraint::ValueConstraint(ValueConstraint {
-    //                                             min_value: Some(ASN1Value::Integer(1)),
-    //                                             max_value: Some(ASN1Value::Integer(1)),
-    //                                             extensible: true,
-    //                                         })],
-    //                                         distinguished_values: None,
-    //                                     }),
-    //                                     default_value: Some(ASN1Value::String("0".into())),
-    //                                     is_optional: true,
-    //                                     constraints: vec![],
-    //                                 }],
-    //                             }),
-    //                             default_value: None,
-    //                             is_optional: true,
-    //                             constraints: vec![],
-    //                         },
-    //                     ],
-    //                 }),
-    //                 default_value: None,
-    //                 is_optional: false,
-    //                 constraints: vec![],
-    //             }],
-    //         }),
-    //     };
-    //     println!("{}", generate_sequence(seq_tld, None).unwrap())
-    // }
+                                        tag: None,
+                                        r#type: ASN1Type::BitString(BitString {
+                                            constraints: vec![Constraint::SubtypeConstraint(
+                                              ElementSet {
+                                                  set: ElementOrSetOperation::Element(
+                                                      SubtypeElement::SizeConstraint(Box::new(
+                                                          ElementOrSetOperation::Element(
+                                                              SubtypeElement::ValueRange { min: Some(ASN1Value::Integer(8)), max: Some(ASN1Value::Integer(18)), extensible: false }
+                                                          )
+                                                      ))
+                                                  ),
+                                                  extensible: false
+                                              }
+                                          )],
+                                            distinguished_values: None,
+                                        }),
+                                        default_value: Some(ASN1Value::String("0".into())),
+                                        is_optional: true,
+                                        constraints: vec![],
+                                    }],
+                                }),
+                                default_value: None,
+                                is_optional: true,
+                                constraints: vec![],
+                            },
+                        ],
+                    }),
+                    default_value: None,
+                    is_optional: false,
+                    constraints: vec![],
+                }],
+            }),
+        };
+        println!("{}", generate_sequence(seq_tld, None).unwrap())
+    }
 }

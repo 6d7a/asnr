@@ -60,117 +60,151 @@ mod tests {
 
     use super::bit_string;
 
-    // #[test]
-    // fn parses_unconfined_bitstring() {
-    //     let sample = "  BIT STRING";
-    //     assert_eq!(
-    //         bit_string(sample).unwrap().1,
-    //         ASN1Type::BitString(BitString {
-    //             distinguished_values: None,
-    //             constraints: vec![]
-    //         })
-    //     )
-    // }
+    #[test]
+    fn parses_unconfined_bitstring() {
+        let sample = "  BIT STRING";
+        assert_eq!(
+            bit_string(sample).unwrap().1,
+            ASN1Type::BitString(BitString {
+                distinguished_values: None,
+                constraints: vec![]
+            })
+        )
+    }
 
-    // #[test]
-    // fn parses_strictly_constrained_bitstring() {
-    //     let sample = "  BIT STRING(SIZE (8))";
-    //     assert_eq!(
-    //         bit_string(sample).unwrap().1,
-    //         ASN1Type::BitString(BitString {
-    //             distinguished_values: None,
-    //             constraints: vec![Constraint::SizeConstraint(ValueConstraint {
-    //                 max_value: Some(ASN1Value::Integer(8)),
-    //                 min_value: Some(ASN1Value::Integer(8)),
-    //                 extensible: false
-    //             })]
-    //         })
-    //     )
-    // }
+    #[test]
+    fn parses_strictly_constrained_bitstring() {
+        let sample = "  BIT STRING(SIZE (8))";
+        assert_eq!(
+            bit_string(sample).unwrap().1,
+            ASN1Type::BitString(BitString {
+                distinguished_values: None,
+                constraints: vec![Constraint::SubtypeConstraint(ElementSet {
+                    set: ElementOrSetOperation::Element(SubtypeElement::SizeConstraint(Box::new(
+                        ElementOrSetOperation::Element(SubtypeElement::SingleValue {
+                            value: ASN1Value::Integer(8),
+                            extensible: false
+                        })
+                    ))),
+                    extensible: false
+                })]
+            })
+        )
+    }
 
-    // #[test]
-    // fn parses_range_constrained_bitstring() {
-    //     let sample = "  BIT STRING -- even here?!?!? -- (SIZE (8 ..18))";
-    //     assert_eq!(
-    //         bit_string(sample).unwrap().1,
-    //         ASN1Type::BitString(BitString {
-    //             distinguished_values: None,
-    //             constraints: vec![Constraint::SizeConstraint(ValueConstraint {
-    //                 max_value: Some(ASN1Value::Integer(18)),
-    //                 min_value: Some(ASN1Value::Integer(8)),
-    //                 extensible: false
-    //             })]
-    //         })
-    //     )
-    // }
+    #[test]
+    fn parses_range_constrained_bitstring() {
+        let sample = "  BIT STRING -- even here?!?!? -- (SIZE (8 ..18))";
+        assert_eq!(
+            bit_string(sample).unwrap().1,
+            ASN1Type::BitString(BitString {
+                distinguished_values: None,
+                constraints: vec![Constraint::SubtypeConstraint(ElementSet {
+                    set: ElementOrSetOperation::Element(SubtypeElement::SizeConstraint(Box::new(
+                        ElementOrSetOperation::Element(SubtypeElement::ValueRange {
+                            min: Some(ASN1Value::Integer(8)),
+                            max: Some(ASN1Value::Integer(18)),
+                            extensible: false
+                        })
+                    ))),
+                    extensible: false
+                })]
+            })
+        )
+    }
 
-    // #[test]
-    // fn parses_strictly_constrained_extended_bitstring() {
-    //     let sample = "  BIT STRING (SIZE (2, ...))";
-    //     assert_eq!(
-    //         bit_string(sample).unwrap().1,
-    //         ASN1Type::BitString(BitString {
-    //             distinguished_values: None,
-    //             constraints: vec![Constraint::SizeConstraint(ValueConstraint {
-    //                 max_value: Some(ASN1Value::Integer(2)),
-    //                 min_value: Some(ASN1Value::Integer(2)),
-    //                 extensible: true
-    //             })]
-    //         })
-    //     )
-    // }
+    #[test]
+    fn parses_strictly_constrained_extended_bitstring() {
+        let sample = "  BIT STRING (SIZE (2, ...))";
+        assert_eq!(
+            bit_string(sample).unwrap().1,
+            ASN1Type::BitString(BitString {
+                distinguished_values: None,
+                constraints: vec![Constraint::SubtypeConstraint(
+                  ElementSet {
+                      set: ElementOrSetOperation::Element(
+                          SubtypeElement::SizeConstraint(Box::new(
+                              ElementOrSetOperation::Element(
+                                  SubtypeElement::SingleValue {
+                                      value: ASN1Value::Integer(2),
+                                      extensible: true
+                                  }
+                              )
+                          ))
+                      ),
+                      extensible: false
+                  }
+              )]
+            })
+        )
+    }
 
-    // #[test]
-    // fn parses_range_constrained_extended_bitstring() {
-    //     let sample = "  BIT STRING (SIZE (8 -- comment -- .. 18, ...))";
-    //     assert_eq!(
-    //         bit_string(sample).unwrap().1,
-    //         ASN1Type::BitString(BitString {
-    //             distinguished_values: None,
-    //             constraints: vec![Constraint::SizeConstraint(ValueConstraint {
-    //                 max_value: Some(ASN1Value::Integer(18)),
-    //                 min_value: Some(ASN1Value::Integer(8)),
-    //                 extensible: true
-    //             })]
-    //         })
-    //     )
-    // }
+    #[test]
+    fn parses_range_constrained_extended_bitstring() {
+        let sample = "  BIT STRING (SIZE (8 -- comment -- .. 18, ...))";
+        assert_eq!(
+            bit_string(sample).unwrap().1,
+            ASN1Type::BitString(BitString {
+                distinguished_values: None,
+                constraints: vec![Constraint::SubtypeConstraint(ElementSet {
+                  set: ElementOrSetOperation::Element(SubtypeElement::SizeConstraint(Box::new(
+                      ElementOrSetOperation::Element(SubtypeElement::ValueRange {
+                          min: Some(ASN1Value::Integer(8)),
+                          max: Some(ASN1Value::Integer(18)),
+                          extensible: true
+                      })
+                  ))),
+                  extensible: false
+              })]
+            })
+        )
+    }
 
-    // #[test]
-    // fn parses_bitstring_with_distinguished_values() {
-    //     let sample = r#"BIT STRING {
-    //       heavyLoad    (0),
-    //       excessWidth  (1),  -- this is excessive
-    //       excessLength (2),  -- this, too
-    //       excessHeight (3) -- and this
-    //   } (SIZE(4))"#;
-    //     assert_eq!(
-    //         bit_string(sample).unwrap().1,
-    //         ASN1Type::BitString(BitString {
-    //             distinguished_values: Some(vec![
-    //                 DistinguishedValue {
-    //                     name: "heavyLoad".into(),
-    //                     value: 0
-    //                 },
-    //                 DistinguishedValue {
-    //                     name: "excessWidth".into(),
-    //                     value: 1
-    //                 },
-    //                 DistinguishedValue {
-    //                     name: "excessLength".into(),
-    //                     value: 2
-    //                 },
-    //                 DistinguishedValue {
-    //                     name: "excessHeight".into(),
-    //                     value: 3
-    //                 },
-    //             ]),
-    //             constraints: vec![Constraint::SizeConstraint(ValueConstraint {
-    //                 max_value: Some(ASN1Value::Integer(4)),
-    //                 min_value: Some(ASN1Value::Integer(4)),
-    //                 extensible: false
-    //             })]
-    //         })
-    //     )
-    // }
+    #[test]
+    fn parses_bitstring_with_distinguished_values() {
+        let sample = r#"BIT STRING {
+          heavyLoad    (0),
+          excessWidth  (1),  -- this is excessive
+          excessLength (2),  -- this, too
+          excessHeight (3) -- and this
+      } (SIZE(4))"#;
+        assert_eq!(
+            bit_string(sample).unwrap().1,
+            ASN1Type::BitString(BitString {
+                distinguished_values: Some(vec![
+                    DistinguishedValue {
+                        name: "heavyLoad".into(),
+                        value: 0
+                    },
+                    DistinguishedValue {
+                        name: "excessWidth".into(),
+                        value: 1
+                    },
+                    DistinguishedValue {
+                        name: "excessLength".into(),
+                        value: 2
+                    },
+                    DistinguishedValue {
+                        name: "excessHeight".into(),
+                        value: 3
+                    },
+                ]),
+                constraints: vec![Constraint::SubtypeConstraint(
+                  ElementSet {
+                      set: ElementOrSetOperation::Element(
+                          SubtypeElement::SizeConstraint(Box::new(
+                              ElementOrSetOperation::Element(
+                                  SubtypeElement::SingleValue {
+                                      value: ASN1Value::Integer(4),
+                                      extensible: false
+                                  }
+                              )
+                          ))
+                      ),
+                      extensible: false
+                  }
+              )]
+            })
+        )
+    }
 }

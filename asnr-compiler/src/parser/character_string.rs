@@ -49,80 +49,114 @@ mod tests {
 
     use super::character_string;
 
-//     #[test]
-//     fn parses_unconfined_characterstring() {
-//         let sample = "  OCTET STRING";
-//         assert_eq!(
-//             character_string(sample).unwrap().1,
-//             ASN1Type::CharacterString(CharacterString {
-//                 constraints: vec![],
-//                 r#type: CharacterStringType::OctetString
-//             })
-//         )
-//     }
+    #[test]
+    fn parses_unconfined_characterstring() {
+        let sample = "  OCTET STRING";
+        assert_eq!(
+            character_string(sample).unwrap().1,
+            ASN1Type::CharacterString(CharacterString {
+                constraints: vec![],
+                r#type: CharacterStringType::OctetString
+            })
+        )
+    }
 
-//     #[test]
-//     fn parses_strictly_constrained_characterstring() {
-//         let sample = "  OCTET STRING(SIZE (8))";
-//         assert_eq!(
-//             character_string(sample).unwrap().1,
-//             ASN1Type::CharacterString(CharacterString {
-//                 constraints: vec![Constraint::ValueConstraint(ValueConstraint {
-//                     max_value: Some(ASN1Value::Integer(8)),
-//                     min_value: Some(ASN1Value::Integer(8)),
-//                     extensible: false
-//                 })],
-//                 r#type: CharacterStringType::OctetString
-//             })
-//         )
-//     }
+    #[test]
+    fn parses_strictly_constrained_characterstring() {
+        let sample = "  OCTET STRING(SIZE (8))";
+        assert_eq!(
+            character_string(sample).unwrap().1,
+            ASN1Type::CharacterString(CharacterString {
+                constraints: vec![Constraint::SubtypeConstraint(
+                  ElementSet {
+                      set: ElementOrSetOperation::Element(
+                          SubtypeElement::SizeConstraint(Box::new(
+                              ElementOrSetOperation::Element(
+                                  SubtypeElement::SingleValue {
+                                      value: ASN1Value::Integer(8),
+                                      extensible: false
+                                  }
+                              )
+                          ))
+                      ),
+                      extensible: false
+                  }
+              )],
+                r#type: CharacterStringType::OctetString
+            })
+        )
+    }
 
-//     #[test]
-//     fn parses_range_constrained_characterstring() {
-//         let sample = "  OCTET STRING -- even here?!?!? -- (SIZE (8 ..18))";
-//         assert_eq!(
-//             character_string(sample).unwrap().1,
-//             ASN1Type::CharacterString(CharacterString {
-//                 constraints: vec![Constraint::ValueConstraint(ValueConstraint {
-//                     max_value: Some(ASN1Value::Integer(18)),
-//                     min_value: Some(ASN1Value::Integer(8)),
-//                     extensible: false
-//                 })],
-//                 r#type: CharacterStringType::OctetString
-//             })
-//         )
-//     }
+    #[test]
+    fn parses_range_constrained_characterstring() {
+        let sample = "  OCTET STRING -- even here?!?!? -- (SIZE (8 ..18))";
+        assert_eq!(
+            character_string(sample).unwrap().1,
+            ASN1Type::CharacterString(CharacterString {
+                constraints: vec![Constraint::SubtypeConstraint(
+                  ElementSet {
+                      set: ElementOrSetOperation::Element(
+                          SubtypeElement::SizeConstraint(Box::new(
+                              ElementOrSetOperation::Element(
+                                  SubtypeElement::ValueRange { min: Some(ASN1Value::Integer(8)), max: Some(ASN1Value::Integer(18)), extensible: false }
+                              )
+                          ))
+                      ),
+                      extensible: false
+                  }
+              )],
+                r#type: CharacterStringType::OctetString
+            })
+        )
+    }
 
-//     #[test]
-//     fn parses_strictly_constrained_extended_characterstring() {
-//         let sample = r#"  OCTET STRING 
-//         (SIZE (2, ...))"#;
-//         assert_eq!(
-//             character_string(sample).unwrap().1,
-//             ASN1Type::CharacterString(CharacterString {
-//                 constraints: vec![Constraint::ValueConstraint(ValueConstraint {
-//                     max_value: Some(ASN1Value::Integer(2)),
-//                     min_value: Some(ASN1Value::Integer(2)),
-//                     extensible: true
-//                 })],
-//                 r#type: CharacterStringType::OctetString
-//             })
-//         )
-//     }
+    #[test]
+    fn parses_strictly_constrained_extended_characterstring() {
+        let sample = r#"  OCTET STRING 
+        (SIZE (2, ...))"#;
+        assert_eq!(
+            character_string(sample).unwrap().1,
+            ASN1Type::CharacterString(CharacterString {
+                constraints: vec![Constraint::SubtypeConstraint(
+                  ElementSet {
+                      set: ElementOrSetOperation::Element(
+                          SubtypeElement::SizeConstraint(Box::new(
+                              ElementOrSetOperation::Element(
+                                  SubtypeElement::SingleValue {
+                                      value: ASN1Value::Integer(2),
+                                      extensible: true
+                                  }
+                              )
+                          ))
+                      ),
+                      extensible: false
+                  }
+              )],
+                r#type: CharacterStringType::OctetString
+            })
+        )
+    }
 
-//     #[test]
-//     fn parses_range_constrained_extended_characterstring() {
-//         let sample = "  OCTET STRING (SIZE (8 -- junior dev's comment -- .. 18, ...))";
-//         assert_eq!(
-//             character_string(sample).unwrap().1,
-//             ASN1Type::CharacterString(CharacterString {
-//                 constraints: vec![Constraint::ValueConstraint(ValueConstraint {
-//                     max_value: Some(ASN1Value::Integer(18)),
-//                     min_value: Some(ASN1Value::Integer(8)),
-//                     extensible: true
-//                 })],
-//                 r#type: CharacterStringType::OctetString
-//             })
-//         )
-//     }
+    #[test]
+    fn parses_range_constrained_extended_characterstring() {
+        let sample = "  OCTET STRING (SIZE (8 --  comment -- .. 18, ...))";
+        assert_eq!(
+            character_string(sample).unwrap().1,
+            ASN1Type::CharacterString(CharacterString {
+                constraints: vec![Constraint::SubtypeConstraint(
+                  ElementSet {
+                      set: ElementOrSetOperation::Element(
+                          SubtypeElement::SizeConstraint(Box::new(
+                              ElementOrSetOperation::Element(
+                                  SubtypeElement::ValueRange { min: Some(ASN1Value::Integer(8)), max: Some(ASN1Value::Integer(18)), extensible: true }
+                              )
+                          ))
+                      ),
+                      extensible: false
+                  }
+              )],
+                r#type: CharacterStringType::OctetString
+            })
+        )
+    }
 }

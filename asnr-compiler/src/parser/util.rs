@@ -212,35 +212,4 @@ mod tests {
             Ok(("", vec![ASN1Value::Integer(5)]))
         );
     }
-
-    #[test]
-    fn x() {
-        assert_eq!(
-            skip_ws_and_comments(in_parentheses(map(
-                into(pair(
-                    value(
-                        ElementOrSetOperation::Element(SubtypeElement::SingleValue {
-                            value: ASN1Value::Integer(5),
-                            extensible: false
-                        }),
-                        opt_parentheses(integer_value),
-                    ),
-                    opt(skip_ws_and_comments(preceded(
-                        char(COMMA),
-                        extension_marker,
-                    ))),
-                )),
-                |set| Constraint::SubtypeConstraint(set)
-            ),))("((5))")
-            .unwrap()
-            .1,
-            Constraint::SubtypeConstraint(ElementSet {
-                set: ElementOrSetOperation::Element(SubtypeElement::SingleValue {
-                    value: ASN1Value::Integer(5),
-                    extensible: false
-                }),
-                extensible: false
-            })
-        );
-    }
 }

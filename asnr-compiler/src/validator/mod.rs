@@ -10,8 +10,8 @@ pub(crate) mod error;
 use std::{collections::HashMap, error::Error};
 
 use asnr_grammar::{
-    information_object::{ASN1Information, ClassLink, InformationObjectClass},
     constraints::*,
+    information_object::{ASN1Information, ClassLink, InformationObjectClass},
     types::*,
     *,
 };
@@ -28,7 +28,6 @@ impl Validator {
     }
 
     fn link(mut self) -> Result<Self, ValidatorError> {
-        let mut with_field_ref = vec![];
         let mut i = 0;
         while i < self.tlds.len() {
             if self
@@ -40,17 +39,13 @@ impl Validator {
                 })
                 .unwrap_or(false)
             {
-                with_field_ref.push(self.tlds.remove(i));
+              
+                if let ToplevelDeclaration::Type(mut tld) = self.tlds.remove(i) {
+                  tld.r#type = tld.r#type.resolve_class_field_reference(&self.tlds);
+                  self.tlds.push(ToplevelDeclaration::Type(tld))
+                }
             } else {
                 i += 1;
-            }
-        }
-        for r in with_field_ref {
-            if let ToplevelDeclaration::Type(mut t) = r {
-                println!("BEFORE {:?}", t.r#type);
-                t.r#type = t.r#type.resolve_class_field_reference(&self.tlds);
-                println!("AFTER {:?}", t.r#type);
-                self.tlds.push(ToplevelDeclaration::Type(t))
             }
         }
 
@@ -137,24 +132,26 @@ impl Validate for CharacterString {
 
 impl Validate for Constraint {
     fn validate(&self) -> Result<(), ValidatorError> {
-        // match self {
-        //     Constraint::ValueConstraint(value_constraint) => {
-        //         if let Some((ASN1Value::Integer(min), ASN1Value::Integer(max))) = value_constraint
-        //             .min_value
-        //             .as_ref()
-        //             .zip(value_constraint.max_value.as_ref())
-        //         {
-        //             if min > max {
-        //                 return Err(ValidatorError::new(
-        //                     None,
-        //                     "Mininum value exceeds maximum value!",
-        //                     ValidatorErrorType::InvalidConstraintsError,
-        //                 ));
-        //             }
-        //         }
-        //     }
-        //     _ => (),
-        // }
+        if let Constraint::SubtypeConstraint(c) = self {
+            if let ElementOrSetOperation::Element(SubtypeElement::ValueRange {
+                min,
+                max,
+                extensible: _,
+            }) = &c.set
+            {
+                if let Some((ASN1Value::Integer(min), ASN1Value::Integer(max))) =
+                    min.as_ref().zip(max.as_ref())
+                {
+                    if min > max {
+                        return Err(ValidatorError::new(
+                            None,
+                            "Mininum value exceeds maximum value!",
+                            ValidatorErrorType::InvalidConstraintsError,
+                        ));
+                    }
+                }
+            }
+        }
         Ok(())
     }
 }

@@ -21,7 +21,11 @@ use super::{
 };
 
 pub fn constraint<'a>(input: &'a str) -> IResult<&'a str, Vec<Constraint>> {
-    many1(single_constraint)(input)
+    many1(alt((
+      single_constraint,
+      // Handle SIZE constraint without external parentheses
+      map(size_constraint, |c| Constraint::SubtypeConstraint(ElementSet { set: ElementOrSetOperation::Element(c), extensible: false }))
+    )))(input)
 }
 
 pub fn single_constraint<'a>(input: &'a str) -> IResult<&'a str, Constraint> {
