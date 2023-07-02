@@ -6,8 +6,8 @@ use nom::{
     },
     combinator::{into, opt, peek, recognize, value},
     error::Error,
-    multi::{many0, many1, separated_list0, separated_list1},
-    sequence::{delimited, pair, preceded, terminated, tuple},
+    multi::{many0, many1},
+    sequence::{delimited, pair, preceded, terminated},
     IResult,
 };
 

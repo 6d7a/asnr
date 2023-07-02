@@ -1,6 +1,6 @@
 use asnr_grammar::{
     information_object::{
-        InformationObjectClass, InformationObjectFieldReference, ObjectFieldIdentifier,
+        InformationObjectClass, ObjectFieldIdentifier,
         SyntaxApplication, SyntaxExpression, SyntaxToken,
     },
     types::*,
@@ -121,20 +121,20 @@ fn compare_tokens(token: &SyntaxToken, application: &SyntaxApplication) -> bool 
     match token {
         SyntaxToken::Comma => application == &SyntaxApplication::Comma,
         SyntaxToken::Literal(l) => application == &SyntaxApplication::Literal(l.clone()),
-        SyntaxToken::Field(ObjectFieldIdentifier::MultipleValue(m)) => match application {
+        SyntaxToken::Field(ObjectFieldIdentifier::MultipleValue(_m)) => match application {
             SyntaxApplication::ObjectSetDeclaration(_) | SyntaxApplication::TypeReference(_) => {
                 true
             }
             _ => false,
         },
-        SyntaxToken::Field(ObjectFieldIdentifier::SingleValue(s)) => {
+        SyntaxToken::Field(ObjectFieldIdentifier::SingleValue(_s)) => {
             if let SyntaxApplication::ValueReference(_) = application {
                 true
             } else {
                 false
             }
         }
-        o => {
+        _o => {
             todo!()
         }
     }

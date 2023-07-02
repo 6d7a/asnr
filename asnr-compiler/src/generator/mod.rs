@@ -12,7 +12,7 @@ use self::{
         character_string_template, generate_bit_string, generate_boolean, generate_choice,
         generate_enumerated, generate_information_object_class, generate_integer,
         generate_integer_value, generate_null, generate_null_value, generate_sequence,
-        generate_sequence_of, generate_typealias, generate_information_object_set,
+        generate_sequence_of, generate_typealias,
     },
     error::GeneratorError,
 };

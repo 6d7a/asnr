@@ -136,18 +136,16 @@ mod tests {
 
     use crate::parser::asn1_value;
     use crate::parser::common::{
-        extension_marker, in_parentheses, opt_parentheses, skip_ws_and_comments,
+        in_parentheses, skip_ws_and_comments,
     };
-    use crate::parser::integer::integer_value;
+    
     use crate::parser::util::opt_delimited;
-    use asnr_grammar::constraints::{
-        Constraint, ElementOrSetOperation, ElementSet, SubtypeElement,
-    };
-    use asnr_grammar::{ASN1Value, COMMA, LEFT_PARENTHESIS, RIGHT_PARENTHESIS};
+    
+    use asnr_grammar::{ASN1Value, LEFT_PARENTHESIS, RIGHT_PARENTHESIS};
     use nom::character::streaming::char;
-    use nom::combinator::{into, map, opt, value};
+    
     use nom::multi::many1;
-    use nom::sequence::{pair, preceded};
+    
     use nom::{bytes::complete::tag, error::Error};
 
     #[test]

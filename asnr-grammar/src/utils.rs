@@ -1,6 +1,6 @@
 use alloc::{vec::Vec, string::String};
 
-use crate::{information_object::{InformationObjectClassField, ObjectFieldIdentifier}, ToplevelDeclaration, error::GrammarError, ASN1Value};
+use crate::{information_object::{InformationObjectClassField, ObjectFieldIdentifier}, ToplevelDeclaration, ASN1Value};
 
 pub fn int_type_token<'a>(min: i128, max: i128) -> &'a str {
     match max - min {

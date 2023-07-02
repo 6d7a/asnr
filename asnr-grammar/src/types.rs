@@ -2,7 +2,7 @@ use core::fmt::Debug;
 
 use alloc::{borrow::ToOwned, boxed::Box, string::ToString, vec};
 
-use crate::{constraints::*, error::GrammarError, *};
+use crate::{constraints::*, *};
 
 /// Representation of an ASN1 INTEGER data element
 /// with corresponding constraints and distinguished values

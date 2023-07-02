@@ -7,11 +7,10 @@
 //! constraints and value definitions.
 pub(crate) mod error;
 
-use std::{collections::HashMap, error::Error};
+use std::{error::Error};
 
 use asnr_grammar::{
     constraints::*,
-    information_object::{ASN1Information, ClassLink, InformationObjectClass},
     types::*,
     *,
 };
@@ -76,7 +75,7 @@ impl Validator {
     pub fn validate(
         mut self,
     ) -> Result<(Vec<ToplevelDeclaration>, Vec<Box<dyn Error>>), Box<dyn Error>> {
-        let mut warnings: Vec<Box<dyn Error>>;
+        let warnings: Vec<Box<dyn Error>>;
         (self, warnings) = self.link()?;
         Ok(self.tlds.into_iter().fold(
             (Vec::<ToplevelDeclaration>::new(), warnings),

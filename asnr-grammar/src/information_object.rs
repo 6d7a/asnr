@@ -1,7 +1,7 @@
 use asnr_traits::Declare;
 
 use crate::{constraints::*, *, utils::walk_object_field_ref_path};
-use alloc::{borrow::ToOwned, boxed::Box, format, string::String, vec, vec::Vec};
+use alloc::{borrow::ToOwned, format, string::String, vec, vec::Vec};
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct ToplevelInformationDeclaration {

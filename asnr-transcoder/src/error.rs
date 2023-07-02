@@ -2,7 +2,7 @@ use core::fmt::{Display, Formatter, Result};
 
 use alloc::{
     format,
-    string::{String, ToString},
+    string::{String},
 };
 use nom::AsBytes;
 

@@ -24,7 +24,7 @@ pub fn declare_trait(input: TokenStream) -> TokenStream {
                 generate_struct_impl(s, struct_name)
             }
         }
-        syn::Data::Enum(e) => {
+        syn::Data::Enum(_e) => {
           // e.variants.first().unwrap().fields.iter().next().unwrap().
           todo!()
         },
@@ -63,9 +63,9 @@ fn format_field_values(s: &syn::DataStruct) -> Vec<proc_macro2::TokenStream> {
         if let Type::Path(p) = &f.ty {
             let type_declarer = declare_type(&p);
             let first_vec = p.path
-                .segments.iter().enumerate().find(|(i, s)| s.ident.to_string().contains("Vec")).map(|(i, s)| i);
+                .segments.iter().enumerate().find(|(_i, s)| s.ident.to_string().contains("Vec")).map(|(i, _s)| i);
             let first_option = p.path
-              .segments.iter().enumerate().find(|(i, s)| s.ident.to_string().contains("Option")).map(|(i, s)| i);
+              .segments.iter().enumerate().find(|(_i, s)| s.ident.to_string().contains("Option")).map(|(i, _s)| i);
             if first_vec.is_some() && first_option.is_none() {
                 quote! { self.#fident.iter().map(|x| #type_declarer).collect::<Vec<String>>().join(", ") }
             } else if first_vec.is_none() && first_option.is_some()
@@ -121,15 +121,15 @@ fn wrap_fields(s: &syn::DataStruct) -> String {
                     .segments
                     .iter()
                     .enumerate()
-                    .find(|(i, s)| s.ident.to_string().contains("Vec"))
-                    .map(|(i, s)| i);
+                    .find(|(_i, s)| s.ident.to_string().contains("Vec"))
+                    .map(|(i, _s)| i);
                 let first_string = p
                     .path
                     .segments
                     .iter()
                     .enumerate()
-                    .find(|(i, s)| s.ident.to_string().contains("String"))
-                    .map(|(i, s)| i);
+                    .find(|(_i, s)| s.ident.to_string().contains("String"))
+                    .map(|(i, _s)| i);
                 if first_vec.is_some() && first_string.is_none() {
                     "vec![{}]"
                 } else if first_vec.is_none() && first_string.is_some() {

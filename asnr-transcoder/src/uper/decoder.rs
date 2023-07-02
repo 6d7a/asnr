@@ -6,7 +6,7 @@ use num::{FromPrimitive, Integer};
 
 use crate::{Decoder, DecoderForIndex};
 
-use super::{Uper, per_visible::PerVisibleIntegerConstraints};
+use super::{Uper};
 
 type BitIn<'a> = BSlice<'a, u8, Msb0>;
 type BitOut = BitVec<u8, Msb0>;
@@ -17,13 +17,13 @@ enum LengthDeterminant {
 }
 
 impl Decoder for Uper {
-    fn decode_open_type<I>(&self, input: I) -> IResult<I, Vec<u8>> {
+    fn decode_open_type<I>(&self, _input: I) -> IResult<I, Vec<u8>> {
         todo!()
     }
 
     fn decode_integer<I, O: num::Integer + num::FromPrimitive>(
         &self,
-        integer: asnr_grammar::types::Integer,
+        _integer: asnr_grammar::types::Integer,
     ) -> fn(I) -> IResult<I, O> {
         // let constraints = PerVisibleIntegerConstraints::from(&integer.constraints);
       todo!()
@@ -31,56 +31,56 @@ impl Decoder for Uper {
 
     fn decode_enumerated<I, O: TryFrom<i128>>(
         &self,
-        enumerated: asnr_grammar::types::Enumerated,
+        _enumerated: asnr_grammar::types::Enumerated,
     ) -> fn(I) -> IResult<I, O> {
         todo!()
     }
 
     fn decode_choice<I, O: DecoderForIndex>(
         &self,
-        choice: asnr_grammar::types::Choice,
+        _choice: asnr_grammar::types::Choice,
     ) -> fn(I) -> IResult<I, O> {
         todo!()
     }
 
-    fn decode_null<I, N>(&self, input: I) -> IResult<I, N> {
+    fn decode_null<I, N>(&self, _input: I) -> IResult<I, N> {
         todo!()
     }
 
-    fn decode_boolean<I>(&self, input: I) -> IResult<I, bool> {
+    fn decode_boolean<I>(&self, _input: I) -> IResult<I, bool> {
         todo!()
     }
 
     fn decode_bit_string<I>(
         &self,
-        bit_string: asnr_grammar::types::BitString,
+        _bit_string: asnr_grammar::types::BitString,
     ) -> fn(I) -> IResult<I, Vec<bool>> {
         todo!()
     }
 
     fn decode_character_string<I>(
         &self,
-        char_string: asnr_grammar::types::CharacterString,
+        _char_string: asnr_grammar::types::CharacterString,
     ) -> fn(I) -> IResult<I, String> {
         todo!()
     }
 
     fn decode_sequence<I, T: crate::DecodeMember>(
         &self,
-        sequence: asnr_grammar::types::Sequence,
+        _sequence: asnr_grammar::types::Sequence,
     ) -> fn(I) -> IResult<I, T> {
         todo!()
     }
 
     fn decode_sequence_of<I, T: crate::Decode>(
         &self,
-        sequence_of: asnr_grammar::types::SequenceOf,
-        member_decoder: impl FnMut(&Self, I) -> IResult<I, T>,
+        _sequence_of: asnr_grammar::types::SequenceOf,
+        _member_decoder: impl FnMut(&Self, I) -> IResult<I, T>,
     ) -> fn(I) -> IResult<I, Vec<T>> {
         todo!()
     }
 
-    fn decode_unknown_extension<I>(&self, input: I) -> IResult<I, Vec<u8>> {
+    fn decode_unknown_extension<I>(&self, _input: I) -> IResult<I, Vec<u8>> {
         todo!()
     }
 }

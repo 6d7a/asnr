@@ -367,7 +367,7 @@ pub fn generate_information_object_set<'a>(
                     ObjectSetValue::Inline(InformationObjectFields::CustomSyntax(s)) => {
                         resolve_syntax(class, s)
                     }
-                    ObjectSetValue::Inline(InformationObjectFields::DefaultSyntax(s)) => {
+                    ObjectSetValue::Inline(InformationObjectFields::DefaultSyntax(_s)) => {
                         todo!()
                     }
                 }

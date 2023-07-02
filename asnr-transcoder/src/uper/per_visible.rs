@@ -1,5 +1,5 @@
-use alloc::vec::Vec;
-use asnr_grammar::{constraints::Constraint, ASN1Value};
+
+use asnr_grammar::{constraints::Constraint};
 
 trait PerVisible {
     fn per_visible(&self) -> bool;
