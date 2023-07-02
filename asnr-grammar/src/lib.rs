@@ -294,7 +294,7 @@ pub enum ToplevelDeclaration {
 }
 
 impl ToplevelDeclaration {
-    pub(crate) fn name(&self) -> &String {
+    pub fn name(&self) -> &String {
         match self {
             ToplevelDeclaration::Information(i) => &i.name,
             ToplevelDeclaration::Type(t) => &t.name,

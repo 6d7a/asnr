@@ -20,7 +20,7 @@ impl ValidatorError {
 
 #[derive(Debug, Clone)]
 pub enum ValidatorErrorType {
-    MissingDependencyError,
+    MissingDependency,
     InvalidConstraintsError,
 }
 

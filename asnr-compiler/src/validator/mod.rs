@@ -27,8 +27,9 @@ impl Validator {
         Self { tlds }
     }
 
-    fn link(mut self) -> Result<Self, ValidatorError> {
+    fn link(mut self) -> Result<(Self, Vec<Box<dyn Error>>), ValidatorError> {
         let mut i = 0;
+        let mut warnings: Vec<Box<dyn Error>> = vec![];
         while i < self.tlds.len() {
             if self
                 .tlds
@@ -50,30 +51,35 @@ impl Validator {
                 .unwrap_or(false)
             {
                 let mut tld = self.tlds.remove(i);
-                let success = tld.link_constraint_reference(&self.tlds);
-                if let ToplevelDeclaration::Type(ref t) = tld {
-                    println!("Success? {}, {}", success, &t.name);
+                if !tld.link_constraint_reference(&self.tlds) {
+                    warnings.push(
+                        Box::new(
+                            ValidatorError { 
+                                data_element: Some(tld.name().to_string()), 
+                                details: format!(
+                                    "Failed to link cross-reference to elsewhere defined value in constraint of {}", 
+                                    tld.name()), 
+                                kind: ValidatorErrorType::MissingDependency
+                            }
+                        )
+                    )
                 }
-                if success {
-                    self.tlds.push(tld);
-                }
+                self.tlds.push(tld);
             } else {
                 i += 1;
             }
         }
 
-        Ok(self)
+        Ok((self, warnings))
     }
 
     pub fn validate(
         mut self,
     ) -> Result<(Vec<ToplevelDeclaration>, Vec<Box<dyn Error>>), Box<dyn Error>> {
-        self = self.link()?;
+        let mut warnings: Vec<Box<dyn Error>>;
+        (self, warnings) = self.link()?;
         Ok(self.tlds.into_iter().fold(
-            (
-                Vec::<ToplevelDeclaration>::new(),
-                Vec::<Box<dyn Error>>::new(),
-            ),
+            (Vec::<ToplevelDeclaration>::new(), warnings),
             |(mut tlds, mut errors), tld| {
                 match tld.validate() {
                     Ok(_) => tlds.push(tld),
