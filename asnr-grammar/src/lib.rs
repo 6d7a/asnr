@@ -22,7 +22,6 @@ pub mod utils;
 
 use alloc::{
     borrow::ToOwned,
-    boxed::Box,
     format,
     string::{String, ToString},
     vec,
@@ -30,11 +29,11 @@ use alloc::{
 };
 use constraints::Constraint;
 use information_object::{
-    InformationObjectClass, InformationObjectFieldReference, ToplevelInformationDeclaration,
+    InformationObjectClass, InformationObjectFieldReference, ToplevelInformationDeclaration, ObjectFieldIdentifier,
 };
 use parameterization::Parameterization;
 use types::*;
-use utils::int_type_token;
+use utils::{find_tld_or_enum_value_by_name, int_type_token};
 
 // Comment tokens
 pub const BLOCK_COMMENT_START: &'static str = "/*";
@@ -295,6 +294,42 @@ pub enum ToplevelDeclaration {
 }
 
 impl ToplevelDeclaration {
+    pub(crate) fn name(&self) -> &String {
+        match self {
+            ToplevelDeclaration::Information(i) => &i.name,
+            ToplevelDeclaration::Type(t) => &t.name,
+            ToplevelDeclaration::Value(v) => &v.name,
+        }
+    }
+
+    pub(crate) fn get_distinguished_or_enum_value(&self, type_name: Option<&String>, identifier: &String) -> Option<ASN1Value> {
+        if let ToplevelDeclaration::Type(t) = self {
+            if type_name.is_some() && Some(&t.name) != type_name {
+                return None
+            }
+            match &t.r#type {
+                ASN1Type::Enumerated(e) => {
+                    return e.members.iter().find_map(|m| {
+                        (&m.name == identifier).then(|| ASN1Value::Integer(m.index as i128))
+                    })
+                }
+                ASN1Type::Integer(i) => {
+                    return i
+                        .distinguished_values
+                        .as_ref()
+                        .map(|dv| {
+                            dv.iter().find_map(|d| {
+                                (&d.name == identifier).then(|| ASN1Value::Integer(d.value))
+                            })
+                        })
+                        .flatten()
+                }
+                _ => (),
+            }
+        }
+        None
+    }
+
     pub fn is_class_with_name(&self, name: &String) -> Option<&InformationObjectClass> {
         match self {
             ToplevelDeclaration::Information(info) => match &info.value {
@@ -322,7 +357,30 @@ impl ToplevelDeclaration {
     pub fn has_constraint_reference(&self) -> bool {
         match self {
             ToplevelDeclaration::Type(t) => t.r#type.contains_constraint_reference(),
-            ToplevelDeclaration::Value(v) => v.value.is_elsewhere_declared(),
+            // TODO: Cover constraint references in other types of top-level declarations
+            _ => false,
+        }
+    }
+
+    /// Traverses a top-level declaration to replace references to other top-level declarations
+    /// in a constraint. An example would be the constraint of the `intercontinental` field in the
+    /// following example.
+    /// ```ignore
+    /// fifteen INTEGER = 15
+    ///
+    /// Departures ::= SEQUENCE {
+    ///   local SEQUENCE (SIZE(0..999)) OF Local,
+    ///   continental SEQUENCE (SIZE(0..99)) OF Continental,
+    ///   intercontinental SEQUENCE (SIZE(0..fifteen)) OF Intercontinental
+    /// }
+    /// ```
+    /// The method handles linking of multiple constraint references within a top-level declaration.
+    /// ### Params
+    ///  * `tlds` - vector of other top-level declarations that will be searched as the method resolves a reference
+    /// returns `true` if the reference was resolved successfully.
+    pub fn link_constraint_reference(&mut self, tlds: &Vec<ToplevelDeclaration>) -> bool {
+        match self {
+            ToplevelDeclaration::Type(t) => t.r#type.link_constraint_reference(&t.name, tlds),
             // TODO: Cover constraint references in other types of top-level declarations
             _ => false,
         }
@@ -389,6 +447,88 @@ pub enum ASN1Type {
 }
 
 impl ASN1Type {
+    pub fn link_constraint_reference(
+        &mut self,
+        name: &String,
+        tlds: &Vec<ToplevelDeclaration>,
+    ) -> bool {
+        match self {
+            ASN1Type::Null => false,
+            ASN1Type::Boolean => false,
+            ASN1Type::Integer(i) => i
+                .constraints
+                .iter_mut()
+                .map(|c| c.link_cross_reference(name, tlds))
+                .fold(false, |acc, b| acc || b),
+            ASN1Type::BitString(b) => b
+                .constraints
+                .iter_mut()
+                .map(|c| c.link_cross_reference(name, tlds))
+                .fold(false, |acc, b| acc || b),
+            ASN1Type::CharacterString(c) => c
+                .constraints
+                .iter_mut()
+                .map(|c| c.link_cross_reference(name, tlds))
+                .fold(false, |acc, b| acc || b),
+            ASN1Type::Enumerated(e) => e
+                .constraints
+                .iter_mut()
+                .map(|c| c.link_cross_reference(name, tlds))
+                .fold(false, |acc, b| acc || b),
+            ASN1Type::Choice(c) => {
+                c.constraints
+                    .iter_mut()
+                    .map(|c| c.link_cross_reference(name, tlds))
+                    .fold(false, |acc, b| acc || b)
+                    || c.options
+                        .iter_mut()
+                        .map(|o| {
+                            let b = o.r#type.link_constraint_reference(&o.name, tlds);
+                            let a = o
+                                .constraints
+                                .iter_mut()
+                                .map(|c| c.link_cross_reference(name, tlds))
+                                .fold(false, |acc, b| acc || b);
+                            a || b
+                        })
+                        .fold(false, |acc, b| acc || b)
+            }
+            ASN1Type::Sequence(s) => {
+                s.constraints
+                    .iter_mut()
+                    .map(|c| c.link_cross_reference(name, tlds))
+                    .fold(false, |acc, b| acc || b)
+                    || s.members
+                        .iter_mut()
+                        .map(|o| {
+                            let b = o.r#type.link_constraint_reference(&o.name, tlds);
+                            let a = o
+                                .constraints
+                                .iter_mut()
+                                .map(|c| c.link_cross_reference(name, tlds))
+                                .fold(false, |acc, b| acc || b);
+                            a || b
+                        })
+                        .fold(false, |acc, b| acc || b)
+            }
+            ASN1Type::SequenceOf(s) => {
+                let a = s
+                    .constraints
+                    .iter_mut()
+                    .map(|c| c.link_cross_reference(name, tlds))
+                    .fold(false, |acc, b| acc || b);
+                let b = s.r#type.link_constraint_reference(name, tlds);
+                a || b
+            }
+            ASN1Type::ElsewhereDeclaredType(e) => e
+                .constraints
+                .iter_mut()
+                .map(|c| c.link_cross_reference(&e.identifier, tlds))
+                .fold(false, |acc, b| acc || b),
+            _ => false,
+        }
+    }
+
     pub fn contains_constraint_reference(&self) -> bool {
         match self {
             ASN1Type::Null => false,
@@ -399,21 +539,21 @@ impl ASN1Type {
             ASN1Type::Enumerated(e) => e.constraints.iter().any(|c| c.has_cross_reference()),
             ASN1Type::Choice(c) => {
                 c.constraints.iter().any(|c| c.has_cross_reference())
-                    && c.options.iter().any(|o| {
+                    || c.options.iter().any(|o| {
                         o.r#type.contains_constraint_reference()
-                            && o.constraints.iter().any(|c| c.has_cross_reference())
+                            || o.constraints.iter().any(|c| c.has_cross_reference())
                     })
             }
             ASN1Type::Sequence(s) => {
                 s.constraints.iter().any(|c| c.has_cross_reference())
-                    && s.members.iter().any(|m| {
+                    || s.members.iter().any(|m| {
                         m.r#type.contains_constraint_reference()
-                            && m.constraints.iter().any(|c| c.has_cross_reference())
+                            || m.constraints.iter().any(|c| c.has_cross_reference())
                     })
             }
             ASN1Type::SequenceOf(s) => {
                 s.constraints.iter().any(|c| c.has_cross_reference())
-                    && s.r#type.contains_constraint_reference()
+                    || s.r#type.contains_constraint_reference()
             }
             ASN1Type::ElsewhereDeclaredType(e) => {
                 e.constraints.iter().any(|c| c.has_cross_reference())
@@ -433,7 +573,13 @@ impl ASN1Type {
                 .iter()
                 .any(|m| m.r#type.contains_class_field_reference()),
             ASN1Type::SequenceOf(so) => so.r#type.contains_class_field_reference(),
-            ASN1Type::InformationObjectFieldReference(_) => true,
+            ASN1Type::InformationObjectFieldReference(io_ref) => {
+                if let Some(ObjectFieldIdentifier::SingleValue(_)) = io_ref.field_path.last() {
+                    true
+                } else {
+                    false
+                }
+            },
             _ => false,
         }
     }
@@ -589,8 +735,21 @@ impl ASN1Value {
         }
     }
 
-    pub fn link_elsewhere_declared(&mut self, new_value: ASN1Value) {
-        *self = new_value
+    pub fn link_elsewhere_declared(
+        &mut self,
+        identifier: &String,
+        tlds: &Vec<ToplevelDeclaration>,
+    ) -> bool {
+        match self {
+            Self::EnumeratedValue(e) | Self::ElsewhereDeclaredValue(e) => {
+                if let Some(v) = find_tld_or_enum_value_by_name(identifier, &e, tlds) {
+                    *self = v;
+                    return true;
+                }
+                false
+            }
+            _ => false,
+        }
     }
 }
 

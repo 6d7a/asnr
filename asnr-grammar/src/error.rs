@@ -16,7 +16,8 @@ impl GrammarError {
 
 #[derive(Debug, Clone)]
 pub enum GrammarErrorType {
-    UnpackingError
+    UnpackingError,
+    LinkerError,
 }
 
 impl Display for GrammarError {

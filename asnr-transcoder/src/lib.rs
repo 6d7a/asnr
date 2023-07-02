@@ -9,7 +9,7 @@
 extern crate alloc;
 
 pub mod error;
-mod generated;
+//mod generated;
 #[cfg(feature = "uper")]
 pub mod uper;
 

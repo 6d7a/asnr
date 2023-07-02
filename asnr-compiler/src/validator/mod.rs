@@ -39,10 +39,23 @@ impl Validator {
                 })
                 .unwrap_or(false)
             {
-              
                 if let ToplevelDeclaration::Type(mut tld) = self.tlds.remove(i) {
-                  tld.r#type = tld.r#type.resolve_class_field_reference(&self.tlds);
-                  self.tlds.push(ToplevelDeclaration::Type(tld))
+                    tld.r#type = tld.r#type.resolve_class_field_reference(&self.tlds);
+                    self.tlds.push(ToplevelDeclaration::Type(tld))
+                }
+            } else if self
+                .tlds
+                .get(i)
+                .map(|t| t.has_constraint_reference())
+                .unwrap_or(false)
+            {
+                let mut tld = self.tlds.remove(i);
+                let success = tld.link_constraint_reference(&self.tlds);
+                if let ToplevelDeclaration::Type(ref t) = tld {
+                    println!("Success? {}, {}", success, &t.name);
+                }
+                if success {
+                    self.tlds.push(tld);
                 }
             } else {
                 i += 1;

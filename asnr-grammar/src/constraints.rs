@@ -3,7 +3,7 @@ use alloc::{borrow::ToOwned, boxed::Box, format, string::String, vec, vec::Vec};
 use crate::{
     error::{GrammarError, GrammarErrorType},
     information_object::ObjectSet,
-    ASN1Type, ASN1Value, DeclarationElsewhere, Declare,
+    ASN1Type, ASN1Value, Declare, ToplevelDeclaration,
 };
 
 #[derive(Debug, PartialEq)]
@@ -29,7 +29,18 @@ pub enum Constraint {
 }
 
 impl Constraint {
-    pub fn has_cross_reference(&self) -> bool {
+    pub(super) fn link_cross_reference(
+        &mut self,
+        identifier: &String,
+        tlds: &Vec<ToplevelDeclaration>,
+    ) -> bool {
+        match self {
+            Constraint::SubtypeConstraint(t) => t.set.link_cross_reference(identifier, tlds),
+            _ => false,
+        }
+    }
+
+    pub(super) fn has_cross_reference(&self) -> bool {
         if let Self::SubtypeConstraint(c) = self {
             c.set.has_cross_reference()
         } else {
@@ -328,6 +339,46 @@ pub enum SubtypeElement {
 }
 
 impl SubtypeElement {
+    pub(super) fn link_cross_reference(
+        &mut self,
+        identifier: &String,
+        tlds: &Vec<ToplevelDeclaration>,
+    ) -> bool {
+        match self {
+            SubtypeElement::SingleValue {
+                value,
+                extensible: _,
+            } => value.link_elsewhere_declared(identifier, tlds),
+            SubtypeElement::ContainedSubtype {
+                subtype,
+                extensible: _,
+            } => subtype.link_constraint_reference(identifier, tlds),
+            SubtypeElement::ValueRange {
+                min,
+                max,
+                extensible: _,
+            } => {
+                let a = min
+                    .as_mut()
+                    .map_or(false, |m| m.link_elsewhere_declared(identifier, tlds));
+                let b = max
+                    .as_mut()
+                    .map_or(false, |m| m.link_elsewhere_declared(identifier, tlds));
+                a || b
+            }
+            SubtypeElement::SizeConstraint(s) => s.link_cross_reference(identifier, tlds),
+            SubtypeElement::TypeConstraint(t) => t.link_constraint_reference(identifier, tlds),
+            SubtypeElement::SingleTypeConstraint(s)
+            | SubtypeElement::MultipleTypeConstraints(s) => {
+                s.constraints
+                    .iter_mut()
+                    .flat_map(|cc| &mut cc.constraints)
+                    .map(|c| c.link_cross_reference(identifier, tlds))
+                    .fold(false, |acc, b| acc || b)
+            }
+        }
+    }
+
     pub(super) fn has_cross_reference(&self) -> bool {
         match self {
             SubtypeElement::SingleValue {
@@ -348,8 +399,8 @@ impl SubtypeElement {
             }
             SubtypeElement::SizeConstraint(s) => s.has_cross_reference(),
             SubtypeElement::TypeConstraint(t) => t.contains_class_field_reference(),
-            SubtypeElement::MultipleTypeConstraints(s) |
-            SubtypeElement::SingleTypeConstraint(s) => s
+            SubtypeElement::MultipleTypeConstraints(s)
+            | SubtypeElement::SingleTypeConstraint(s) => s
                 .constraints
                 .iter()
                 .any(|cc| cc.constraints.iter().any(|c| c.has_cross_reference())),
@@ -481,11 +532,26 @@ pub enum ElementOrSetOperation {
 }
 
 impl ElementOrSetOperation {
+    pub(super) fn link_cross_reference(
+        &mut self,
+        identifier: &String,
+        tlds: &Vec<ToplevelDeclaration>,
+    ) -> bool {
+        match self {
+            ElementOrSetOperation::Element(e) => e.link_cross_reference(identifier, tlds),
+            ElementOrSetOperation::SetOperation(s) => {
+                let a = s.base.link_cross_reference(identifier, tlds);
+                let b = s.operant.link_cross_reference(identifier, tlds);
+                a || b
+            }
+        }
+    }
+
     pub(super) fn has_cross_reference(&self) -> bool {
         match self {
             ElementOrSetOperation::Element(e) => e.has_cross_reference(),
             ElementOrSetOperation::SetOperation(s) => {
-                s.base.has_cross_reference() && s.operant.has_cross_reference()
+                s.base.has_cross_reference() || s.operant.has_cross_reference()
             }
         }
     }
