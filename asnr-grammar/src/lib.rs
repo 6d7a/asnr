@@ -28,8 +28,10 @@ use alloc::{
     vec::Vec,
 };
 use constraints::Constraint;
+use error::GrammarError;
 use information_object::{
-    InformationObjectClass, InformationObjectFieldReference, ToplevelInformationDeclaration, ObjectFieldIdentifier,
+    InformationObjectClass, InformationObjectFieldReference, ObjectFieldIdentifier,
+    ToplevelInformationDeclaration,
 };
 use parameterization::Parameterization;
 use types::*;
@@ -302,10 +304,14 @@ impl ToplevelDeclaration {
         }
     }
 
-    pub(crate) fn get_distinguished_or_enum_value(&self, type_name: Option<&String>, identifier: &String) -> Option<ASN1Value> {
+    pub(crate) fn get_distinguished_or_enum_value(
+        &self,
+        type_name: Option<&String>,
+        identifier: &String,
+    ) -> Option<ASN1Value> {
         if let ToplevelDeclaration::Type(t) = self {
             if type_name.is_some() && Some(&t.name) != type_name {
-                return None
+                return None;
             }
             match &t.r#type {
                 ASN1Type::Enumerated(e) => {
@@ -579,7 +585,7 @@ impl ASN1Type {
                 } else {
                     false
                 }
-            },
+            }
             _ => false,
         }
     }
@@ -636,13 +642,12 @@ impl ASN1Type {
         self
     }
 
-    pub fn link_subtype_constraint(
-        &mut self,
-        tlds: &Vec<ToplevelDeclaration>,
-    ) -> bool {
+    pub fn link_subtype_constraint(&mut self, tlds: &Vec<ToplevelDeclaration>) -> bool {
         match self {
             Self::ElsewhereDeclaredType(e) => {
-                if let Some(ToplevelDeclaration::Type(t)) = tlds.iter().find(|t| t.name() == &e.identifier) {
+                if let Some(ToplevelDeclaration::Type(t)) =
+                    tlds.iter().find(|t| t.name() == &e.identifier)
+                {
                     *self = t.r#type.clone();
                     return true;
                 }
@@ -744,6 +749,17 @@ pub enum ASN1Value {
 }
 
 impl ASN1Value {
+    pub fn unwrap_as_integer(&self) -> Result<i128, GrammarError> {
+        if let ASN1Value::Integer(i) = self {
+            Ok(*i)
+        } else {
+            Err(GrammarError {
+                details: format!("Cannot unwrap {:?} as integer!", self),
+                kind: error::GrammarErrorType::UnpackingError,
+            })
+        }
+    }
+
     pub fn is_elsewhere_declared(&self) -> bool {
         match self {
             Self::ElsewhereDeclaredValue(_) | Self::EnumeratedValue(_) => true,

@@ -14,7 +14,7 @@ pub fn imports_and_generic_types(derive: Option<&str>) -> String {
 
 use core::any::Any;
 use alloc::{{format, vec, vec::Vec, string::String, boxed::Box}};
-use asnr_grammar::{{*, types::*, subtyping::*, information_object::*}};
+use asnr_grammar::{{*, types::*, constraints::*, information_object::*}};
 use asnr_transcoder::{{error::{{DecodingError, DecodingErrorType}}, Decode, Decoder, DecodeMember, DecoderForIndex, Describe}};
 use nom::{{AsBytes, IResult}};
 
@@ -24,7 +24,7 @@ pub struct ASN1_ALL(pub dyn Any);
 {}
 pub struct ASN1_OPEN(pub Vec<u8>);
 
-impl Decode for ASN1_OPEN {{
+impl<I: AsBytes> Decode<I> for ASN1_OPEN {{
   {DECODE_SIGNATURE}
   {{
     decoder
@@ -39,10 +39,9 @@ derive.unwrap_or(DERIVE_DEFAULT)
 
 pub const DERIVE_DEFAULT: &str = "#[derive(Debug, Clone, PartialEq, Default)]";
 
-pub const DECODE_SIGNATURE: &str = r#"fn decode<I, D>(decoder: &D, input: I) -> IResult<I, Self>
+pub const DECODE_SIGNATURE: &str = r#"fn decode< D>(decoder: &D, input: I) -> IResult<I, Self>
 where
-    I: AsBytes,
-    D: Decoder,
+    D: Decoder<I>,
     Self: Sized,"#;
 
 pub fn type_reference_value_template(
@@ -78,7 +77,7 @@ pub fn typealias_template(
       }}
     }}
     
-    impl Decode for {name} {{
+    impl<I: AsBytes> Decode<I> for {name} {{
       {DECODE_SIGNATURE}
       {{
         {alias}::decode(decoder, input).map(|(r, v)|(r, Self(v)))
@@ -114,7 +113,7 @@ pub fn integer_template(
 {comments}{derive}
 pub struct {name}(pub {integer_type});{distinguished_values}
 
-impl Decode for {name} {{
+impl<I: AsBytes> Decode<I> for {name} {{
   {DECODE_SIGNATURE}
   {{
     decoder
@@ -138,7 +137,7 @@ pub fn bit_string_template(
 {comments}{derive}
 pub struct {name}(pub Vec<bool>);{distinguished_values}
 
-impl Decode for {name} {{
+impl<I: AsBytes> Decode<I> for {name} {{
 {DECODE_SIGNATURE}
   {{
     decoder
@@ -161,7 +160,7 @@ pub fn char_string_template(
 {comments}{derive}
 pub struct {name}(pub String);
 
-impl Decode for {name} {{
+impl<I: AsBytes> Decode<I> for {name} {{
   {DECODE_SIGNATURE}
   {{
     decoder
@@ -179,7 +178,7 @@ pub fn boolean_template(comments: String, derive: &str, name: String) -> String 
 {comments}{derive}
 pub struct {name}(pub bool);
 
-impl Decode for {name} {{
+impl<I: AsBytes> Decode<I> for {name} {{
   {DECODE_SIGNATURE}
   {{
     decoder
@@ -205,7 +204,7 @@ pub fn null_template(comments: String, derive: &str, name: String) -> String {
 {comments}{derive}
 pub struct {name};
 
-impl Decode for {name} {{
+impl<I: AsBytes> Decode<I> for {name} {{
   {DECODE_SIGNATURE}
   {{
     decoder.decode_null(input)
@@ -246,7 +245,7 @@ pub fn enumerated_template(
     }}
   }}
   
-  impl Decode for {name} {{
+  impl<I: AsBytes> Decode<I> for {name} {{
     {DECODE_SIGNATURE}
     {{
       decoder.decode_enumerated({enum_descriptor})( 
@@ -278,11 +277,10 @@ pub fn sequence_template(
     {member_declaration}{extension_decl}
   }}
   
-  impl DecodeMember for {name} {{
-    fn decode_member_at_index<I, D>(&mut self, index: usize, decoder: &D, input: I) -> Result<(I, ()), DecodingError>
+  impl<I: AsBytes> DecodeMember<I> for {name} {{
+    fn decode_member_at_index<D>(&mut self, index: usize, decoder: &D, input: I) -> Result<(I, ()), DecodingError>
       where
-          I: AsBytes,
-          D: Decoder,
+          D: Decoder<I>,
           Self: Sized,
     {{
       let mut input = input;
@@ -294,7 +292,7 @@ pub fn sequence_template(
     }}
   }}
   
-  impl Decode for {name} {{
+  impl<I: AsBytes> Decode<I> for {name} {{
     {DECODE_SIGNATURE}
     {{
         decoder.decode_sequence({seq_descriptor})( 
@@ -320,7 +318,7 @@ pub fn sequence_of_template(
 {comments}{derive}
 pub struct {name}(pub Vec<{member_type}>);
 
-impl Decode for {name} {{
+impl<I: AsBytes> Decode<I> for {name} {{
   {DECODE_SIGNATURE}
   {{
     decoder
@@ -358,8 +356,8 @@ pub enum {name} {{
   {options}
 }}
 
-impl DecoderForIndex for {name} {{
-  fn decoder_for_index<I, D>(v: i128) -> Result<fn(&D, I) -> IResult<I, Self>, DecodingError> where I: AsBytes, D: Decoder, Self: Sized {{
+impl<I: AsBytes> DecoderForIndex<I> for {name} {{
+  fn decoder_for_index<D>(v: i128) -> Result<fn(&D, I) -> IResult<I, Self>, DecodingError> where D: Decoder<I>, Self: Sized {{
     match v {{
         {options_from_int}
         _ => Err(
@@ -377,7 +375,7 @@ impl Default for {name} {{
   }}
 }}
 
-impl Decode for {name} {{
+impl<I: AsBytes> Decode<I> for {name} {{
   {DECODE_SIGNATURE}
   {{
     decoder.decode_choice({choice_descriptor})( 
@@ -425,11 +423,10 @@ pub struct {name} {{
 {member_declaration}{extension_decl}
 }}
 
-impl DecodeMember for {name} {{
-fn decode_member_at_index<I, D>(&mut self, index: usize, decoder: &D, input: I) -> Result<(I, ()), DecodingError>
+impl<I: AsBytes> DecodeMember<I> for {name} {{
+fn decode_member_at_index<D>(&mut self, index: usize, decoder: &D, input: I) -> Result<(I, ()), DecodingError>
   where
-      I: AsBytes,
-      D: Decoder,
+      D: Decoder<I>,
       Self: Sized,
 {{
   let mut input = input;
@@ -441,7 +438,7 @@ fn decode_member_at_index<I, D>(&mut self, index: usize, decoder: &D, input: I) 
 }}
 }}
 
-impl Decode for {name} {{
+impl<I: AsBytes> Decode<I> for {name} {{
 {DECODE_SIGNATURE}
 {{
     decoder.decode_information_object({information_object_descriptor})( 
@@ -466,12 +463,11 @@ pub enum {name} {{
   {options}
 }}
 
-impl DecoderForKey<{key_type}> for {name} {{
+impl<I: AsBytes> DecoderForKey<I, {key_type}> for {name} {{
   fn decoder_for_key<I, D>(
     key: {key_type},
   ) -> Result<fn(&D, I) -> IResult<I, Self>, DecodingError>
   where
-    I: AsBytes,
     D: Decoder,
     T: PartialEq,
     Self: Sized, 

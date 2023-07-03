@@ -323,7 +323,7 @@ pub fn format_extensible_sequence<'a>(name: &String, extensible: bool) -> (Strin
             "".into()
         },
         if extensible {
-            "{{ (input, self.unknown_extension) = decoder.decode_unknown_extension(input)? }},".into()
+            "{ (input, self.unknown_extension) = decoder.decode_unknown_extension(input)? },".into()
         } else {
             format!(
                 r#"return Err(

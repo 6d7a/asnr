@@ -1,86 +1,80 @@
 use alloc::{string::String, vec::Vec};
 use bitvec::{prelude::Msb0, vec::BitVec};
 use bitvec_nom::BSlice;
-use nom::{bytes::complete::take, combinator::{map, map_res}, IResult};
+use nom::{
+    bytes::complete::take,
+    combinator::{map, map_res},
+    IResult,
+};
 use num::{FromPrimitive, Integer};
 
-use crate::{Decoder, DecoderForIndex};
+use crate::{uper::per_visible::PerVisibleIntegerConstraints, Decoder, DecoderForIndex};
 
-use super::{Uper};
+use super::Uper;
 
 type BitIn<'a> = BSlice<'a, u8, Msb0>;
 type BitOut = BitVec<u8, Msb0>;
 
 enum LengthDeterminant {
-  Content(usize),
-  ContentFragment(usize)
+    Content(usize),
+    ContentFragment(usize),
 }
 
-impl Decoder for Uper {
-    fn decode_open_type<I>(&self, _input: I) -> IResult<I, Vec<u8>> {
+impl<'a> Decoder<BitIn<'a>> for Uper {
+    fn decode_open_type(&self, input: BitIn<'a>) -> IResult<BitIn<'a>, Vec<u8>> {
         todo!()
     }
 
-    fn decode_integer<I, O: num::Integer + num::FromPrimitive>(
+    fn decode_integer<O: num::Integer + num::FromPrimitive>(
         &self,
-        _integer: asnr_grammar::types::Integer,
-    ) -> fn(I) -> IResult<I, O> {
-        // let constraints = PerVisibleIntegerConstraints::from(&integer.constraints);
-      todo!()
+        integer: asnr_grammar::types::Integer,
+    ) -> fn(BitIn<'a>) -> IResult<BitIn<'a>, O> {
+        todo!()
     }
 
-    fn decode_enumerated<I, O: TryFrom<i128>>(
+    fn decode_enumerated<O: TryFrom<i128>>(
         &self,
-        _enumerated: asnr_grammar::types::Enumerated,
-    ) -> fn(I) -> IResult<I, O> {
+        enumerated: asnr_grammar::types::Enumerated,
+    ) -> fn(BitIn<'a>) -> IResult<BitIn<'a>, O> {
         todo!()
     }
 
-    fn decode_choice<I, O: DecoderForIndex>(
+    fn decode_choice<O: DecoderForIndex<BitIn<'a>>>(&self, choice: asnr_grammar::types::Choice) -> fn(BitIn<'a>) -> IResult<BitIn<'a>, O> {
+        todo!()
+    }
+
+    fn decode_null<N>(&self, input: BitIn<'a>) -> IResult<BitIn<'a>, N> {
+        todo!()
+    }
+
+    fn decode_boolean(&self, input: BitIn<'a>) -> IResult<BitIn<'a>, bool> {
+        todo!()
+    }
+
+    fn decode_bit_string(&self, bit_string: asnr_grammar::types::BitString) -> fn(BitIn<'a>) -> IResult<BitIn<'a>, Vec<bool>> {
+        todo!()
+    }
+
+    fn decode_character_string(
         &self,
-        _choice: asnr_grammar::types::Choice,
-    ) -> fn(I) -> IResult<I, O> {
+        char_string: asnr_grammar::types::CharacterString,
+    ) -> fn(BitIn<'a>) -> IResult<BitIn<'a>, String> {
         todo!()
     }
 
-    fn decode_null<I, N>(&self, _input: I) -> IResult<I, N> {
+    fn decode_sequence<T: crate::DecodeMember<BitIn<'a>>>(&self, sequence: asnr_grammar::types::Sequence) -> fn(BitIn<'a>) -> IResult<BitIn<'a>, T> {
         todo!()
     }
 
-    fn decode_boolean<I>(&self, _input: I) -> IResult<I, bool> {
-        todo!()
-    }
-
-    fn decode_bit_string<I>(
+    fn decode_sequence_of<T: crate::Decode<BitIn<'a>>>(
         &self,
-        _bit_string: asnr_grammar::types::BitString,
-    ) -> fn(I) -> IResult<I, Vec<bool>> {
+        sequence_of: asnr_grammar::types::SequenceOf,
+        member_decoder: impl FnMut(&Self, BitIn<'a>) -> IResult<BitIn<'a>, T>,
+    ) -> fn(BitIn<'a>) -> IResult<BitIn<'a>, Vec<T>> {
         todo!()
     }
 
-    fn decode_character_string<I>(
-        &self,
-        _char_string: asnr_grammar::types::CharacterString,
-    ) -> fn(I) -> IResult<I, String> {
-        todo!()
-    }
-
-    fn decode_sequence<I, T: crate::DecodeMember>(
-        &self,
-        _sequence: asnr_grammar::types::Sequence,
-    ) -> fn(I) -> IResult<I, T> {
-        todo!()
-    }
-
-    fn decode_sequence_of<I, T: crate::Decode>(
-        &self,
-        _sequence_of: asnr_grammar::types::SequenceOf,
-        _member_decoder: impl FnMut(&Self, I) -> IResult<I, T>,
-    ) -> fn(I) -> IResult<I, Vec<T>> {
-        todo!()
-    }
-
-    fn decode_unknown_extension<I>(&self, _input: I) -> IResult<I, Vec<u8>> {
+    fn decode_unknown_extension(&self, input: BitIn<'a>) -> IResult<BitIn<'a>, Vec<u8>> {
         todo!()
     }
 }
@@ -88,13 +82,16 @@ impl Decoder for Uper {
 fn decode_length_determinant(input: BitIn) -> IResult<BitIn, LengthDeterminant> {
     let (input, longer_than_127) = read_bit(input)?;
     if longer_than_127 {
-      let (input, longer_than_15999) = read_bit(input)?;
-      if longer_than_15999 {
-        let (input, size_factor) = read_int::<usize>(6)(input)?;
-        //TODO: Check that size factor is in range 1..=4
-        return Ok((input, LengthDeterminant::ContentFragment(16000 * size_factor)));
-      }
-      return map(read_int::<usize>(14), |i| LengthDeterminant::Content(i))(input);
+        let (input, longer_than_15999) = read_bit(input)?;
+        if longer_than_15999 {
+            let (input, size_factor) = read_int::<usize>(6)(input)?;
+            //TODO: Check that size factor is in range 1..=4
+            return Ok((
+                input,
+                LengthDeterminant::ContentFragment(16000 * size_factor),
+            ));
+        }
+        return map(read_int::<usize>(14), |i| LengthDeterminant::Content(i))(input);
     }
     map(read_int::<usize>(7), |i| LengthDeterminant::Content(i))(input)
 }
@@ -110,9 +107,11 @@ fn read_int<O>(bits: usize) -> impl FnMut(BitIn) -> IResult<BitIn, O>
 where
     O: Integer + FromPrimitive,
 {
-    move |input| map_res(take(bits), |int_bits: BitIn| {
-        O::from_u64(bits_to_int(int_bits)).ok_or("err")
-    })(input)
+    move |input| {
+        map_res(take(bits), |int_bits: BitIn| {
+            O::from_u64(bits_to_int(int_bits)).ok_or("err")
+        })(input)
+    }
 }
 
 fn bits_to_int(input: BitIn) -> u64 {

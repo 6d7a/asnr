@@ -4,6 +4,7 @@ use alloc::{
     format,
     string::{String},
 };
+use asnr_grammar::error::GrammarError;
 use nom::AsBytes;
 
 #[derive(Debug, Clone)]
@@ -27,6 +28,13 @@ pub enum DecodingErrorType {
     InvalidChoiceIndex,
     InvalidSequenceMemberIndex,
     GenericParsingError,
+    ConstraintError,
+}
+
+impl From<GrammarError> for DecodingError {
+    fn from(value: GrammarError) -> Self {
+        Self { details: value.details, kind: DecodingErrorType::ConstraintError }
+    }
 }
 
 impl<I: AsBytes> From<nom::Err<nom::error::Error<I>>> for DecodingError {

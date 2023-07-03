@@ -157,7 +157,7 @@ pub struct InnerTypeConstraint {
 impl asnr_traits::Declare for InnerTypeConstraint {
     fn declare(&self) -> String {
         format!(
-            "ComponentConstraint {{ is_partial: {}, constraints: vec![{}] }}",
+            "InnerTypeConstraint {{ is_partial: {}, constraints: vec![{}] }}",
             self.is_partial,
             self.constraints
                 .iter()
@@ -458,7 +458,7 @@ impl Declare for SubtypeElement {
         match self {
             SubtypeElement::SingleValue { value, extensible } => {
                 format!(
-                    "SubtypeElements::SingleValue {{ value: {}, extensible: {extensible} }}",
+                    "SubtypeElement::SingleValue {{ value: {}, extensible: {extensible} }}",
                     value.declare()
                 )
             }
@@ -467,7 +467,7 @@ impl Declare for SubtypeElement {
                 extensible,
             } => {
                 format!(
-                    "SubtypeElements::ContainedSubtype {{ subtype: {}, extensible: {extensible} }}",
+                    "SubtypeElement::ContainedSubtype {{ subtype: {}, extensible: {extensible} }}",
                     subtype.declare()
                 )
             }
@@ -477,7 +477,7 @@ impl Declare for SubtypeElement {
                 extensible,
             } => {
                 format!(
-                    "SubtypeElements::ValueRange {{ min: {}, max: {}, extensible: {extensible} }}",
+                    "SubtypeElement::ValueRange {{ min: {}, max: {}, extensible: {extensible} }}",
                     min.as_ref()
                         .map_or("None".to_owned(), |m| format!("Some({})", m.declare())),
                     max.as_ref()
@@ -485,16 +485,16 @@ impl Declare for SubtypeElement {
                 )
             }
             SubtypeElement::SizeConstraint(i) => {
-                format!("SubtypeElements::SizeConstraint(Box::new({}))", i.declare())
+                format!("SubtypeElement::SizeConstraint(Box::new({}))", i.declare())
             }
             SubtypeElement::TypeConstraint(t) => {
-                format!("SubtypeElements::TypeConstraint({})", t.declare())
+                format!("SubtypeElement::TypeConstraint({})", t.declare())
             }
             SubtypeElement::SingleTypeConstraint(s) => {
-                format!("SubtypeElements::SingleTypeConstraint({})", s.declare())
+                format!("SubtypeElement::SingleTypeConstraint({})", s.declare())
             }
             SubtypeElement::MultipleTypeConstraints(m) => {
-                format!("SubtypeElements::MultipleTypeConstraints({})", m.declare())
+                format!("SubtypeElement::MultipleTypeConstraints({})", m.declare())
             }
         }
     }
@@ -590,7 +590,7 @@ impl From<(SubtypeElement, SetOperator, ElementOrSetOperation)> for SetOperation
 impl Declare for SetOperation {
     fn declare(&self) -> String {
         format!(
-            "SetOperation {{ base: {}, operator: SetOperator::{:?}, operant: {} }}",
+            "SetOperation {{ base: {}, operator: SetOperator::{:?}, operant: Box::new({}) }}",
             self.base.declare(),
             self.operator,
             self.operant.declare()
