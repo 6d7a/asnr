@@ -1,5 +1,7 @@
 
-use asnr_grammar::{constraints::Constraint};
+use asnr_grammar::{constraints::{Constraint, ElementSet, ElementOrSetOperation, SubtypeElement, SetOperation}};
+
+use crate::error::DecodingError;
 
 trait PerVisible {
     fn per_visible(&self) -> bool;
@@ -62,7 +64,34 @@ impl PerVisible for Constraint {
     fn per_visible(&self) -> bool {
         match self {
           Constraint::TableConstraint(_) => false,
-          _ => true
+          Constraint::SubtypeConstraint(s) => s.set.per_visible()
         }
     }
+}
+
+impl PerVisible for ElementOrSetOperation {
+    fn per_visible(&self) -> bool {
+        match self {
+            ElementOrSetOperation::Element(e) => e.per_visible(),
+            ElementOrSetOperation::SetOperation(o) => {
+                o.operant.per_visible() || o.operant.per_visible()
+            },
+        }
+    }
+}
+
+impl PerVisible for SubtypeElement {
+    fn per_visible(&self) -> bool {
+        match self {
+            SubtypeElement::SingleValue { value: _, extensible: _ } => true,
+            SubtypeElement::ContainedSubtype { subtype: _, extensible: _ } => true,
+            SubtypeElement::ValueRange { min: _, max: _, extensible: _ } => true,
+            SubtypeElement::SizeConstraint(s) => s.per_visible(),
+            _ => false
+        }
+    }
+}
+
+fn fold_constraint_set(set: &SetOperation) -> Result<SubtypeElement, DecodingError> {
+    todo!()
 }

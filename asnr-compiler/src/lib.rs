@@ -218,7 +218,6 @@ mod tests {
 
     #[test]
     fn compiles_a_simple_spec() {
-        println!("{:?}", PathBuf::from("test_asn1/ETSI-ITS-CDD.asn"));
         println!(
             "{:#?}",
             Asnr::compiler()

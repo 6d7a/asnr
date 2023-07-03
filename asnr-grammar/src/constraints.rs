@@ -352,7 +352,7 @@ impl SubtypeElement {
             SubtypeElement::ContainedSubtype {
                 subtype,
                 extensible: _,
-            } => subtype.link_constraint_reference(identifier, tlds),
+            } => subtype.link_subtype_constraint(tlds),
             SubtypeElement::ValueRange {
                 min,
                 max,

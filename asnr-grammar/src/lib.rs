@@ -635,6 +635,22 @@ impl ASN1Type {
         }
         self
     }
+
+    pub fn link_subtype_constraint(
+        &mut self,
+        tlds: &Vec<ToplevelDeclaration>,
+    ) -> bool {
+        match self {
+            Self::ElsewhereDeclaredType(e) => {
+                if let Some(ToplevelDeclaration::Type(t)) = tlds.iter().find(|t| t.name() == &e.identifier) {
+                    *self = t.r#type.clone();
+                    return true;
+                }
+                false
+            }
+            _ => false,
+        }
+    }
 }
 
 impl ToString for ASN1Type {
