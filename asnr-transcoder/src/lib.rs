@@ -72,11 +72,11 @@ pub trait Decoder<I: AsBytes> {
     fn decode_boolean(&self, input: I) -> IResult<I, bool>;
     fn decode_bit_string(&self, bit_string: BitString) -> fn(I) -> IResult<I, Vec<bool>>;
     fn decode_character_string(&self, char_string: CharacterString) -> fn(I) -> IResult<I, String>;
-    fn decode_sequence<T: DecodeMember<I>>(&self, sequence: Sequence) -> fn(I) -> IResult<I, T>;
+    fn decode_sequence<T: DecodeMember<I>>(&self, sequence: Sequence) -> Result<Box<dyn FnMut(I) -> IResult<I, T>>, DecodingError>;
     fn decode_sequence_of<T: Decode<I>>(
         &self,
         sequence_of: SequenceOf,
         member_decoder: impl FnMut(&Self, I) -> IResult<I, T>,
-    ) -> fn(I) -> IResult<I, Vec<T>>;
+    ) -> Result<Box<dyn FnMut(I) -> IResult<I, Vec<T>>>, DecodingError>;
     fn decode_unknown_extension(&self, input: I) -> IResult<I, Vec<u8>>;
 }

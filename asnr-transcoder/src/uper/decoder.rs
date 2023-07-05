@@ -1,4 +1,4 @@
-use alloc::{borrow::ToOwned, boxed::Box, string::String, vec::Vec};
+use alloc::{borrow::ToOwned, boxed::Box, string::String, vec::{Vec}, vec};
 use bitvec::{prelude::Msb0, vec::BitVec};
 use bitvec_nom::BSlice;
 use nom::{
@@ -162,15 +162,30 @@ impl<'a> Decoder<BitIn<'a>> for Uper {
     fn decode_sequence<T: crate::DecodeMember<BitIn<'a>>>(
         &self,
         sequence: asnr_grammar::types::Sequence,
-    ) -> fn(BitIn<'a>) -> IResult<BitIn<'a>, T> {
-        todo!()
+    ) -> Result<Box<dyn FnMut(BitIn) -> IResult<BitIn, T>>, DecodingError> {
+        if let Some(extension_index) = sequence.extensible {
+            Ok(Box::new(move |input| {
+                let (mut input, is_extended) = read_bit(input)?;
+                let mut optionals = vec![];
+                for m in sequence.members.iter() {
+                    if m.is_optional {
+                        let parsed = read_bit(input)?;
+                        input = parsed.0;
+                        optionals.push(parsed.1);
+                    }
+                }
+                todo!()
+            }))
+        } else {
+            todo!()
+        }
     }
 
     fn decode_sequence_of<T: crate::Decode<BitIn<'a>>>(
         &self,
         sequence_of: asnr_grammar::types::SequenceOf,
         member_decoder: impl FnMut(&Self, BitIn<'a>) -> IResult<BitIn<'a>, T>,
-    ) -> fn(BitIn<'a>) -> IResult<BitIn<'a>, Vec<T>> {
+    ) -> Result<Box<dyn FnMut(BitIn<'a>) -> IResult<BitIn<'a>, Vec<T>>>, DecodingError> {
         todo!()
     }
 
