@@ -78,8 +78,56 @@ impl<'a> Decoder<BitIn<'a>> for Uper {
     fn decode_enumerated<O: TryFrom<i128>>(
         &self,
         enumerated: asnr_grammar::types::Enumerated,
-    ) -> fn(BitIn<'a>) -> IResult<BitIn<'a>, O> {
-        todo!()
+    ) -> Result<Box<dyn FnMut(BitIn) -> IResult<BitIn, O>>, DecodingError> {
+        let mut constraints = PerVisibleIntegerConstraints::default();
+        for c in enumerated.clone().constraints {
+            constraints += c.try_into()?
+        }
+        constraints.as_enum_constraint(&enumerated);
+        if constraints.is_extensible() {
+            if let Some(bit_length) = constraints.bit_size() {
+                Ok(Box::new(move |input: BitIn| -> IResult<BitIn, O> {
+                    let (input, is_extended) = read_bit(input)?;
+                    if is_extended {
+                        map_res(decode_normally_small_number, |i| {
+                            let index = i + enumerated.extensible.unwrap();
+                            O::try_from(index as i128).map_err(|_| {
+                                nom::Err::Error(Error {
+                                    input,
+                                    code: nom::error::ErrorKind::OneOf,
+                                })
+                            })
+                        })(input)
+                    } else {
+                        map_res(read_int::<i128>(bit_length), |i| {
+                            O::try_from(i).map_err(|_| {
+                                nom::Err::Error(Error {
+                                    input,
+                                    code: nom::error::ErrorKind::OneOf,
+                                })
+                            })
+                        })(input)
+                    }
+                }))
+            } else {
+                unreachable!()
+            }
+        } else {
+            if let Some(bit_length) = constraints.bit_size() {
+                Ok(Box::new(move |input: BitIn| -> IResult<BitIn, O> {
+                    map_res(read_int::<i128>(bit_length), |i| {
+                        O::try_from(i).map_err(|_| {
+                            nom::Err::Error(Error {
+                                input,
+                                code: nom::error::ErrorKind::OneOf,
+                            })
+                        })
+                    })(input)
+                }))
+            } else {
+                unreachable!()
+            }
+        }
     }
 
     fn decode_choice<O: DecoderForIndex<BitIn<'a>>>(
@@ -89,12 +137,12 @@ impl<'a> Decoder<BitIn<'a>> for Uper {
         todo!()
     }
 
-    fn decode_null<N>(&self, input: BitIn<'a>) -> IResult<BitIn<'a>, N> {
-        todo!()
+    fn decode_null<N: Default>(&self, input: BitIn<'a>) -> IResult<BitIn<'a>, N> {
+        Ok((input, N::default()))
     }
 
     fn decode_boolean(&self, input: BitIn<'a>) -> IResult<BitIn<'a>, bool> {
-        todo!()
+        read_bit(input)
     }
 
     fn decode_bit_string(
@@ -152,6 +200,23 @@ fn decode_varlength_integer<O: num::Integer + num::FromPrimitive + Copy>(
             input: input,
             code: nom::error::ErrorKind::Digit,
         })),
+    }
+}
+
+fn decode_normally_small_number(input: BitIn) -> IResult<BitIn, usize> {
+    let (input, over_63) = read_bit(input)?;
+    if over_63 {
+        let (input, length_det) = decode_length_determinant(input)?;
+        if let LengthDeterminant::Content(i) = length_det {
+            Ok((input, i))
+        } else {
+            Err(nom::Err::Error(Error {
+                input,
+                code: nom::error::ErrorKind::Digit,
+            }))
+        }
+    } else {
+        read_int::<usize>(6)(input)
     }
 }
 
@@ -275,7 +340,11 @@ mod tests {
     use bitvec_nom::BSlice;
 
     use crate::uper::decoder::*;
-    use asnr_grammar::{constraints::*, types::Integer, *};
+    use asnr_grammar::{
+        constraints::*,
+        types::{Enumeral, Enumerated, Integer},
+        *,
+    };
 
     #[test]
     fn bit_to_int() {
@@ -353,7 +422,7 @@ mod tests {
     #[test]
     fn decodes_constrained_int() {
         let uper = Uper {};
-        let mut decoder_1 = uper
+        let mut decoder = uper
             .decode_integer::<i128>(Integer {
                 distinguished_values: None,
                 constraints: vec![Constraint::SubtypeConstraint(ElementSet {
@@ -366,9 +435,183 @@ mod tests {
                 })],
             })
             .unwrap();
-        assert_eq!(decoder_1(BSlice::from(bits![u8, Msb0; 0,0])).unwrap().1, 3);
-        assert_eq!(decoder_1(BSlice::from(bits![u8, Msb0; 0,1])).unwrap().1, 4);
-        assert_eq!(decoder_1(BSlice::from(bits![u8, Msb0; 1,0])).unwrap().1, 5);
-        assert_eq!(decoder_1(BSlice::from(bits![u8, Msb0; 1,1])).unwrap().1, 6);
+        assert_eq!(
+            decoder(BSlice::from(bits![static u8, Msb0; 0,0]))
+                .unwrap()
+                .1,
+            3
+        );
+        assert_eq!(
+            decoder(BSlice::from(bits![static u8, Msb0; 0,1]))
+                .unwrap()
+                .1,
+            4
+        );
+        assert_eq!(
+            decoder(BSlice::from(bits![static u8, Msb0; 1,0]))
+                .unwrap()
+                .1,
+            5
+        );
+        assert_eq!(
+            decoder(BSlice::from(bits![static u8, Msb0; 1,1]))
+                .unwrap()
+                .1,
+            6
+        );
+        decoder = uper
+            .decode_integer::<i128>(Integer {
+                distinguished_values: None,
+                constraints: vec![Constraint::SubtypeConstraint(ElementSet {
+                    set: ElementOrSetOperation::Element(SubtypeElement::ValueRange {
+                        min: Some(ASN1Value::Integer(4000)),
+                        max: Some(ASN1Value::Integer(4254)),
+                        extensible: false,
+                    }),
+                    extensible: false,
+                })],
+            })
+            .unwrap();
+        assert_eq!(
+            decoder(BSlice::from(bits![static u8, Msb0; 0,0,0,0,0,0,1,0]))
+                .unwrap()
+                .1,
+            4002
+        );
+        assert_eq!(
+            decoder(BSlice::from(bits![static u8, Msb0; 0,0,0,0,0,1,1,0]))
+                .unwrap()
+                .1,
+            4006
+        );
+        decoder = uper
+            .decode_integer::<i128>(Integer {
+                distinguished_values: None,
+                constraints: vec![Constraint::SubtypeConstraint(ElementSet {
+                    set: ElementOrSetOperation::Element(SubtypeElement::ValueRange {
+                        min: Some(ASN1Value::Integer(1)),
+                        max: Some(ASN1Value::Integer(65538)),
+                        extensible: false,
+                    }),
+                    extensible: false,
+                })],
+            })
+            .unwrap();
+        assert_eq!(
+            decoder(BSlice::from(
+                bits![static u8, Msb0; 1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1]
+            ))
+            .unwrap()
+            .1,
+            65538
+        );
+    }
+
+    #[test]
+    fn decodes_enum() {
+        #[derive(Debug, PartialEq)]
+        enum TestEnum {
+            One,
+            Two,
+            Three,
+            UnknownExt,
+        }
+
+        impl TryFrom<i128> for TestEnum {
+            type Error = DecodingError;
+
+            fn try_from(value: i128) -> Result<Self, Self::Error> {
+                match value {
+                    x if x == Self::One as i128 => Ok(Self::One),
+                    x if x == Self::Two as i128 => Ok(Self::Two),
+                    x if x == Self::Three as i128 => Ok(Self::Three),
+                    _ => Ok(Self::UnknownExt),
+                }
+            }
+        }
+
+        let uper = Uper {};
+        let mut decoder = uper
+            .decode_enumerated::<TestEnum>(Enumerated {
+                extensible: None,
+                members: vec![
+                    Enumeral {
+                        name: "One".into(),
+                        description: None,
+                        index: 0,
+                    },
+                    Enumeral {
+                        name: "Two".into(),
+                        description: None,
+                        index: 1,
+                    },
+                    Enumeral {
+                        name: "Three".into(),
+                        description: None,
+                        index: 2,
+                    },
+                ],
+                constraints: vec![],
+            })
+            .unwrap();
+        assert_eq!(
+            decoder(BSlice::from(bits![static u8, Msb0; 0,0]))
+                .unwrap()
+                .1,
+            TestEnum::One
+        );
+        assert_eq!(
+            decoder(BSlice::from(bits![static u8, Msb0; 0,1]))
+                .unwrap()
+                .1,
+            TestEnum::Two
+        );
+        assert_eq!(
+            decoder(BSlice::from(bits![static u8, Msb0; 1,0]))
+                .unwrap()
+                .1,
+            TestEnum::Three
+        );
+        decoder = uper
+            .decode_enumerated::<TestEnum>(Enumerated {
+                extensible: Some(2),
+                members: vec![
+                    Enumeral {
+                        name: "One".into(),
+                        description: None,
+                        index: 0,
+                    },
+                    Enumeral {
+                        name: "Two".into(),
+                        description: None,
+                        index: 1,
+                    },
+                    Enumeral {
+                        name: "Three".into(),
+                        description: None,
+                        index: 2,
+                    },
+                ],
+                constraints: vec![],
+            })
+            .unwrap();
+        assert_eq!(
+            decoder(BSlice::from(bits![static u8, Msb0; 0,0,0]))
+                .unwrap()
+                .1,
+            TestEnum::One
+        );
+        assert_eq!(
+            decoder(BSlice::from(bits![static u8, Msb0; 1,0,0,0,0,0,0,0]))
+                .unwrap()
+                .1,
+            TestEnum::Three
+        );
+        assert_eq!(
+            decoder(BSlice::from(bits![static u8, Msb0; 1,0,0,0,0,0,1,1]))
+                .unwrap()
+                .1,
+            TestEnum::UnknownExt
+        );
     }
 }

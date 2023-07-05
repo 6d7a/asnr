@@ -177,10 +177,11 @@ pub fn generate_null<'a>(
 }
 
 pub fn generate_enumerated<'a>(
-    tld: ToplevelTypeDeclaration,
+    mut tld: ToplevelTypeDeclaration,
     custom_derive: Option<&'a str>,
 ) -> Result<String, GeneratorError> {
-    if let ASN1Type::Enumerated(ref enumerated) = tld.r#type {
+    if let ASN1Type::Enumerated(ref mut enumerated) = tld.r#type {
+        enumerated.members.sort_by(|a,b| a.index.cmp(&b.index));
         let enumerals = enumerated
             .members
             .iter()

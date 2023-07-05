@@ -9,7 +9,6 @@
 extern crate alloc;
 
 pub mod error;
-mod generated;
 #[cfg(feature = "uper")]
 pub mod uper;
 
@@ -67,9 +66,9 @@ pub trait Decoder<I: AsBytes> {
     where
         O: num::Integer + num::FromPrimitive + Copy;
     fn decode_enumerated<O: TryFrom<i128>>(&self, enumerated: Enumerated)
-        -> fn(I) -> IResult<I, O>;
+        -> Result<Box<dyn FnMut(I) -> IResult<I, O>>, DecodingError>;
     fn decode_choice<O: DecoderForIndex<I>>(&self, choice: Choice) -> fn(I) -> IResult<I, O>;
-    fn decode_null<N>(&self, input: I) -> IResult<I, N>;
+    fn decode_null<N: Default>(&self, input: I) -> IResult<I, N>;
     fn decode_boolean(&self, input: I) -> IResult<I, bool>;
     fn decode_bit_string(&self, bit_string: BitString) -> fn(I) -> IResult<I, Vec<bool>>;
     fn decode_character_string(&self, char_string: CharacterString) -> fn(I) -> IResult<I, String>;

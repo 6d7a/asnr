@@ -4,7 +4,7 @@ use asnr_grammar::{
     constraints::{
         Constraint, ElementOrSetOperation, SetOperation, SetOperator, SubtypeElement,
     },
-    ASN1Value,
+    ASN1Value, types::Enumerated,
 };
 
 use crate::error::DecodingError;
@@ -43,6 +43,14 @@ impl PerVisibleIntegerConstraints {
 
     pub fn min<I: num::Integer + num::FromPrimitive>(&self) -> Option<I> {
       self.min.map(|m| I::from_i128(m)).flatten()
+    }
+
+    pub fn as_enum_constraint(&mut self, enumerated: &Enumerated) {
+        *self += PerVisibleIntegerConstraints {
+            min: Some(0),
+            max: Some(enumerated.members.len() as i128 - 1),
+            extensible: enumerated.extensible.is_some()
+        };
     }
 }
 
