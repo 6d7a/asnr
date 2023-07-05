@@ -33,7 +33,7 @@ impl<I: AsBytes> Decode<I> for ASN1_OPEN {{
   }}
 }}
 "#,
-derive.unwrap_or(DERIVE_DEFAULT)
+        derive.unwrap_or(DERIVE_DEFAULT)
     )
 }
 
@@ -43,6 +43,11 @@ pub const DECODE_SIGNATURE: &str = r#"fn decode< D>(decoder: &D, input: I) -> IR
 where
     D: Decoder<I>,
     Self: Sized,"#;
+
+pub const DECODER_SIGNATURE: &str = r#"fn decoder<D>(decoder: &D) -> Result<Box<dyn FnMut(I) -> IResult<I, Self>>, DecodingError>
+    where
+        D: Decoder<I>,
+        Self: Sized,"#;
 
 pub fn type_reference_value_template(
     comments: String,

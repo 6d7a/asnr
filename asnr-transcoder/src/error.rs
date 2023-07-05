@@ -5,7 +5,7 @@ use alloc::{
     string::{String},
 };
 use asnr_grammar::error::GrammarError;
-use nom::AsBytes;
+use nom::{AsBytes, error::Error};
 
 #[derive(Debug, Clone)]
 pub struct DecodingError {
@@ -29,6 +29,7 @@ pub enum DecodingErrorType {
     InvalidSequenceMemberIndex,
     GenericParsingError,
     ConstraintError,
+    Unsupported,
 }
 
 impl From<GrammarError> for DecodingError {

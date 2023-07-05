@@ -40,12 +40,20 @@ impl PerVisibleIntegerConstraints {
     pub fn is_extensible(&self) -> bool {
       self.extensible
     }
+
+    pub fn min<I: num::Integer + num::FromPrimitive>(&self) -> Option<I> {
+      self.min.map(|m| I::from_i128(m)).flatten()
+    }
 }
 
 impl AddAssign<PerVisibleIntegerConstraints> for PerVisibleIntegerConstraints {
     fn add_assign(&mut self, rhs: PerVisibleIntegerConstraints) {
-        self.min = self.min.map(|min1| rhs.min.map_or(min1, |min2| min1.max(min2)));
-        self.max = self.max.map(|max1| rhs.max.map_or(max1, |max2| max1.min(max2)));
+        self.min = self.min.max(rhs.min);
+        self.max = match (self.max, rhs.max) {
+          (Some(m1), Some(m2)) => Some(m1.min(m2)),
+          (None, Some(m)) | (Some(m), None) => Some(m),
+          _ => None
+        };
         self.extensible = self.extensible || rhs.extensible;
     }
 }

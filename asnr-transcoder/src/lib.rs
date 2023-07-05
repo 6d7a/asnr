@@ -13,13 +13,18 @@ mod generated;
 #[cfg(feature = "uper")]
 pub mod uper;
 
-use alloc::{string::String, vec::Vec};
+use alloc::{string::String, vec::Vec, boxed::Box};
 use asnr_grammar::{types::*, ASN1Type};
 use error::DecodingError;
 use nom::{AsBytes, IResult};
 
 pub trait Decode<I: AsBytes> {
     fn decode<D>(decoder: &D, input: I) -> IResult<I, Self>
+    where
+        D: Decoder<I>,
+        Self: Sized;
+
+    fn decoder<D>(decoder: &D) -> Result<Box<dyn FnMut(I) -> IResult<I, Self>>, DecodingError>
     where
         D: Decoder<I>,
         Self: Sized;
@@ -58,22 +63,16 @@ pub trait DecoderForKey<I: AsBytes, T> {
 
 pub trait Decoder<I: AsBytes> {
     fn decode_open_type(&self, input: I) -> IResult<I, Vec<u8>>;
-    fn decode_integer<O: num::Integer + num::FromPrimitive>(
-        &self,
-        integer: Integer,
-    ) -> fn(I) -> IResult<I, O>;
-    fn decode_enumerated<O: TryFrom<i128>>(
-        &self,
-        enumerated: Enumerated,
-    ) -> fn(I) -> IResult<I, O>;
+    fn decode_integer<O>(&self, integer: Integer) -> Result<Box<dyn FnMut(I) -> IResult<I, O>>, DecodingError>
+    where
+        O: num::Integer + num::FromPrimitive + Copy;
+    fn decode_enumerated<O: TryFrom<i128>>(&self, enumerated: Enumerated)
+        -> fn(I) -> IResult<I, O>;
     fn decode_choice<O: DecoderForIndex<I>>(&self, choice: Choice) -> fn(I) -> IResult<I, O>;
     fn decode_null<N>(&self, input: I) -> IResult<I, N>;
     fn decode_boolean(&self, input: I) -> IResult<I, bool>;
     fn decode_bit_string(&self, bit_string: BitString) -> fn(I) -> IResult<I, Vec<bool>>;
-    fn decode_character_string(
-        &self,
-        char_string: CharacterString,
-    ) -> fn(I) -> IResult<I, String>;
+    fn decode_character_string(&self, char_string: CharacterString) -> fn(I) -> IResult<I, String>;
     fn decode_sequence<T: DecodeMember<I>>(&self, sequence: Sequence) -> fn(I) -> IResult<I, T>;
     fn decode_sequence_of<T: Decode<I>>(
         &self,
