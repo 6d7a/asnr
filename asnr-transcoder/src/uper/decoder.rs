@@ -1,11 +1,10 @@
-use alloc::{borrow::ToOwned, boxed::Box, string::String, vec::{Vec}, vec};
+use alloc::{boxed::Box, string::String, vec, vec::Vec};
 use bitvec::{prelude::Msb0, vec::BitVec};
 use bitvec_nom::BSlice;
 use nom::{
     bytes::complete::take,
     combinator::{map, map_res},
     error::Error,
-    multi::{length_data, length_value},
     AsBytes, IResult,
 };
 use num::{FromPrimitive, Integer};
@@ -13,7 +12,7 @@ use num::{FromPrimitive, Integer};
 use crate::{
     error::{DecodingError, DecodingErrorType},
     uper::per_visible::PerVisibleIntegerConstraints,
-    Decoder, DecoderForIndex,
+    Decode, DecodeMember, Decoder, DecoderForIndex,
 };
 
 use super::Uper;
@@ -27,12 +26,11 @@ enum LengthDeterminant {
 }
 
 impl<'a> Decoder<BitIn<'a>> for Uper {
-    fn decode_open_type(&self, input: BitIn<'a>) -> IResult<BitIn<'a>, Vec<u8>> {
+    fn decode_open_type(input: BitIn<'a>) -> IResult<BitIn<'a>, Vec<u8>> {
         todo!()
     }
 
     fn decode_integer<O>(
-        &self,
         integer: asnr_grammar::types::Integer,
     ) -> Result<Box<dyn FnMut(BitIn<'a>) -> IResult<BitIn<'a>, O>>, DecodingError>
     where
@@ -76,7 +74,6 @@ impl<'a> Decoder<BitIn<'a>> for Uper {
     }
 
     fn decode_enumerated<O: TryFrom<i128>>(
-        &self,
         enumerated: asnr_grammar::types::Enumerated,
     ) -> Result<Box<dyn FnMut(BitIn) -> IResult<BitIn, O>>, DecodingError> {
         let mut constraints = PerVisibleIntegerConstraints::default();
@@ -131,65 +128,100 @@ impl<'a> Decoder<BitIn<'a>> for Uper {
     }
 
     fn decode_choice<O: DecoderForIndex<BitIn<'a>>>(
-        &self,
         choice: asnr_grammar::types::Choice,
     ) -> fn(BitIn<'a>) -> IResult<BitIn<'a>, O> {
         todo!()
     }
 
-    fn decode_null<N: Default>(&self, input: BitIn<'a>) -> IResult<BitIn<'a>, N> {
+    fn decode_null<N: Default>(input: BitIn<'a>) -> IResult<BitIn<'a>, N> {
         Ok((input, N::default()))
     }
 
-    fn decode_boolean(&self, input: BitIn<'a>) -> IResult<BitIn<'a>, bool> {
+    fn decode_boolean(input: BitIn<'a>) -> IResult<BitIn<'a>, bool> {
         read_bit(input)
     }
 
     fn decode_bit_string(
-        &self,
         bit_string: asnr_grammar::types::BitString,
     ) -> fn(BitIn<'a>) -> IResult<BitIn<'a>, Vec<bool>> {
         todo!()
     }
 
     fn decode_character_string(
-        &self,
         char_string: asnr_grammar::types::CharacterString,
     ) -> fn(BitIn<'a>) -> IResult<BitIn<'a>, String> {
         todo!()
     }
 
-    fn decode_sequence<T: crate::DecodeMember<BitIn<'a>>>(
-        &self,
+    fn decode_sequence<T: DecodeMember<BitIn<'a>> + Default>(
         sequence: asnr_grammar::types::Sequence,
-    ) -> Result<Box<dyn FnMut(BitIn) -> IResult<BitIn, T>>, DecodingError> {
+    ) -> Result<Box<dyn FnMut(BitIn<'a>) -> IResult<BitIn, T>>, DecodingError> {
         if let Some(extension_index) = sequence.extensible {
             Ok(Box::new(move |input| {
                 let (mut input, is_extended) = read_bit(input)?;
-                let mut optionals = vec![];
+                let mut member_presence = vec![];
                 for m in sequence.members.iter() {
                     if m.is_optional {
                         let parsed = read_bit(input)?;
                         input = parsed.0;
-                        optionals.push(parsed.1);
+                        member_presence.push(parsed.1);
+                    } else {
+                        member_presence.push(true)
                     }
                 }
-                todo!()
+                let mut instance = T::default();
+                for (index, present) in member_presence.iter().enumerate() {
+                    if *present {
+                        input = instance.decode_member_at_index(index, Uper::new(), input)?;
+                    }
+                }
+                if is_extended {
+                    let (mut input, length) = decode_normally_small_number(input)?;
+                    let mut extension_presence = vec![];
+                    for _ in 0..length {
+                        if m.is_optional {
+                            let parsed = read_bit(input)?;
+                            input = parsed.0;
+                            extension_presence.push(parsed.1);
+                        } else {
+                            extension_presence.push(true)
+                        }
+                    }
+                    input = instance.decode_member_at_index(extension_index, Uper::new(), input)?
+                }
+                Ok((input, instance))
             }))
         } else {
-            todo!()
+            Ok(Box::new(move |mut input| {
+                let mut member_presence = vec![];
+                for m in sequence.members.iter() {
+                    if m.is_optional {
+                        let parsed = read_bit(input)?;
+                        input = parsed.0;
+                        member_presence.push(parsed.1);
+                    } else {
+                        member_presence.push(true)
+                    }
+                }
+                let mut instance = T::default();
+                for (index, present) in member_presence.iter().enumerate() {
+                    if *present {
+                        input = instance.decode_member_at_index(index, Uper::new(), input)?;
+                    }
+                }
+                Ok((input, instance))
+            }))
         }
     }
 
-    fn decode_sequence_of<T: crate::Decode<BitIn<'a>>>(
-        &self,
+    fn decode_sequence_of<T: Decode<BitIn<'a>>>(
         sequence_of: asnr_grammar::types::SequenceOf,
-        member_decoder: impl FnMut(&Self, BitIn<'a>) -> IResult<BitIn<'a>, T>,
+        member_decoder: impl FnMut(BitIn<'a>) -> IResult<BitIn<'a>, T>,
     ) -> Result<Box<dyn FnMut(BitIn<'a>) -> IResult<BitIn<'a>, Vec<T>>>, DecodingError> {
         todo!()
     }
 
-    fn decode_unknown_extension(&self, input: BitIn<'a>) -> IResult<BitIn<'a>, Vec<u8>> {
+    fn decode_unknown_extension(input: BitIn<'a>) -> IResult<BitIn<'a>, Vec<u8>> {
         todo!()
     }
 }
@@ -436,20 +468,18 @@ mod tests {
 
     #[test]
     fn decodes_constrained_int() {
-        let uper = Uper {};
-        let mut decoder = uper
-            .decode_integer::<i128>(Integer {
-                distinguished_values: None,
-                constraints: vec![Constraint::SubtypeConstraint(ElementSet {
-                    set: ElementOrSetOperation::Element(SubtypeElement::ValueRange {
-                        min: Some(ASN1Value::Integer(3)),
-                        max: Some(ASN1Value::Integer(6)),
-                        extensible: false,
-                    }),
+        let mut decoder = Uper::decode_integer::<i128>(Integer {
+            distinguished_values: None,
+            constraints: vec![Constraint::SubtypeConstraint(ElementSet {
+                set: ElementOrSetOperation::Element(SubtypeElement::ValueRange {
+                    min: Some(ASN1Value::Integer(3)),
+                    max: Some(ASN1Value::Integer(6)),
                     extensible: false,
-                })],
-            })
-            .unwrap();
+                }),
+                extensible: false,
+            })],
+        })
+        .unwrap();
         assert_eq!(
             decoder(BSlice::from(bits![static u8, Msb0; 0,0]))
                 .unwrap()
@@ -474,19 +504,18 @@ mod tests {
                 .1,
             6
         );
-        decoder = uper
-            .decode_integer::<i128>(Integer {
-                distinguished_values: None,
-                constraints: vec![Constraint::SubtypeConstraint(ElementSet {
-                    set: ElementOrSetOperation::Element(SubtypeElement::ValueRange {
-                        min: Some(ASN1Value::Integer(4000)),
-                        max: Some(ASN1Value::Integer(4254)),
-                        extensible: false,
-                    }),
+        decoder = Uper::decode_integer::<i128>(Integer {
+            distinguished_values: None,
+            constraints: vec![Constraint::SubtypeConstraint(ElementSet {
+                set: ElementOrSetOperation::Element(SubtypeElement::ValueRange {
+                    min: Some(ASN1Value::Integer(4000)),
+                    max: Some(ASN1Value::Integer(4254)),
                     extensible: false,
-                })],
-            })
-            .unwrap();
+                }),
+                extensible: false,
+            })],
+        })
+        .unwrap();
         assert_eq!(
             decoder(BSlice::from(bits![static u8, Msb0; 0,0,0,0,0,0,1,0]))
                 .unwrap()
@@ -499,19 +528,18 @@ mod tests {
                 .1,
             4006
         );
-        decoder = uper
-            .decode_integer::<i128>(Integer {
-                distinguished_values: None,
-                constraints: vec![Constraint::SubtypeConstraint(ElementSet {
-                    set: ElementOrSetOperation::Element(SubtypeElement::ValueRange {
-                        min: Some(ASN1Value::Integer(1)),
-                        max: Some(ASN1Value::Integer(65538)),
-                        extensible: false,
-                    }),
+        decoder = Uper::decode_integer::<i128>(Integer {
+            distinguished_values: None,
+            constraints: vec![Constraint::SubtypeConstraint(ElementSet {
+                set: ElementOrSetOperation::Element(SubtypeElement::ValueRange {
+                    min: Some(ASN1Value::Integer(1)),
+                    max: Some(ASN1Value::Integer(65538)),
                     extensible: false,
-                })],
-            })
-            .unwrap();
+                }),
+                extensible: false,
+            })],
+        })
+        .unwrap();
         assert_eq!(
             decoder(BSlice::from(
                 bits![static u8, Msb0; 1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1]
@@ -545,30 +573,28 @@ mod tests {
             }
         }
 
-        let uper = Uper {};
-        let mut decoder = uper
-            .decode_enumerated::<TestEnum>(Enumerated {
-                extensible: None,
-                members: vec![
-                    Enumeral {
-                        name: "One".into(),
-                        description: None,
-                        index: 0,
-                    },
-                    Enumeral {
-                        name: "Two".into(),
-                        description: None,
-                        index: 1,
-                    },
-                    Enumeral {
-                        name: "Three".into(),
-                        description: None,
-                        index: 2,
-                    },
-                ],
-                constraints: vec![],
-            })
-            .unwrap();
+        let mut decoder = Uper::decode_enumerated::<TestEnum>(Enumerated {
+            extensible: None,
+            members: vec![
+                Enumeral {
+                    name: "One".into(),
+                    description: None,
+                    index: 0,
+                },
+                Enumeral {
+                    name: "Two".into(),
+                    description: None,
+                    index: 1,
+                },
+                Enumeral {
+                    name: "Three".into(),
+                    description: None,
+                    index: 2,
+                },
+            ],
+            constraints: vec![],
+        })
+        .unwrap();
         assert_eq!(
             decoder(BSlice::from(bits![static u8, Msb0; 0,0]))
                 .unwrap()
@@ -587,29 +613,28 @@ mod tests {
                 .1,
             TestEnum::Three
         );
-        decoder = uper
-            .decode_enumerated::<TestEnum>(Enumerated {
-                extensible: Some(2),
-                members: vec![
-                    Enumeral {
-                        name: "One".into(),
-                        description: None,
-                        index: 0,
-                    },
-                    Enumeral {
-                        name: "Two".into(),
-                        description: None,
-                        index: 1,
-                    },
-                    Enumeral {
-                        name: "Three".into(),
-                        description: None,
-                        index: 2,
-                    },
-                ],
-                constraints: vec![],
-            })
-            .unwrap();
+        decoder = Uper::decode_enumerated::<TestEnum>(Enumerated {
+            extensible: Some(2),
+            members: vec![
+                Enumeral {
+                    name: "One".into(),
+                    description: None,
+                    index: 0,
+                },
+                Enumeral {
+                    name: "Two".into(),
+                    description: None,
+                    index: 1,
+                },
+                Enumeral {
+                    name: "Three".into(),
+                    description: None,
+                    index: 2,
+                },
+            ],
+            constraints: vec![],
+        })
+        .unwrap();
         assert_eq!(
             decoder(BSlice::from(bits![static u8, Msb0; 0,0,0]))
                 .unwrap()

@@ -12,7 +12,7 @@ pub mod error;
 #[cfg(feature = "uper")]
 pub mod uper;
 
-use alloc::{string::String, vec::Vec, boxed::Box};
+use alloc::{boxed::Box, string::String, vec::Vec};
 use asnr_grammar::{types::*, ASN1Type};
 use error::DecodingError;
 use nom::{AsBytes, IResult};
@@ -37,9 +37,9 @@ pub trait DecodeMember<I: AsBytes> {
     fn decode_member_at_index<D>(
         &mut self,
         index: usize,
-        decoder: &D,
+        decoder: D,
         input: I,
-    ) -> Result<(I, ()), DecodingError>
+    ) -> Result<I, nom::Err<nom::error::Error<I>>>
     where
         D: Decoder<I>,
         Self: Sized;
@@ -61,22 +61,26 @@ pub trait DecoderForKey<I: AsBytes, T> {
 }
 
 pub trait Decoder<I: AsBytes> {
-    fn decode_open_type(&self, input: I) -> IResult<I, Vec<u8>>;
-    fn decode_integer<O>(&self, integer: Integer) -> Result<Box<dyn FnMut(I) -> IResult<I, O>>, DecodingError>
+    fn decode_open_type(input: I) -> IResult<I, Vec<u8>>;
+    fn decode_integer<O>(
+        integer: Integer,
+    ) -> Result<Box<dyn FnMut(I) -> IResult<I, O>>, DecodingError>
     where
         O: num::Integer + num::FromPrimitive + Copy;
-    fn decode_enumerated<O: TryFrom<i128>>(&self, enumerated: Enumerated)
-        -> Result<Box<dyn FnMut(I) -> IResult<I, O>>, DecodingError>;
-    fn decode_choice<O: DecoderForIndex<I>>(&self, choice: Choice) -> fn(I) -> IResult<I, O>;
-    fn decode_null<N: Default>(&self, input: I) -> IResult<I, N>;
-    fn decode_boolean(&self, input: I) -> IResult<I, bool>;
-    fn decode_bit_string(&self, bit_string: BitString) -> fn(I) -> IResult<I, Vec<bool>>;
-    fn decode_character_string(&self, char_string: CharacterString) -> fn(I) -> IResult<I, String>;
-    fn decode_sequence<T: DecodeMember<I>>(&self, sequence: Sequence) -> Result<Box<dyn FnMut(I) -> IResult<I, T>>, DecodingError>;
+    fn decode_enumerated<O: TryFrom<i128>>(
+        enumerated: Enumerated,
+    ) -> Result<Box<dyn FnMut(I) -> IResult<I, O>>, DecodingError>;
+    fn decode_choice<O: DecoderForIndex<I>>(choice: Choice) -> fn(I) -> IResult<I, O>;
+    fn decode_null<N: Default>(input: I) -> IResult<I, N>;
+    fn decode_boolean(input: I) -> IResult<I, bool>;
+    fn decode_bit_string(bit_string: BitString) -> fn(I) -> IResult<I, Vec<bool>>;
+    fn decode_character_string(char_string: CharacterString) -> fn(I) -> IResult<I, String>;
+    fn decode_sequence<T: DecodeMember<I> + Default>(
+        sequence: Sequence,
+    ) -> Result<Box<dyn FnMut(I) -> IResult<I, T>>, DecodingError>;
     fn decode_sequence_of<T: Decode<I>>(
-        &self,
         sequence_of: SequenceOf,
-        member_decoder: impl FnMut(&Self, I) -> IResult<I, T>,
+        member_decoder: impl FnMut(I) -> IResult<I, T>,
     ) -> Result<Box<dyn FnMut(I) -> IResult<I, Vec<T>>>, DecodingError>;
-    fn decode_unknown_extension(&self, input: I) -> IResult<I, Vec<u8>>;
+    fn decode_unknown_extension(input: I) -> IResult<I, Vec<u8>>;
 }
