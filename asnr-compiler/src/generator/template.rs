@@ -366,7 +366,7 @@ impl<I: AsBytes> Decode<I> for {name} {{
 
   {DECODER_SIGNATURE}
   {{
-    let mut seq_of_decoder = D::decode_sequence_of({seq_of_descriptor}, |d, i| {{ {member_type}::decode(i) }})?;
+    let mut seq_of_decoder = D::decode_sequence_of({seq_of_descriptor}, |i| {{ {member_type}::decode::<D>(i) }})?;
     Ok(Box::new(|input| seq_of_decoder(input).map(|(remaining, res)| (remaining, Self(res)))))
   }}
 }}

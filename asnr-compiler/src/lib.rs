@@ -222,15 +222,15 @@ mod tests {
             "{:#?}",
             Asnr::compiler()
                 .add_asn_source(PathBuf::from("test_asn1/ETSI-ITS-CDD.asn"))
-                .add_asn_source(PathBuf::from(
-                    "test_asn1/CPM-OriginatingStationContainers.asn"
-                ))
-                .add_asn_source(PathBuf::from("test_asn1/CPM-PerceivedObjectContainer.asn"))
-                .add_asn_source(PathBuf::from("test_asn1/CPM-PerceptionRegionContainer.asn"))
-                .add_asn_source(PathBuf::from(
-                    "test_asn1/CPM-SensorInformationContainer.asn"
-                ))
-               .add_asn_source(PathBuf::from("test_asn1/CPM-PDU-Descriptions.asn"))
+            //     .add_asn_source(PathBuf::from(
+            //         "test_asn1/CPM-OriginatingStationContainers.asn"
+            //     ))
+            //     .add_asn_source(PathBuf::from("test_asn1/CPM-PerceivedObjectContainer.asn"))
+            //     .add_asn_source(PathBuf::from("test_asn1/CPM-PerceptionRegionContainer.asn"))
+            //     .add_asn_source(PathBuf::from(
+            //         "test_asn1/CPM-SensorInformationContainer.asn"
+            //     ))
+            //    .add_asn_source(PathBuf::from("test_asn1/CPM-PDU-Descriptions.asn"))
                 .set_output_path(PathBuf::from("../asnr-transcoder/src/generated.rs"))
                 .compile()
                 .unwrap()
