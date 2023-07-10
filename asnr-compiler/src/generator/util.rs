@@ -162,7 +162,7 @@ pub fn format_enumeral(enumeral: &Enumeral) -> String {
 pub fn format_option_from_int(args: (usize, &StringifiedNameType)) -> String {
     format!(
         r#"x if x == {index} => Ok(|decoder, input| {{
-    {t}::decode(decoder, input).map(|(r, v)|(r, Self::{name}(v)))
+    {t}::decode::<D>(input).map(|(r, v)|(r, Self::{name}(v)))
   }}),"#,
         index = args.0,
         name = args.1.name,
@@ -323,13 +323,11 @@ pub fn format_extensible_sequence<'a>(name: &String, extensible: bool) -> (Strin
             "".into()
         },
         if extensible {
-            "{ (input, self.unknown_extension) = decoder.decode_unknown_extension(input)? },".into()
+            "{ (input, self.unknown_extension) = D::decode_unknown_extension(input)? },".into()
         } else {
             format!(
                 r#"return Err(
-              DecodingError::new(
-                &format!("Invalid sequence member index decoding {name}. Received index {{}}",index), DecodingErrorType::InvalidSequenceMemberIndex
-              )
+              nom::Err::Error(nom::error::Error {{ input, code: nom::error::ErrorKind::Fail }})
             )"#
             )
         },
@@ -342,7 +340,7 @@ pub fn format_decode_member_body(members: &Vec<StringifiedNameType>) -> String {
         .enumerate()
         .map(|(i, m)| {
             format!(
-                "{i} => {{ (input, self.{name}) = {t}::decode(decoder, input)? }},",
+                "{i} => {{ (input, self.{name}) = {t}::decode::<D>(input)? }},",
                 t = m.r#type,
                 name = m.name
             )

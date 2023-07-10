@@ -129,7 +129,7 @@ impl<'a> Decoder<BitIn<'a>> for Uper {
 
     fn decode_choice<O: DecoderForIndex<BitIn<'a>>>(
         choice: asnr_grammar::types::Choice,
-    ) -> fn(BitIn<'a>) -> IResult<BitIn<'a>, O> {
+    ) -> Result<Box<dyn FnMut(BitIn<'a>) -> IResult<BitIn<'a>, O>>, DecodingError> {
         todo!()
     }
 
@@ -143,13 +143,13 @@ impl<'a> Decoder<BitIn<'a>> for Uper {
 
     fn decode_bit_string(
         bit_string: asnr_grammar::types::BitString,
-    ) -> fn(BitIn<'a>) -> IResult<BitIn<'a>, Vec<bool>> {
+    ) -> Result<Box<dyn FnMut(BitIn<'a>) -> IResult<BitIn<'a>, Vec<bool>>>, DecodingError> {
         todo!()
     }
 
     fn decode_character_string(
         char_string: asnr_grammar::types::CharacterString,
-    ) -> fn(BitIn<'a>) -> IResult<BitIn<'a>, String> {
+    ) -> Result<Box<dyn FnMut(BitIn<'a>) -> IResult<BitIn<'a>, String>>, DecodingError> {
         todo!()
     }
 
@@ -172,22 +172,18 @@ impl<'a> Decoder<BitIn<'a>> for Uper {
                 let mut instance = T::default();
                 for (index, present) in member_presence.iter().enumerate() {
                     if *present {
-                        input = instance.decode_member_at_index(index, Uper::new(), input)?;
+                        input = instance.decode_member_at_index::<Uper>(index, input)?;
                     }
                 }
                 if is_extended {
                     let (mut input, length) = decode_normally_small_number(input)?;
                     let mut extension_presence = vec![];
                     for _ in 0..length {
-                        if m.is_optional {
-                            let parsed = read_bit(input)?;
-                            input = parsed.0;
-                            extension_presence.push(parsed.1);
-                        } else {
-                            extension_presence.push(true)
-                        }
+                        let parsed = read_bit(input)?;
+                        input = parsed.0;
+                        extension_presence.push(parsed.1);
                     }
-                    input = instance.decode_member_at_index(extension_index, Uper::new(), input)?
+                    input = instance.decode_member_at_index::<Uper>(extension_index, input)?
                 }
                 Ok((input, instance))
             }))
@@ -206,7 +202,7 @@ impl<'a> Decoder<BitIn<'a>> for Uper {
                 let mut instance = T::default();
                 for (index, present) in member_presence.iter().enumerate() {
                     if *present {
-                        input = instance.decode_member_at_index(index, Uper::new(), input)?;
+                        input = instance.decode_member_at_index::<Uper>(index, input)?;
                     }
                 }
                 Ok((input, instance))
@@ -389,7 +385,8 @@ mod tests {
     use crate::uper::decoder::*;
     use asnr_grammar::{
         constraints::*,
-        types::{Enumeral, Enumerated, Integer},
+        information_object::ASN1Information,
+        types::{Enumeral, Enumerated, Integer, Sequence, SequenceMember},
         *,
     };
 

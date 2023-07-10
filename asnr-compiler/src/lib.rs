@@ -231,7 +231,7 @@ mod tests {
                     "test_asn1/CPM-SensorInformationContainer.asn"
                 ))
                .add_asn_source(PathBuf::from("test_asn1/CPM-PDU-Descriptions.asn"))
-                .set_output_path(PathBuf::from("./test_asn1/generated.rs"))
+                .set_output_path(PathBuf::from("../asnr-transcoder/src/generated.rs"))
                 .compile()
                 .unwrap()
         )

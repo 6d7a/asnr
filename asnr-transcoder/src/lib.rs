@@ -11,6 +11,7 @@ extern crate alloc;
 pub mod error;
 #[cfg(feature = "uper")]
 pub mod uper;
+mod generated;
 
 use alloc::{boxed::Box, string::String, vec::Vec};
 use asnr_grammar::{types::*, ASN1Type};
@@ -18,12 +19,12 @@ use error::DecodingError;
 use nom::{AsBytes, IResult};
 
 pub trait Decode<I: AsBytes> {
-    fn decode<D>(decoder: &D, input: I) -> IResult<I, Self>
+    fn decode<D>(input: I) -> IResult<I, Self>
     where
         D: Decoder<I>,
         Self: Sized;
 
-    fn decoder<D>(decoder: &D) -> Result<Box<dyn FnMut(I) -> IResult<I, Self>>, DecodingError>
+    fn decoder<D>() -> Result<Box<dyn FnMut(I) -> IResult<I, Self>>, DecodingError>
     where
         D: Decoder<I>,
         Self: Sized;
@@ -37,7 +38,6 @@ pub trait DecodeMember<I: AsBytes> {
     fn decode_member_at_index<D>(
         &mut self,
         index: usize,
-        decoder: D,
         input: I,
     ) -> Result<I, nom::Err<nom::error::Error<I>>>
     where
@@ -70,11 +70,11 @@ pub trait Decoder<I: AsBytes> {
     fn decode_enumerated<O: TryFrom<i128>>(
         enumerated: Enumerated,
     ) -> Result<Box<dyn FnMut(I) -> IResult<I, O>>, DecodingError>;
-    fn decode_choice<O: DecoderForIndex<I>>(choice: Choice) -> fn(I) -> IResult<I, O>;
+    fn decode_choice<O: DecoderForIndex<I>>(choice: Choice) -> Result<Box<dyn FnMut(I) -> IResult<I, O>>, DecodingError>;
     fn decode_null<N: Default>(input: I) -> IResult<I, N>;
     fn decode_boolean(input: I) -> IResult<I, bool>;
-    fn decode_bit_string(bit_string: BitString) -> fn(I) -> IResult<I, Vec<bool>>;
-    fn decode_character_string(char_string: CharacterString) -> fn(I) -> IResult<I, String>;
+    fn decode_bit_string(bit_string: BitString) -> Result<Box<dyn FnMut(I) -> IResult<I, Vec<bool>>>, DecodingError>;
+    fn decode_character_string(char_string: CharacterString) -> Result<Box<dyn FnMut(I) -> IResult<I, String>>, DecodingError>;
     fn decode_sequence<T: DecodeMember<I> + Default>(
         sequence: Sequence,
     ) -> Result<Box<dyn FnMut(I) -> IResult<I, T>>, DecodingError>;
