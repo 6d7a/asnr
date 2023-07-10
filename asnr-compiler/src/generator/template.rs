@@ -24,10 +24,16 @@ pub struct ASN1_ALL(pub dyn Any);
 {}
 pub struct ASN1_OPEN(pub Vec<u8>);
 
-impl<I: AsBytes> Decode<I> for ASN1_OPEN {{
+impl<'a, I: AsBytes + 'a> Decode<'a, I> for ASN1_OPEN {{
   {DECODE_SIGNATURE}
-  {{
-    ASN1_OPEN::decoder::<D>().map_err(|err| nom::Err::Error(nom::error::Error {{ input, code: nom::error::ErrorKind::Fail }}))?(input)
+  {{ 
+    match ASN1_OPEN::decoder::<D>() {{
+      Ok(mut decoder) => decoder(input),
+      Err(_e) => Err(nom::Err::Error(nom::error::Error {{
+        input,
+        code: nom::error::ErrorKind::Fail,
+      }}))
+    }}
   }}
 
   {DECODER_SIGNATURE}
@@ -44,12 +50,12 @@ pub const DERIVE_DEFAULT: &str = "#[derive(Debug, Clone, PartialEq, Default)]";
 
 pub const DECODE_SIGNATURE: &str = r#"fn decode<D>(input: I) -> IResult<I, Self>
 where
-    D: Decoder<I>,
+    D: Decoder<'a, I>,
     Self: Sized,"#;
 
-pub const DECODER_SIGNATURE: &str = r#"fn decoder<D>() -> Result<Box<dyn FnMut(I) -> IResult<I, Self>>, DecodingError>
+pub const DECODER_SIGNATURE: &str = r#"fn decoder<D>() -> Result<Box<dyn FnMut(I) -> IResult<I, Self> + 'a>, DecodingError>
     where
-        D: Decoder<I>,
+        D: Decoder<'a, I>,
         Self: Sized,"#;
 
 pub fn type_reference_value_template(
@@ -85,16 +91,22 @@ pub fn typealias_template(
       }}
     }}
     
-    impl<I: AsBytes> Decode<I> for {name} {{
+    impl<'a, I: AsBytes + 'a> Decode<'a, I> for {name} {{
       {DECODE_SIGNATURE}
       {{
-        {name}::decoder::<D>().map_err(|err| nom::Err::Error(nom::error::Error {{ input, code: nom::error::ErrorKind::Fail }}))?(input)
+        match {name}::decoder::<D>() {{
+          Ok(mut decoder) => decoder(input),
+          Err(_e) => Err(nom::Err::Error(nom::error::Error {{
+            input,
+            code: nom::error::ErrorKind::Fail,
+          }}))
+        }}
       }}
 
       {DECODER_SIGNATURE}
       {{
-        let inner_decoder = {alias}::decoder::<D>()?;
-        Ok(Box::new(move |input| inner_decoder(input).map(|(r, v)|(r, Self(v)))))
+        let mut inner_decoder = {alias}::decoder::<D>()?;
+        Ok(Box::new(move |input| (*inner_decoder)(input).map(|(r, v)|(r, Self(v)))))
       }}
     }}
     "#
@@ -127,16 +139,22 @@ pub fn integer_template(
 {comments}{derive}
 pub struct {name}(pub {integer_type});{distinguished_values}
 
-impl<I: AsBytes> Decode<I> for {name} {{
+impl<'a, I: AsBytes + 'a> Decode<'a, I> for {name} {{
   {DECODE_SIGNATURE}
   {{
-    {name}::decoder::<D>().map_err(|err| nom::Err::Error(nom::error::Error {{ input, code: nom::error::ErrorKind::Fail }}))?(input)
+    match {name}::decoder::<D>() {{
+      Ok(mut decoder) => decoder(input),
+      Err(_e) => Err(nom::Err::Error(nom::error::Error {{
+        input,
+        code: nom::error::ErrorKind::Fail,
+      }}))
+    }}
   }}
 
   {DECODER_SIGNATURE}
   {{
     let mut int_decoder = D::decode_integer({int_descriptor})?;
-    Ok(Box::new(move |input| int_decoder(input).map(|(remaining, res)| (remaining, Self(res)))))
+    Ok(Box::new(move |input| (*int_decoder)(input).map(|(remaining, res)| (remaining, Self(res)))))
   }}
 }}
 "#
@@ -155,16 +173,22 @@ pub fn bit_string_template(
 {comments}{derive}
 pub struct {name}(pub Vec<bool>);{distinguished_values}
 
-impl<I: AsBytes> Decode<I> for {name} {{
+impl<'a, I: AsBytes + 'a> Decode<'a, I> for {name} {{
   {DECODE_SIGNATURE}
   {{
-    {name}::decoder::<D>().map_err(|err| nom::Err::Error(nom::error::Error {{ input, code: nom::error::ErrorKind::Fail }}))?(input)
+    match {name}::decoder::<D>() {{
+      Ok(mut decoder) => decoder(input),
+      Err(_e) => Err(nom::Err::Error(nom::error::Error {{
+        input,
+        code: nom::error::ErrorKind::Fail,
+      }}))
+    }}
   }}
 
   {DECODER_SIGNATURE}
   {{
     let mut bitstring_decoder = D::decode_bit_string({bitstr_descriptor})?;
-    Ok(Box::new(move |input| bitstring_decoder(input).map(|(remaining, res)| (remaining, Self(res)))))
+    Ok(Box::new(move |input| (*bitstring_decoder)(input).map(|(remaining, res)| (remaining, Self(res)))))
   }}
 }}
 "#,
@@ -182,16 +206,22 @@ pub fn char_string_template(
 {comments}{derive}
 pub struct {name}(pub String);
 
-impl<I: AsBytes> Decode<I> for {name} {{
+impl<'a, I: AsBytes + 'a> Decode<'a, I> for {name} {{
   {DECODE_SIGNATURE}
   {{
-    {name}::decoder::<D>().map_err(|err| nom::Err::Error(nom::error::Error {{ input, code: nom::error::ErrorKind::Fail }}))?(input)
+    match {name}::decoder::<D>() {{
+      Ok(mut decoder) => decoder(input),
+      Err(_e) => Err(nom::Err::Error(nom::error::Error {{
+        input,
+        code: nom::error::ErrorKind::Fail,
+      }}))
+    }}
   }}
 
   {DECODER_SIGNATURE}
   {{
     let mut charstring_decoder = D::decode_character_string({charstr_descriptor})?;
-    Ok(Box::new(move |input| charstring_decoder(input).map(|(remaining, res)| (remaining, Self(res)))))
+    Ok(Box::new(move |input| (*charstring_decoder)(input).map(|(remaining, res)| (remaining, Self(res)))))
   }}
 }}
 "#,
@@ -204,10 +234,16 @@ pub fn boolean_template(comments: String, derive: &str, name: String) -> String 
 {comments}{derive}
 pub struct {name}(pub bool);
 
-impl<I: AsBytes> Decode<I> for {name} {{
+impl<'a, I: AsBytes + 'a> Decode<'a, I> for {name} {{
   {DECODE_SIGNATURE}
   {{
-    {name}::decoder::<D>().map_err(|err| nom::Err::Error(nom::error::Error {{ input, code: nom::error::ErrorKind::Fail }}))?(input)
+    match {name}::decoder::<D>() {{
+      Ok(mut decoder) => decoder(input),
+      Err(_e) => Err(nom::Err::Error(nom::error::Error {{
+        input,
+        code: nom::error::ErrorKind::Fail,
+      }}))
+    }}
   }}
   
   {DECODER_SIGNATURE}
@@ -233,10 +269,16 @@ pub fn null_template(comments: String, derive: &str, name: String) -> String {
 {comments}{derive}
 pub struct {name};
 
-impl<I: AsBytes> Decode<I> for {name} {{
+impl<'a, I: AsBytes + 'a> Decode<'a, I> for {name} {{
   {DECODE_SIGNATURE}
   {{
-    {name}::decoder::<D>().map_err(|err| nom::Err::Error(nom::error::Error {{ input, code: nom::error::ErrorKind::Fail }}))?(input)
+    match {name}::decoder::<D>() {{
+      Ok(mut decoder) => decoder(input),
+      Err(_e) => Err(nom::Err::Error(nom::error::Error {{
+        input,
+        code: nom::error::ErrorKind::Fail,
+      }}))
+    }}
   }}
   
   {DECODER_SIGNATURE}
@@ -279,10 +321,16 @@ pub fn enumerated_template(
     }}
   }}
   
-  impl<I: AsBytes> Decode<I> for {name} {{
+  impl<'a, I: AsBytes + 'a> Decode<'a, I> for {name} {{
     {DECODE_SIGNATURE}
     {{
-      {name}::decoder::<D>().map_err(|err| nom::Err::Error(nom::error::Error {{ input, code: nom::error::ErrorKind::Fail }}))?(input)
+      match {name}::decoder::<D>() {{
+        Ok(mut decoder) => decoder(input),
+        Err(_e) => Err(nom::Err::Error(nom::error::Error {{
+          input,
+          code: nom::error::ErrorKind::Fail,
+        }}))
+      }}
     }}
     
     {DECODER_SIGNATURE}
@@ -314,10 +362,10 @@ pub fn sequence_template(
     {member_declaration}{extension_decl}
   }}
   
-  impl<I: AsBytes> DecodeMember<I> for {name} {{
+  impl<'a, I: AsBytes + 'a> DecodeMember<'a, I> for {name} {{
     fn decode_member_at_index<D>(&mut self, index: usize, input: I) -> Result<I, nom::Err<nom::error::Error<I>>>
       where
-          D: Decoder<I>,
+          D: Decoder<'a, I>,
           Self: Sized,
     {{
       let mut input = input;
@@ -329,10 +377,16 @@ pub fn sequence_template(
     }}
   }}
   
-  impl<I: AsBytes> Decode<I> for {name} {{
+  impl<'a, I: AsBytes + 'a> Decode<'a, I> for {name} {{
     {DECODE_SIGNATURE}
     {{
-      {name}::decoder::<D>().map_err(|err| nom::Err::Error(nom::error::Error {{ input, code: nom::error::ErrorKind::Fail }}))?(input)
+      match {name}::decoder::<D>() {{
+        Ok(mut decoder) => decoder(input),
+        Err(_e) => Err(nom::Err::Error(nom::error::Error {{
+          input,
+          code: nom::error::ErrorKind::Fail,
+        }}))
+      }}
     }}
 
     {DECODER_SIGNATURE}
@@ -358,16 +412,22 @@ pub fn sequence_of_template(
 {comments}{derive}
 pub struct {name}(pub Vec<{member_type}>);
 
-impl<I: AsBytes> Decode<I> for {name} {{
+impl<'a, I: AsBytes + 'a> Decode<'a, I> for {name} {{
   {DECODE_SIGNATURE}
   {{
-    {name}::decoder::<D>().map_err(|err| nom::Err::Error(nom::error::Error {{ input, code: nom::error::ErrorKind::Fail }}))?(input)
+    match {name}::decoder::<D>() {{
+      Ok(mut decoder) => decoder(input),
+      Err(_e) => Err(nom::Err::Error(nom::error::Error {{
+        input,
+        code: nom::error::ErrorKind::Fail,
+      }}))
+    }}
   }}
 
   {DECODER_SIGNATURE}
   {{
     let mut seq_of_decoder = D::decode_sequence_of({seq_of_descriptor}, |i| {{ {member_type}::decode::<D>(i) }})?;
-    Ok(Box::new(|input| seq_of_decoder(input).map(|(remaining, res)| (remaining, Self(res)))))
+    Ok(Box::new(move |input| (*seq_of_decoder)(input).map(|(remaining, res)| (remaining, Self(res)))))
   }}
 }}
 "#
@@ -400,8 +460,8 @@ pub enum {name} {{
   {options}
 }}
 
-impl<I: AsBytes> DecoderForIndex<I> for {name} {{
-  fn decoder_for_index<D>(v: i128) -> Result<fn(&D, I) -> IResult<I, Self>, DecodingError> where D: Decoder<I>, Self: Sized {{
+impl<'a, I: AsBytes + 'a> DecoderForIndex<'a, I> for {name} {{
+  fn decoder_for_index<D>(v: i128) -> Result<fn(&D, I) -> IResult<I, Self>, DecodingError> where D: Decoder<'a, I>, Self: Sized {{
     match v {{
         {options_from_int}
         _ => Err(
@@ -419,10 +479,16 @@ impl Default for {name} {{
   }}
 }}
 
-impl<I: AsBytes> Decode<I> for {name} {{
+impl<'a, I: AsBytes + 'a> Decode<'a, I> for {name} {{
   {DECODE_SIGNATURE}
   {{
-    {name}::decoder::<D>().map_err(|err| nom::Err::Error(nom::error::Error {{ input, code: nom::error::ErrorKind::Fail }}))?(input)
+    match {name}::decoder::<D>() {{
+      Ok(mut decoder) => decoder(input),
+      Err(_e) => Err(nom::Err::Error(nom::error::Error {{
+        input,
+        code: nom::error::ErrorKind::Fail,
+      }}))
+    }}
   }}
 
   {DECODER_SIGNATURE}
@@ -470,10 +536,10 @@ pub struct {name} {{
 {member_declaration}{extension_decl}
 }}
 
-impl<I: AsBytes> DecodeMember<I> for {name} {{
+impl<'a, I: AsBytes + 'a> DecodeMember<'a, I> for {name} {{
 fn decode_member_at_index<D>(&mut self, index: usize, input: I) -> Result<I, nom::Err<nom::error::Error<I>>>
   where
-      D: Decoder<I>,
+      D: Decoder<'a, I>,
       Self: Sized,
 {{
   let mut input = input;
@@ -485,10 +551,16 @@ fn decode_member_at_index<D>(&mut self, index: usize, input: I) -> Result<I, nom
 }}
 }}
 
-impl<I: AsBytes> Decode<I> for {name} {{
+impl<'a, I: AsBytes + 'a> Decode<'a, I> for {name} {{
   {DECODE_SIGNATURE}
   {{
-    {name}::decoder::<D>().map_err(|err| nom::Err::Error(nom::error::Error {{ input, code: nom::error::ErrorKind::Fail }}))?(input)
+    match {name}::decoder::<D>() {{
+      Ok(mut decoder) => decoder(input),
+      Err(_e) => Err(nom::Err::Error(nom::error::Error {{
+        input,
+        code: nom::error::ErrorKind::Fail,
+      }}))
+    }}
   }}
 
   {DECODER_SIGNATURE}

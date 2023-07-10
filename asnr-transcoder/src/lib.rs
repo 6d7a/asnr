@@ -24,7 +24,7 @@ pub trait Decode<'a, I: AsBytes + 'a> {
         D: Decoder<'a, I>,
         Self: Sized;
 
-    fn decoder<D>() -> Result<Box<dyn FnMut(I) -> IResult<I, Self>>, DecodingError>
+    fn decoder<D>() -> Result<Box<dyn FnMut(I) -> IResult<I, Self> + 'a>, DecodingError>
     where
         D: Decoder<'a, I>,
         Self: Sized;
