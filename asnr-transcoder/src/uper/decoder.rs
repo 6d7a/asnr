@@ -5,13 +5,13 @@ use nom::{
     bytes::complete::take,
     combinator::{map, map_res},
     error::Error,
-    AsBytes, IResult,
+    AsBytes, Err, IResult,
 };
 use num::{FromPrimitive, Integer};
 
 use crate::{
     error::{DecodingError, DecodingErrorType},
-    uper::per_visible::PerVisibleIntegerConstraints,
+    uper::per_visible::PerVisibleRangeConstraints,
     Decode, DecodeMember, Decoder, DecoderForIndex,
 };
 
@@ -36,7 +36,7 @@ impl<'a> Decoder<'a, BitIn<'a>> for Uper {
     where
         O: num::Integer + num::FromPrimitive + Copy,
     {
-        let mut constraints = PerVisibleIntegerConstraints::default();
+        let mut constraints = PerVisibleRangeConstraints::default();
         for c in integer.constraints {
             constraints += c.try_into()?
         }
@@ -76,8 +76,8 @@ impl<'a> Decoder<'a, BitIn<'a>> for Uper {
     fn decode_enumerated<O: TryFrom<i128>>(
         enumerated: asnr_grammar::types::Enumerated,
     ) -> Result<Box<dyn FnMut(BitIn) -> IResult<BitIn, O>>, DecodingError> {
-        let mut constraints = PerVisibleIntegerConstraints::default();
-        for c in enumerated.clone().constraints {
+        let mut constraints = PerVisibleRangeConstraints::default();
+        for c in enumerated.constraints {
             constraints += c.try_into()?
         }
         constraints.as_enum_constraint(&enumerated);
@@ -150,7 +150,45 @@ impl<'a> Decoder<'a, BitIn<'a>> for Uper {
     fn decode_character_string(
         char_string: asnr_grammar::types::CharacterString,
     ) -> Result<Box<dyn FnMut(BitIn<'a>) -> IResult<BitIn<'a>, String>>, DecodingError> {
-        todo!()
+        let mut constraints = PerVisibleRangeConstraints::default();
+        for c in char_string.constraints {
+            constraints += c.try_into()?
+        }
+        constraints.as_unsigned_constraint();
+        if constraints.is_extensible() {
+            Ok(Box::new(
+                move |input: BitIn<'a>| -> IResult<BitIn<'a>, String> {
+                    let (input, is_extended) = read_bit(input)?;
+                    if is_extended {
+                        let (input, length_det) = decode_varlength_integer(input, Some(0))?;
+                        map(
+                            take(char_string.r#type.char_bit_size() * length_det),
+                            |buffer: BitIn| String::from_utf8_lossy(buffer.as_bytes()).into_owned(),
+                        )(input)
+                    } else {
+                        let (input, length_det) =
+                            map(read_int::<usize>(constraints.bit_size().unwrap()), |i| {
+                                i + constraints.min::<usize>().unwrap()
+                            })(input)?;
+                        map(
+                            take(char_string.r#type.char_bit_size() * length_det),
+                            |buffer: BitIn| String::from_utf8_lossy(buffer.as_bytes()).into_owned(),
+                        )(input)
+                    }
+                },
+            ))
+        } else {
+            Ok(Box::new(move |input| {
+                let (input, length_det) =
+                    map(read_int::<usize>(constraints.bit_size().unwrap()), |i| {
+                        i + constraints.min::<usize>().unwrap()
+                    })(input)?;
+                map(
+                    take(char_string.r#type.char_bit_size() * length_det),
+                    |buffer: BitIn| String::from_utf8_lossy(buffer.as_bytes()).into_owned(),
+                )(input)
+            }))
+        }
     }
 
     fn decode_sequence<T: DecodeMember<'a, BitIn<'a>> + Default>(

@@ -1,4 +1,4 @@
-use core::ops::{Add, AddAssign};
+use core::ops::{AddAssign};
 
 use asnr_grammar::{
     constraints::{
@@ -13,19 +13,19 @@ trait PerVisible {
     fn per_visible(&self) -> bool;
 }
 
-pub struct PerVisibleIntegerConstraints {
+pub struct PerVisibleRangeConstraints {
     min: Option<i128>,
     max: Option<i128>,
     extensible: bool,
 }
 
-impl Default for PerVisibleIntegerConstraints {
+impl Default for PerVisibleRangeConstraints {
     fn default() -> Self {
         Self { min: None, max: None, extensible: false }
     }
 }
 
-impl PerVisibleIntegerConstraints {
+impl PerVisibleRangeConstraints {
     pub fn bit_size(&self) -> Option<usize> {
         self.min.zip(self.max).map(|(min, max)| {
             let range = max - min;
@@ -46,16 +46,24 @@ impl PerVisibleIntegerConstraints {
     }
 
     pub fn as_enum_constraint(&mut self, enumerated: &Enumerated) {
-        *self += PerVisibleIntegerConstraints {
+        *self += PerVisibleRangeConstraints {
             min: Some(0),
             max: Some(enumerated.members.len() as i128 - 1),
             extensible: enumerated.extensible.is_some()
         };
     }
+
+    pub fn as_unsigned_constraint(&mut self) {
+        *self += PerVisibleRangeConstraints {
+            min: Some(0),
+            max: None,
+            extensible: self.is_extensible()
+        };
+    }
 }
 
-impl AddAssign<PerVisibleIntegerConstraints> for PerVisibleIntegerConstraints {
-    fn add_assign(&mut self, rhs: PerVisibleIntegerConstraints) {
+impl AddAssign<PerVisibleRangeConstraints> for PerVisibleRangeConstraints {
+    fn add_assign(&mut self, rhs: PerVisibleRangeConstraints) {
         self.min = self.min.max(rhs.min);
         self.max = match (self.max, rhs.max) {
           (Some(m1), Some(m2)) => Some(m1.min(m2)),
@@ -66,10 +74,10 @@ impl AddAssign<PerVisibleIntegerConstraints> for PerVisibleIntegerConstraints {
     }
 }
 
-impl TryFrom<Constraint> for PerVisibleIntegerConstraints {
+impl TryFrom<Constraint> for PerVisibleRangeConstraints {
     type Error = DecodingError;
 
-    fn try_from(value: Constraint) -> Result<PerVisibleIntegerConstraints, DecodingError> {
+    fn try_from(value: Constraint) -> Result<PerVisibleRangeConstraints, DecodingError> {
         match value {
             Constraint::SubtypeConstraint(c) => match c.set {
                 ElementOrSetOperation::Element(e) => Some(e).try_into(),
@@ -80,11 +88,11 @@ impl TryFrom<Constraint> for PerVisibleIntegerConstraints {
     }
 }
 
-impl TryFrom<Option<SubtypeElement>> for PerVisibleIntegerConstraints {
+impl TryFrom<Option<SubtypeElement>> for PerVisibleRangeConstraints {
     type Error = DecodingError;
     fn try_from(
         value: Option<SubtypeElement>,
-    ) -> Result<PerVisibleIntegerConstraints, DecodingError> {
+    ) -> Result<PerVisibleRangeConstraints, DecodingError> {
         match value {
             None => Ok(Self::default()),
             Some(SubtypeElement::SingleValue { value, extensible }) => {
@@ -104,6 +112,10 @@ impl TryFrom<Option<SubtypeElement>> for PerVisibleIntegerConstraints {
                 max: max.map(|i| i.unwrap_as_integer()).transpose()?,
                 extensible,
             }),
+            Some(SubtypeElement::SizeConstraint(s)) => match *s {
+                ElementOrSetOperation::Element(e) => Some(e).try_into(),
+                ElementOrSetOperation::SetOperation(s) => fold_constraint_set(&s)?.try_into(),
+            },
             _ => unreachable!()
         }
     }

@@ -693,6 +693,16 @@ pub enum CharacterStringType {
     PrintableString,
 }
 
+impl CharacterStringType {
+    pub fn char_bit_size(&self) -> usize {
+        match self {
+            Self::NumericString => 4,
+            Self::IA5String | Self::PrintableString | Self::VisibleString => 7,
+            _ => 8
+        }
+    }
+}
+
 impl From<&str> for CharacterStringType {
     fn from(value: &str) -> Self {
         match value {
