@@ -315,7 +315,7 @@ pub fn format_member_declaration(members: &Vec<StringifiedNameType>) -> String {
         .join("\n  ")
 }
 
-pub fn format_extensible_sequence<'a>(name: &String, extensible: bool) -> (String, String) {
+pub fn format_extensible_sequence<'a>(_name: &String, extensible: bool) -> (String, String) {
     (
         if extensible {
             "\n  pub unknown_extension: Vec<u8>,".into()

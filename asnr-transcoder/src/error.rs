@@ -5,7 +5,7 @@ use alloc::{
     string::{String},
 };
 use asnr_grammar::error::GrammarError;
-use nom::{AsBytes, error::Error};
+use nom::{AsBytes};
 
 #[derive(Debug, Clone)]
 pub struct DecodingError {

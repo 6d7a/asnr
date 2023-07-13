@@ -5,7 +5,7 @@ use nom::{
     bytes::complete::take,
     combinator::{map, map_res},
     error::Error,
-    AsBytes, Err, IResult,
+    AsBytes, IResult,
 };
 use num::{FromPrimitive, Integer};
 
@@ -26,7 +26,7 @@ enum LengthDeterminant {
 }
 
 impl<'a> Decoder<'a, BitIn<'a>> for Uper {
-    fn decode_open_type(input: BitIn<'a>) -> IResult<BitIn<'a>, Vec<u8>> {
+    fn decode_open_type(_input: BitIn<'a>) -> IResult<BitIn<'a>, Vec<u8>> {
         todo!()
     }
 
@@ -128,7 +128,7 @@ impl<'a> Decoder<'a, BitIn<'a>> for Uper {
     }
 
     fn decode_choice<O: DecoderForIndex<'a, BitIn<'a>>>(
-        choice: asnr_grammar::types::Choice,
+        _choice: asnr_grammar::types::Choice,
     ) -> Result<Box<dyn FnMut(BitIn<'a>) -> IResult<BitIn<'a>, O>>, DecodingError> {
         todo!()
     }
@@ -142,7 +142,7 @@ impl<'a> Decoder<'a, BitIn<'a>> for Uper {
     }
 
     fn decode_bit_string(
-        bit_string: asnr_grammar::types::BitString,
+        _bit_string: asnr_grammar::types::BitString,
     ) -> Result<Box<dyn FnMut(BitIn<'a>) -> IResult<BitIn<'a>, Vec<bool>>>, DecodingError> {
         todo!()
     }
@@ -249,13 +249,13 @@ impl<'a> Decoder<'a, BitIn<'a>> for Uper {
     }
 
     fn decode_sequence_of<T: Decode<'a, BitIn<'a>>>(
-        sequence_of: asnr_grammar::types::SequenceOf,
-        member_decoder: impl FnMut(BitIn<'a>) -> IResult<BitIn<'a>, T>,
+        _sequence_of: asnr_grammar::types::SequenceOf,
+        _member_decoder: impl FnMut(BitIn<'a>) -> IResult<BitIn<'a>, T>,
     ) -> Result<Box<dyn FnMut(BitIn<'a>) -> IResult<BitIn<'a>, Vec<T>>>, DecodingError> {
         todo!()
     }
 
-    fn decode_unknown_extension(input: BitIn<'a>) -> IResult<BitIn<'a>, Vec<u8>> {
+    fn decode_unknown_extension(_input: BitIn<'a>) -> IResult<BitIn<'a>, Vec<u8>> {
         todo!()
     }
 }
@@ -423,8 +423,7 @@ mod tests {
     use crate::uper::decoder::*;
     use asnr_grammar::{
         constraints::*,
-        information_object::ASN1Information,
-        types::{Enumeral, Enumerated, Integer, Sequence, SequenceMember},
+        types::{Enumeral, Enumerated, Integer},
         *,
     };
 
