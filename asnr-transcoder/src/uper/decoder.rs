@@ -77,7 +77,7 @@ impl<'a> Decoder<'a, BitIn<'a>> for Uper {
         enumerated: asnr_grammar::types::Enumerated,
     ) -> Result<Box<dyn FnMut(BitIn) -> IResult<BitIn, O>>, DecodingError> {
         let mut constraints = PerVisibleRangeConstraints::default();
-        for c in enumerated.constraints {
+        for c in enumerated.clone().constraints {
             constraints += c.try_into()?
         }
         constraints.as_enum_constraint(&enumerated);
