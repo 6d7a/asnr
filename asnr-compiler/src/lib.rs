@@ -221,7 +221,7 @@ mod tests {
         println!(
             "{:#?}",
             Asnr::compiler()
-                .add_asn_source(PathBuf::from("test_asn1/ETSI-ITS-CDD.asn"))
+                .add_asn_source(PathBuf::from("test_asn1/AddGrpC.asn"))
             //     .add_asn_source(PathBuf::from(
             //         "test_asn1/CPM-OriginatingStationContainers.asn"
             //     ))

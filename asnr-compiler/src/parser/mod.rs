@@ -187,7 +187,7 @@ mod tests {
     use core::panic;
     use std::vec;
 
-    use asnr_grammar::{constraints::*, information_object::*, types::*, *};
+    use asnr_grammar::{constraints::*, information_object::*, types::*, *, parameterization::{Parameterization, ParameterizationArgument}};
 
     use crate::parser::top_level_information_declaration;
 
@@ -455,6 +455,157 @@ mod tests {
                         ]))
                     ],
                     extensible: Some(2)
+                })
+            }
+        )
+    }
+
+    #[test]
+    fn parses_empty_extensible_object_set() {
+        assert_eq!(
+            top_level_information_declaration(
+                r#"Reg-AdvisorySpeed	            REG-EXT-ID-AND-TYPE ::= { ... }"#
+            )
+            .unwrap()
+            .1,
+            ToplevelInformationDeclaration {
+                comments: "".into(),
+                name: "Reg-AdvisorySpeed".into(),
+                class: Some(ClassLink::ByName("REG-EXT-ID-AND-TYPE".into())),
+                value: ASN1Information::ObjectSet(ObjectSet {
+                    values: vec![],
+                    extensible: Some(0)
+                })
+            }
+        )
+    }
+
+    #[test]
+    fn parses_class_declaration() {
+        assert_eq!(
+            top_level_information_declaration(
+                r#"REG-EXT-ID-AND-TYPE ::= CLASS {
+                  &id     RegionId UNIQUE,
+                  &Type
+                } WITH SYNTAX {&Type IDENTIFIED BY &id}"#
+            )
+            .unwrap()
+            .1,
+            ToplevelInformationDeclaration {
+                comments: "".into(),
+                name: "REG-EXT-ID-AND-TYPE".into(),
+                class: None,
+                value: ASN1Information::ObjectClass(InformationObjectClass {
+                    fields: vec![
+                        InformationObjectClassField {
+                            identifier: ObjectFieldIdentifier::SingleValue("&id".into()),
+                            r#type: Some(ASN1Type::ElsewhereDeclaredType(DeclarationElsewhere {
+                                identifier: "RegionId".into(),
+                                constraints: vec![]
+                            })),
+                            is_optional: false,
+                            default: None,
+                            is_unique: true
+                        },
+                        InformationObjectClassField {
+                            identifier: ObjectFieldIdentifier::MultipleValue("&Type".into()),
+                            r#type: None,
+                            is_optional: false,
+                            default: None,
+                            is_unique: false
+                        }
+                    ],
+                    syntax: Some(InformationObjectSyntax {
+                        expressions: vec![
+                            SyntaxExpression::Required(SyntaxToken::Field(
+                                ObjectFieldIdentifier::MultipleValue("&Type".into())
+                            )),
+                            SyntaxExpression::Required(SyntaxToken::Literal("IDENTIFIED".into())),
+                            SyntaxExpression::Required(SyntaxToken::Literal("BY".into())),
+                            SyntaxExpression::Required(SyntaxToken::Field(
+                                ObjectFieldIdentifier::SingleValue("&id".into())
+                            ))
+                        ]
+                    })
+                })
+            }
+        )
+    }
+
+    #[test]
+    fn parses_parameterized_declaration() {
+        assert_eq!(
+            top_level_type_declaration(
+                r#"RegionalExtension {REG-EXT-ID-AND-TYPE : Set} ::= SEQUENCE {
+                  regionId     REG-EXT-ID-AND-TYPE.&id( {Set} ),
+                  regExtValue  REG-EXT-ID-AND-TYPE.&Type( {Set}{@regionId} )
+                }"#
+            )
+            .unwrap()
+            .1,
+            ToplevelTypeDeclaration {
+                comments: "".into(),
+                name: "RegionalExtension".into(),
+                r#type: ASN1Type::Sequence(Sequence {
+                    extensible: None,
+                    constraints: vec![],
+                    members: vec![
+                        SequenceMember {
+                            name: "regionId".into(),
+                            tag: None,
+                            r#type: ASN1Type::InformationObjectFieldReference(
+                                InformationObjectFieldReference {
+                                    class: "REG-EXT-ID-AND-TYPE".into(),
+                                    field_path: vec![ObjectFieldIdentifier::SingleValue(
+                                        "&id".into()
+                                    )],
+                                    constraints: vec![Constraint::TableConstraint(
+                                        TableConstraint {
+                                            object_set: ObjectSet {
+                                                values: vec![ObjectSetValue::Reference("Set".into())],
+                                                extensible: None
+                                            },
+                                            linked_fields: vec![]
+                                        }
+                                    )]
+                                }
+                            ),
+                            default_value: None,
+                            is_optional: false,
+                            constraints: vec![]
+                        },
+                        SequenceMember {
+                            name: "regExtValue".into(),
+                            tag: None,
+                            r#type: ASN1Type::InformationObjectFieldReference(
+                                InformationObjectFieldReference {
+                                    class: "REG-EXT-ID-AND-TYPE".into(),
+                                    field_path: vec![ObjectFieldIdentifier::MultipleValue(
+                                        "&Type".into()
+                                    )],
+                                    constraints: vec![Constraint::TableConstraint(TableConstraint {
+                                        object_set: ObjectSet {
+                                            values: vec![ObjectSetValue::Reference("Set".into())],
+                                            extensible: None
+                                        },
+                                        linked_fields: vec![RelationalConstraint {
+                                            field_name: "regionId".into(),
+                                            level: 0
+                                        }]
+                                    })]
+                                }
+                            ),
+                            default_value: None,
+                            is_optional: false,
+                            constraints: vec![]
+                        }
+                    ]
+                }),
+                parameterization: Some(Parameterization {
+                    parameters: vec![ParameterizationArgument {
+                        r#type: "REG-EXT-ID-AND-TYPE".into(),
+                        name: "Set".into()
+                    }]
                 })
             }
         )

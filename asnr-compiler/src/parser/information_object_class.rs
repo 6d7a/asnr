@@ -62,7 +62,7 @@ pub fn object_set<'a>(input: &'a str) -> IResult<&'a str, ObjectSet> {
             ))),
         ),
         opt(skip_ws_and_comments(preceded(
-            char(COMMA),
+            opt(char(COMMA)),
             extension_marker,
         ))),
         opt(separated_list1(
