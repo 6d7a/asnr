@@ -1,8 +1,6 @@
-//! The `generator` module is responsible
-//! for generating rust code that handles
-//! decoding and encoding of the parsed and
-//! validated ASN1 data elements.
-
+//! The `generator` module is responsible for generating rust code that handles
+//! decoding and encoding of the parsed and validated ASN1 data elements.
+//! The `generator` uses string templates for generating rust code. 
 use std::ffi::OsStr;
 
 use asnr_grammar::{*, information_object::*};

@@ -1,5 +1,5 @@
 # ASNR
-_Disclaimer: This is a pet project and heavy WIP. I advise against using this until a stable cargo crate has been released._
+_Disclaimer: This is a pet project and heavy WIP. I advise looking into [`rasn`](https://github.com/XAMPPRocky/rasn) for something more mature._
 
 ASNR - an ASN1 compiler for Rust that makes your skin tingle.
 
@@ -39,3 +39,10 @@ The transcoder crate handles the actual encoding and decoding of data at runtime
 It aims to be suitable for `no_std` environments and `wasm-unknown` targets.
 For a start, the asnr transcoder will provide support for UPER encoding rules, 
 but transcoding can be easily customized by implementing the crate's `Encoder` and `Decoder` traits.
+
+The ASNR transcoder de- and encodes messages by composing functions that handle the
+de-/encoding of generic ASN1 types like SEQUENCEs or INTEGERs. In the current implementation,
+that choice has led to a lot of boxing and unboxing, but I hope to find a more efficient solution
+in the future. The advantage of this design is that authors of custom encoders and decoders have
+pretty much all of the information concerning the data element as it's specified in an 
+ASN1 specification, including constraints, even comments up to a certain degree. 

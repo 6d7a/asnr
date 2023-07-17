@@ -1,10 +1,11 @@
-//! The `asnr-grammar` crate describes the single elements
-//! of the ASN1 notation.
-//! It includes constants for the various ASN1 keywords
-//! and types to represent the single ASN1 data elements
-//! from which the generator module produces de-/encodable
-//! types.
-//!
+//! The `asnr-grammar` crate describes the single elements of the ASN1 notation.
+//! It includes constants for the various ASN1 keywords and types to represent the 
+//! single ASN1 data elements in an intermediate representation from which the
+//! generator module produces de-/encodable types.
+//! The intermediate representation aims to preserve as much information as possible
+//! from the original specification, even though some of that information might not actually
+//! be relevant for decoding and encoding in any of the common encoding rules 
+//! (inner type constraints are such an example). 
 #![no_std]
 extern crate alloc;
 extern crate asnr_traits;
