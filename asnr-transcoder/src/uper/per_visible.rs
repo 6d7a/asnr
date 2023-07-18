@@ -4,7 +4,7 @@ use asnr_grammar::{
     constraints::{
         Constraint, ElementOrSetOperation, SetOperation, SetOperator, SubtypeElement,
     },
-    ASN1Value, types::Enumerated,
+    ASN1Value, types::{Enumerated, Choice},
 };
 
 use crate::error::DecodingError;
@@ -53,6 +53,14 @@ impl PerVisibleRangeConstraints {
         };
     }
 
+    pub fn as_choice_constraint(&mut self, choice: &Choice) {
+      *self += PerVisibleRangeConstraints {
+          min: Some(0),
+          max: Some(choice.options.len() as i128 - 1),
+          extensible: choice.extensible.is_some()
+      };
+   }
+
     pub fn as_unsigned_constraint(&mut self) {
         *self += PerVisibleRangeConstraints {
             min: Some(0),
@@ -83,7 +91,7 @@ impl TryFrom<Constraint> for PerVisibleRangeConstraints {
                 ElementOrSetOperation::Element(e) => Some(e).try_into(),
                 ElementOrSetOperation::SetOperation(s) => fold_constraint_set(&s)?.try_into(),
             },
-            Constraint::TableConstraint(_) => Ok(Self::default()),
+            _ => Ok(Self::default()),
         }
     }
 }
@@ -124,8 +132,8 @@ impl TryFrom<Option<SubtypeElement>> for PerVisibleRangeConstraints {
 impl PerVisible for Constraint {
     fn per_visible(&self) -> bool {
         match self {
-            Constraint::TableConstraint(_) => false,
-            Constraint::SubtypeConstraint(s) => s.set.per_visible(),
+          Constraint::SubtypeConstraint(s) => s.set.per_visible(),
+          _ => false,
         }
     }
 }

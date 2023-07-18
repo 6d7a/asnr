@@ -35,7 +35,12 @@ pub fn sequence_of<'a>(input: &'a str) -> IResult<&'a str, ASN1Type> {
 
 #[cfg(test)]
 mod tests {
-    use asnr_grammar::{constraints::*, types::*, *};
+    use asnr_grammar::{
+        constraints::*,
+        information_object::{ObjectSet, ObjectSetValue},
+        types::*,
+        *,
+    };
 
     use crate::parser::sequence_of;
 
@@ -148,6 +153,39 @@ mod tests {
                         name: "one-distinguished-value".into(),
                         value: 12
                     }])
+                }))
+            })
+        );
+    }
+
+    #[test]
+    fn parses_parameterized_constrained_sequence_of() {
+        assert_eq!(
+            sequence_of(
+                r#"SEQUENCE (SIZE(1..4)) OF 
+      RegionalExtension {{Reg-MapData}} OPTIONAL,"#
+            )
+            .unwrap()
+            .1,
+            ASN1Type::SequenceOf(SequenceOf {
+                constraints: vec![Constraint::SubtypeConstraint(ElementSet {
+                    set: ElementOrSetOperation::Element(SubtypeElement::SizeConstraint(Box::new(
+                        ElementOrSetOperation::Element(SubtypeElement::ValueRange {
+                            min: Some(ASN1Value::Integer(1)),
+                            max: Some(ASN1Value::Integer(4)),
+                            extensible: false
+                        })
+                    ))),
+                    extensible: false
+                })],
+                r#type: Box::new(ASN1Type::ElsewhereDeclaredType(DeclarationElsewhere {
+                    identifier: "RegionalExtension".into(),
+                    constraints: vec![Constraint::Parameter(vec![Parameter::ObjectSetParameter(
+                        ObjectSet {
+                            values: vec![ObjectSetValue::Reference("Reg-MapData".into())],
+                            extensible: None
+                        }
+                    )])]
                 }))
             })
         );

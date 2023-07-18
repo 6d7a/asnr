@@ -1,4 +1,5 @@
 mod decoder;
+mod encoder;
 mod per_visible;
 pub struct Uper;
 

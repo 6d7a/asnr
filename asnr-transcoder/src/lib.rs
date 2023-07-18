@@ -15,7 +15,7 @@ mod generated;
 
 use alloc::{boxed::Box, string::String, vec::Vec};
 use asnr_grammar::{types::*, ASN1Type};
-use error::DecodingError;
+use error::{DecodingError, EncodingError};
 use nom::{AsBytes, IResult};
 
 pub trait Decode<'a, I: AsBytes + 'a> {
@@ -46,14 +46,14 @@ pub trait DecodeMember<'a, I: AsBytes + 'a> {
 }
 
 pub trait DecoderForIndex<'a, I: AsBytes + 'a> {
-    fn decoder_for_index<D>(v: i128) -> Result<fn(&D, I) -> IResult<I, Self>, DecodingError>
+    fn decoder_for_index<D>(v: i128) -> Result<fn(I) -> IResult<I, Self>, DecodingError>
     where
         D: Decoder<'a, I>,
         Self: Sized;
 }
 
 pub trait DecoderForKey<'a, I: AsBytes + 'a, T> {
-    fn decoder_for_key<D>(key: T) -> Result<fn(&D, I) -> IResult<I, Self>, DecodingError>
+    fn decoder_for_key<D>(key: T) -> Result<fn(I) -> IResult<I, Self>, DecodingError>
     where
         D: Decoder<'a, I>,
         T: PartialEq,
@@ -78,9 +78,17 @@ pub trait Decoder<'a, I: AsBytes + 'a> {
     fn decode_sequence<T: DecodeMember<'a, I> + Default>(
         sequence: Sequence,
     ) -> Result<Box<dyn FnMut(I) -> IResult<I, T>>, DecodingError>;
-    fn decode_sequence_of<T: Decode<'a, I>>(
+    fn decode_sequence_of<T: Decode<'a, I> + 'a + Sized>(
         sequence_of: SequenceOf,
-        member_decoder: impl FnMut(I) -> IResult<I, T>,
-    ) -> Result<Box<dyn FnMut(I) -> IResult<I, Vec<T>>>, DecodingError>;
+        member_decoder: fn(I) -> IResult<I, T>,
+    ) -> Result<Box<dyn FnMut(I) -> IResult<I, Vec<T>> + 'a>, DecodingError>;
     fn decode_unknown_extension(input: I) -> IResult<I, Vec<u8>>;
+}
+
+pub trait Encoder<T, I: Extend<T>> {
+    fn encode_integer<O>(
+        integer: Integer,
+    ) -> Result<Box<dyn FnMut(I,O) -> Result<I, EncodingError>>, EncodingError>
+    where
+        O: num::Integer + num::FromPrimitive + Copy;
 }

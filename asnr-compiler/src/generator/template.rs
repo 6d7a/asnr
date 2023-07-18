@@ -426,7 +426,7 @@ impl<'a, I: AsBytes + 'a> Decode<'a, I> for {name} {{
 
   {DECODER_SIGNATURE}
   {{
-    let mut seq_of_decoder = D::decode_sequence_of({seq_of_descriptor}, |i| {{ {member_type}::decode::<D>(i) }})?;
+    let mut seq_of_decoder = D::decode_sequence_of({seq_of_descriptor}, {member_type}::decode::<D>)?;
     Ok(Box::new(move |input| (*seq_of_decoder)(input).map(|(remaining, res)| (remaining, Self(res)))))
   }}
 }}
@@ -450,6 +450,7 @@ pub fn choice_template(
     default_option: String,
     options: String,
     options_from_int: String,
+    unknown_index_case: String,
     choice_descriptor: String,
 ) -> String {
     format!(
@@ -461,14 +462,10 @@ pub enum {name} {{
 }}
 
 impl<'a, I: AsBytes + 'a> DecoderForIndex<'a, I> for {name} {{
-  fn decoder_for_index<D>(v: i128) -> Result<fn(&D, I) -> IResult<I, Self>, DecodingError> where D: Decoder<'a, I>, Self: Sized {{
+  fn decoder_for_index<D>(v: i128) -> Result<fn(I) -> IResult<I, Self>, DecodingError> where D: Decoder<'a, I>, Self: Sized {{
     match v {{
         {options_from_int}
-        _ => Err(
-          DecodingError::new(
-            &format!("Invalid choice index decoding {name}. Received index {{}}",v), DecodingErrorType::InvalidChoiceIndex
-          )
-        ),
+        {unknown_index_case}
     }}
   }}
 }}
@@ -588,7 +585,7 @@ pub enum {name} {{
 impl<I: AsBytes> DecoderForKey<I, {key_type}> for {name} {{
   fn decoder_for_key<I, D>(
     key: {key_type},
-  ) -> Result<fn(&D, I) -> IResult<I, Self>, DecodingError>
+  ) -> Result<fn(I) -> IResult<I, Self>, DecodingError>
   where
     D: Decoder,
     T: PartialEq,

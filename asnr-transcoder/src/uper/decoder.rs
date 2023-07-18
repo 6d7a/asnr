@@ -1,12 +1,13 @@
 use alloc::{boxed::Box, string::String, vec, vec::Vec};
 use asnr_grammar::types::{CharacterString, Sequence};
-use bitvec::{prelude::Msb0, vec::BitVec};
+use bitvec::{bits, prelude::Msb0};
 use bitvec_nom::BSlice;
 use nom::{
     bytes::complete::take,
     combinator::{map, map_res},
     error::Error,
-    AsBytes, IResult, multi::many_m_n,
+    multi::many_m_n,
+    AsBytes, IResult,
 };
 use num::{FromPrimitive, Integer};
 
@@ -19,7 +20,6 @@ use crate::{
 use super::Uper;
 
 type BitIn<'a> = BSlice<'a, u8, Msb0>;
-type BitOut = BitVec<u8, Msb0>;
 
 enum LengthDeterminant {
     Content(usize),
@@ -27,8 +27,11 @@ enum LengthDeterminant {
 }
 
 impl<'a> Decoder<'a, BitIn<'a>> for Uper {
-    fn decode_open_type(_input: BitIn<'a>) -> IResult<BitIn<'a>, Vec<u8>> {
-        todo!()
+    fn decode_open_type(input: BitIn<'a>) -> IResult<BitIn<'a>, Vec<u8>> {
+        let (input, ext_length) = decode_varlength_integer::<usize>(input, Some(0))?;
+        map(take(8 * ext_length), |buffer: BitIn| {
+            buffer.as_bytes().to_vec()
+        })(input)
     }
 
     fn decode_integer<O>(
@@ -115,9 +118,46 @@ impl<'a> Decoder<'a, BitIn<'a>> for Uper {
     }
 
     fn decode_choice<O: DecoderForIndex<'a, BitIn<'a>>>(
-        _choice: asnr_grammar::types::Choice,
+        choice: asnr_grammar::types::Choice,
     ) -> Result<Box<dyn FnMut(BitIn<'a>) -> IResult<BitIn<'a>, O>>, DecodingError> {
-        todo!()
+        let mut constraints = PerVisibleRangeConstraints::default();
+        for c in choice.clone().constraints {
+            constraints += c.try_into()?
+        }
+        constraints.as_choice_constraint(&choice);
+        if constraints.is_extensible() {
+            if let Some(bit_length) = constraints.bit_size() {
+                Ok(Box::new(move |input: BitIn| -> IResult<BitIn, O> {
+                    let (mut input, is_extended) = read_bit(input)?;
+                    if is_extended {
+                        let mut index;
+                        (input, index) = decode_normally_small_number(input)?;
+                        index = index + choice.extensible.unwrap();
+                        let (mut inner_input, ext_length) =
+                            decode_varlength_integer::<usize>(input, Some(0))?;
+                        (input, inner_input) = take(8 * ext_length)(inner_input)?;
+                        O::decoder_for_index::<Uper>(index as i128).map_err(|_| {
+                            nom::Err::Error(Error {
+                                input,
+                                code: nom::error::ErrorKind::OneOf,
+                            })
+                        })?(inner_input)
+                    } else {
+                        decode_choice_index_into(bit_length, input)
+                    }
+                }))
+            } else {
+                unreachable!()
+            }
+        } else {
+            if let Some(bit_length) = constraints.bit_size() {
+                Ok(Box::new(move |input: BitIn| {
+                    decode_choice_index_into(bit_length, input)
+                }))
+            } else {
+                unreachable!()
+            }
+        }
     }
 
     fn decode_null<N: Default>(input: BitIn<'a>) -> IResult<BitIn<'a>, N> {
@@ -137,24 +177,24 @@ impl<'a> Decoder<'a, BitIn<'a>> for Uper {
         }
         constraints.as_unsigned_constraint();
         if constraints.is_extensible() {
-          Ok(Box::new(
-              move |input: BitIn<'a>| -> IResult<BitIn<'a>, Vec<bool>> {
-                  let (input, is_extended) = read_bit(input)?;
-                  if is_extended {
-                      let (input, length_det) = decode_varlength_integer(input, Some(0))?;
-                      many_m_n(length_det, length_det, read_bit)(input)
-                  } else {
-                      let (input, length_det) = decode_semi_constrained_int(&constraints, input)?;
-                      many_m_n(length_det, length_det, read_bit)(input)
-                  }
-              },
-          ))
-      } else {
-          Ok(Box::new(move |input| {
-              let (input, length_det) = decode_semi_constrained_int(&constraints, input)?;
-              many_m_n(length_det, length_det, read_bit)(input)
-          }))
-      }
+            Ok(Box::new(
+                move |input: BitIn<'a>| -> IResult<BitIn<'a>, Vec<bool>> {
+                    let (input, is_extended) = read_bit(input)?;
+                    if is_extended {
+                        let (input, length_det) = decode_varlength_integer(input, Some(0))?;
+                        many_m_n(length_det, length_det, read_bit)(input)
+                    } else {
+                        let (input, length_det) = decode_semi_constrained_int(&constraints, input)?;
+                        many_m_n(length_det, length_det, read_bit)(input)
+                    }
+                },
+            ))
+        } else {
+            Ok(Box::new(move |input| {
+                let (input, length_det) = decode_semi_constrained_int(&constraints, input)?;
+                many_m_n(length_det, length_det, read_bit)(input)
+            }))
+        }
     }
 
     fn decode_character_string(
@@ -191,10 +231,10 @@ impl<'a> Decoder<'a, BitIn<'a>> for Uper {
     ) -> Result<Box<dyn FnMut(BitIn<'a>) -> IResult<BitIn, T>>, DecodingError> {
         if let Some(extension_index) = sequence.extensible {
             Ok(Box::new(move |input| {
-                let (mut input, is_extended) = read_bit(input)?;
-                let (input, mut instance) = decode_non_extended_sequence::<T>(&sequence, input)?;
+                let (input, is_extended) = read_bit(input)?;
+                let (mut input, mut instance) = decode_unextended_sequence::<T>(&sequence, input)?;
 
-                if is_extended {
+                input = if is_extended {
                     let (mut input, length) = decode_normally_small_number(input)?;
                     let mut extension_presence = vec![];
                     for _ in 0..length {
@@ -202,53 +242,71 @@ impl<'a> Decoder<'a, BitIn<'a>> for Uper {
                         input = parsed.0;
                         extension_presence.push(parsed.1);
                     }
-                    input = instance.decode_member_at_index::<Uper>(extension_index, input)?
-                }
+                    for (index, present) in extension_presence.iter().enumerate() {
+                        if *present {
+                            let (mut inner_input, ext_length) =
+                                decode_varlength_integer::<usize>(input, Some(0))?;
+                            (input, inner_input) = take(8 * ext_length)(inner_input)?;
+                            let _ = instance.decode_member_at_index::<Uper>(
+                                index + extension_index,
+                                inner_input,
+                            )?;
+                        }
+                    }
+                    input
+                } else {
+                    input
+                };
                 Ok((input, instance))
             }))
         } else {
             Ok(Box::new(move |input| {
-                decode_non_extended_sequence(&sequence, input)
+                decode_unextended_sequence(&sequence, input)
             }))
         }
     }
 
-    fn decode_sequence_of<T: Decode<'a, BitIn<'a>>>(
+    fn decode_sequence_of<T: Decode<'a, BitIn<'a>> + 'a>(
         sequence_of: asnr_grammar::types::SequenceOf,
-        member_decoder: impl FnMut(BitIn<'a>) -> IResult<BitIn<'a>, T>,
-    ) -> Result<Box<dyn FnMut(BitIn<'a>) -> IResult<BitIn<'a>, Vec<T>>>, DecodingError> {
-      let mut constraints = PerVisibleRangeConstraints::default();
-      for c in sequence_of.clone().constraints {
-          constraints += c.try_into()?
-      }
-      constraints.as_unsigned_constraint();
-      if constraints.is_extensible() {
-          Ok(Box::new(
-              move |input: BitIn<'a>| -> IResult<BitIn<'a>, Vec<T>> {
-                  let (input, is_extended) = read_bit(input)?;
-                  if is_extended {
-                      let (input, length_det) = decode_varlength_integer(input, Some(0))?;
-                      many_m_n(length_det, length_det, member_decoder)(input)
-                  } else {
-                      let (input, length_det) = decode_semi_constrained_int(&constraints, input)?;
-                      many_m_n(length_det, length_det, member_decoder)(input)
-                  }
-              },
-          ))
-      } else {
-          Ok(Box::new(move |input| {
-              let (input, length_det) = decode_semi_constrained_int(&constraints, input)?;
-              many_m_n(length_det, length_det, member_decoder)(input)
-          }))
-      }
+        member_decoder: fn(BitIn<'a>) -> IResult<BitIn<'a>, T>,
+    ) -> Result<Box<dyn FnMut(BitIn<'a>) -> IResult<BitIn<'a>, Vec<T>> + 'a>, DecodingError> {
+        let mut constraints = PerVisibleRangeConstraints::default();
+        for c in sequence_of.clone().constraints {
+            constraints += c.try_into()?
+        }
+        constraints.as_unsigned_constraint();
+        if constraints.is_extensible() {
+            Ok(Box::new(
+                move |input: BitIn<'a>| -> IResult<BitIn<'a>, Vec<T>> {
+                    let (input, is_extended) = read_bit(input)?;
+                    if is_extended {
+                        let (input, length_det) = decode_varlength_integer(input, Some(0))?;
+                        many_m_n(length_det, length_det, member_decoder)(input)
+                    } else {
+                        let (input, length_det) = decode_semi_constrained_int(&constraints, input)?;
+                        many_m_n(length_det, length_det, member_decoder)(input)
+                    }
+                },
+            ))
+        } else {
+            Ok(Box::new(
+                move |input: BitIn<'a>| -> IResult<BitIn<'a>, Vec<T>> {
+                    let (input, length_det) = decode_semi_constrained_int(&constraints, input)?;
+                    many_m_n(length_det, length_det, member_decoder)(input)
+                },
+            ))
+        }
     }
 
-    fn decode_unknown_extension(_input: BitIn<'a>) -> IResult<BitIn<'a>, Vec<u8>> {
-        todo!()
+    fn decode_unknown_extension(input: BitIn<'a>) -> IResult<BitIn<'a>, Vec<u8>> {
+        Ok((
+            BSlice::from(bits![static u8, Msb0;]),
+            input.as_bytes().to_vec(),
+        ))
     }
 }
 
-fn decode_non_extended_sequence<'a, T: DecodeMember<'a, BitIn<'a>> + Default>(
+fn decode_unextended_sequence<'a, T: DecodeMember<'a, BitIn<'a>> + Default>(
     sequence: &Sequence,
     mut input: BitIn<'a>,
 ) -> IResult<BitIn<'a>, T> {
@@ -283,6 +341,19 @@ fn decode_enum_index_into<'a, O: TryFrom<i128>>(
             })
         })
     })(input)
+}
+
+fn decode_choice_index_into<'a, O: DecoderForIndex<'a, BitIn<'a>>>(
+    bit_length: usize,
+    input: BitIn<'a>,
+) -> IResult<BitIn<'a>, O> {
+    let (input, index) = read_int::<i128>(bit_length)(input)?;
+    O::decoder_for_index::<Uper>(index).map_err(|_| {
+        nom::Err::Error(Error {
+            input,
+            code: nom::error::ErrorKind::OneOf,
+        })
+    })?(input)
 }
 
 fn decode_semi_constrained_int<'a>(

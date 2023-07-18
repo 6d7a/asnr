@@ -17,14 +17,21 @@ use super::{
         skip_ws_and_comments,
     },
     information_object_class::object_set,
+    parameterization::parameters,
     util::opt_delimited,
 };
 
 pub fn constraint<'a>(input: &'a str) -> IResult<&'a str, Vec<Constraint>> {
     many1(alt((
-      single_constraint,
-      // Handle SIZE constraint without external parentheses
-      map(size_constraint, |c| Constraint::SubtypeConstraint(ElementSet { set: ElementOrSetOperation::Element(c), extensible: false }))
+        single_constraint,
+        // Handle SIZE constraint without external parentheses
+        map(size_constraint, |c| {
+            Constraint::SubtypeConstraint(ElementSet {
+                set: ElementOrSetOperation::Element(c),
+                extensible: false,
+            })
+        }),
+        map(parameters, |p| Constraint::Parameter(p)),
     )))(input)
 }
 

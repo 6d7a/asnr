@@ -1,7 +1,7 @@
 use asnr_grammar::{
     information_object::{
-        InformationObjectClass, ObjectFieldIdentifier,
-        SyntaxApplication, SyntaxExpression, SyntaxToken,
+        InformationObjectClass, ObjectFieldIdentifier, SyntaxApplication, SyntaxExpression,
+        SyntaxToken,
     },
     types::*,
     *,
@@ -12,6 +12,13 @@ use super::{
     error::{GeneratorError, GeneratorErrorType},
     generate,
 };
+
+const RUST_KEYWORDS: [&'static str; 38] = [
+    "as", "async", "await", "break", "const", "continue", "crate", "dyn", "else", "enum", "extern",
+    "false", "fn", "for", "if", "impl", "in", "let", "loop", "match", "mod", "move", "mut", "pub",
+    "ref", "return", "self", "Self", "static", "struct", "super", "trait", "true", "type",
+    "unsafe", "use", "where", "while",
+];
 
 pub fn resolve_syntax(
     class: &InformationObjectClass,
@@ -134,9 +141,6 @@ fn compare_tokens(token: &SyntaxToken, application: &SyntaxApplication) -> bool 
                 false
             }
         }
-        _o => {
-            todo!()
-        }
     }
 }
 
@@ -161,7 +165,7 @@ pub fn format_enumeral(enumeral: &Enumeral) -> String {
 
 pub fn format_option_from_int(args: (usize, &StringifiedNameType)) -> String {
     format!(
-        r#"x if x == {index} => Ok(|decoder, input| {{
+        r#"x if x == {index} => Ok(|input| {{
     {t}::decode::<D>(input).map(|(r, v)|(r, Self::{name}(v)))
   }}),"#,
         index = args.0,
@@ -294,9 +298,7 @@ pub fn extract_sequence_members(
             let name = rustify_name(&m.name);
             let rtype = match &m.r#type {
                 ASN1Type::ElsewhereDeclaredType(d) => rustify_name(&d.identifier),
-                ASN1Type::InformationObjectFieldReference(_) => {
-                  "ASN1_OPEN".to_string()
-                }
+                ASN1Type::InformationObjectFieldReference(_) => "ASN1_OPEN".to_string(),
                 _ => inner_name(&m.name, parent_name),
             };
             StringifiedNameType {
@@ -384,7 +386,12 @@ fn inner_name(name: &String, parent_name: &String) -> String {
 }
 
 pub fn rustify_name(name: &String) -> String {
-    name.replace("-", "_")
+    let name = name.replace("-", "_");
+    if RUST_KEYWORDS.contains(&name.as_str()) {
+      String::from("r#") + &name
+    } else {
+      name
+    }
 }
 
 #[cfg(test)]

@@ -2,7 +2,7 @@ use alloc::{borrow::ToOwned, boxed::Box, format, string::String, vec, vec::Vec};
 
 use crate::{
     error::{GrammarError, GrammarErrorType},
-    information_object::ObjectSet,
+    information_object::{ASN1Information, InformationObjectFields, ObjectSet},
     ASN1Type, ASN1Value, Declare, ToplevelDeclaration,
 };
 
@@ -25,6 +25,7 @@ pub struct ExtensionMarker();
 pub enum Constraint {
     SubtypeConstraint(ElementSet),
     TableConstraint(TableConstraint),
+    Parameter(Vec<Parameter>),
     //CharacterConstraint(CharacterConstraint)
 }
 
@@ -79,6 +80,39 @@ impl asnr_traits::Declare for Constraint {
             }
             Constraint::TableConstraint(t) => {
                 format!("Constraint::TableConstraint({})", t.declare())
+            }
+            Constraint::Parameter(params) => {
+                format!(
+                    "Constraint::Parameter(vec![{}])",
+                    params
+                        .iter()
+                        .map(|p| p.declare())
+                        .collect::<Vec<String>>()
+                        .join(",")
+                )
+            }
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum Parameter {
+    ValueParameter(ASN1Value),
+    TypeParameter(ASN1Type),
+    InformationObjectParameter(InformationObjectFields),
+    ObjectSetParameter(ObjectSet),
+}
+
+impl Declare for Parameter {
+    fn declare(&self) -> String {
+        match self {
+            Parameter::ValueParameter(v) => format!("Parameter::ValueParameter({})", v.declare()),
+            Parameter::TypeParameter(t) => format!("Parameter::TypeParameter({})", t.declare()),
+            Parameter::InformationObjectParameter(i) => {
+                format!("Parameter::InformationObjectParameter({})", i.declare())
+            }
+            Parameter::ObjectSetParameter(i) => {
+                format!("Parameter::ObjectSetParameter({})", i.declare())
             }
         }
     }
@@ -369,13 +403,12 @@ impl SubtypeElement {
             SubtypeElement::SizeConstraint(s) => s.link_cross_reference(identifier, tlds),
             SubtypeElement::TypeConstraint(t) => t.link_constraint_reference(identifier, tlds),
             SubtypeElement::SingleTypeConstraint(s)
-            | SubtypeElement::MultipleTypeConstraints(s) => {
-                s.constraints
-                    .iter_mut()
-                    .flat_map(|cc| &mut cc.constraints)
-                    .map(|c| c.link_cross_reference(identifier, tlds))
-                    .fold(false, |acc, b| acc || b)
-            }
+            | SubtypeElement::MultipleTypeConstraints(s) => s
+                .constraints
+                .iter_mut()
+                .flat_map(|cc| &mut cc.constraints)
+                .map(|c| c.link_cross_reference(identifier, tlds))
+                .fold(false, |acc, b| acc || b),
         }
     }
 

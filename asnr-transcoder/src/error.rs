@@ -63,3 +63,8 @@ impl Display for DecodingError {
         )
     }
 }
+
+#[derive(Debug, Clone)]
+pub struct EncodingError {
+    pub details: String,
+}

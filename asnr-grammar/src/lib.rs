@@ -32,7 +32,7 @@ use constraints::Constraint;
 use error::GrammarError;
 use information_object::{
     InformationObjectClass, InformationObjectFieldReference, ObjectFieldIdentifier,
-    ToplevelInformationDeclaration,
+    ToplevelInformationDeclaration, ObjectSet,
 };
 use parameterization::Parameterization;
 use types::*;

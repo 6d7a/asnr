@@ -1,6 +1,6 @@
 use asnr_traits::Declare;
 
-use crate::{constraints::*, *, utils::walk_object_field_ref_path};
+use crate::{constraints::*, utils::walk_object_field_ref_path, *};
 use alloc::{borrow::ToOwned, format, string::String, vec, vec::Vec};
 
 #[derive(Debug, Clone, PartialEq)]
@@ -59,6 +59,18 @@ pub enum ASN1Information {
     ObjectClass(InformationObjectClass),
     ObjectSet(ObjectSet),
     Object(InformationObject),
+}
+
+impl Declare for ASN1Information {
+    fn declare(&self) -> String {
+        match self {
+            Self::ObjectClass(c) => format!("ASN1Information::ObjectClass({})", c.declare()),
+            Self::ObjectSet(s) => format!("ASN1Information::ObjectSet({})", s.declare()),
+            Self::Object(o) => {
+                format!("ASN1Information::Object({})", o.declare())
+            }
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]

@@ -181,7 +181,7 @@ pub fn generate_enumerated<'a>(
     custom_derive: Option<&'a str>,
 ) -> Result<String, GeneratorError> {
     if let ASN1Type::Enumerated(ref mut enumerated) = tld.r#type {
-        enumerated.members.sort_by(|a,b| a.index.cmp(&b.index));
+        enumerated.members.sort_by(|a, b| a.index.cmp(&b.index));
         let enumerals = enumerated
             .members
             .iter()
@@ -219,7 +219,22 @@ pub fn generate_choice<'a>(
         let name = rustify_name(&tld.name);
         let inner_options = flatten_nested_choice_options(&choice.options, &name).join("\n");
         let options = extract_choice_options(&choice.options, &name);
-        let options_declaration = format_option_declaration(&options);
+        let mut options_declaration = format_option_declaration(&options);
+        if choice.extensible.is_some() {
+            options_declaration.push_str("\n\tUnknownChoiceValue(Vec<u8>)");
+        }
+        let unknown_index_case = if choice.extensible.is_some() {
+            r#"_ => Ok(|input| D::decode_unknown_extension(input).map(|(r, v)|(r, Self::UnknownChoiceValue(v))))"#.to_owned()
+        } else {
+            format!(
+                r#"x => Err(
+  DecodingError::new(
+    &format!("Invalid choice index decoding {name}. Received {{x}}"),
+    DecodingErrorType::InvalidChoiceIndex
+  )
+)"#
+            )
+        };
         let default_option = match options.first() {
             Some(o) => default_choice(o),
             None => {
@@ -244,6 +259,7 @@ pub fn generate_choice<'a>(
             default_option,
             options_declaration,
             options_from_int,
+            unknown_index_case,
             choice.declare(),
         ))
     } else {
@@ -591,17 +607,25 @@ mod tests {
                                         tag: None,
                                         r#type: ASN1Type::BitString(BitString {
                                             constraints: vec![Constraint::SubtypeConstraint(
-                                              ElementSet {
-                                                  set: ElementOrSetOperation::Element(
-                                                      SubtypeElement::SizeConstraint(Box::new(
-                                                          ElementOrSetOperation::Element(
-                                                              SubtypeElement::ValueRange { min: Some(ASN1Value::Integer(8)), max: Some(ASN1Value::Integer(18)), extensible: false }
-                                                          )
-                                                      ))
-                                                  ),
-                                                  extensible: false
-                                              }
-                                          )],
+                                                ElementSet {
+                                                    set: ElementOrSetOperation::Element(
+                                                        SubtypeElement::SizeConstraint(Box::new(
+                                                            ElementOrSetOperation::Element(
+                                                                SubtypeElement::ValueRange {
+                                                                    min: Some(ASN1Value::Integer(
+                                                                        8,
+                                                                    )),
+                                                                    max: Some(ASN1Value::Integer(
+                                                                        18,
+                                                                    )),
+                                                                    extensible: false,
+                                                                },
+                                                            ),
+                                                        )),
+                                                    ),
+                                                    extensible: false,
+                                                },
+                                            )],
                                             distinguished_values: None,
                                         }),
                                         default_value: Some(ASN1Value::String("0".into())),
