@@ -43,12 +43,18 @@ use std::{
 use asnr_grammar::ToplevelDeclaration;
 use generator::{generate, template::imports_and_generic_types};
 use parser::asn_spec;
-use validator::{Validator};
+use validator::Validator;
 
 /// The ASNR compiler
 #[derive(Debug, PartialEq)]
 pub struct Asnr {
     sources: Vec<PathBuf>,
+}
+
+#[derive(Debug, PartialEq)]
+enum AsnSource {
+    Path(PathBuf),
+    Literal(String),
 }
 
 impl Asnr {
@@ -60,15 +66,17 @@ impl Asnr {
 
 #[derive(Default)]
 pub struct AsnrCompiler {
-    sources: Vec<PathBuf>,
+    sources: Vec<AsnSource>,
     output_path: PathBuf,
+    no_std: bool,
 }
 
 impl From<Vec<PathBuf>> for AsnrCompiler {
     fn from(value: Vec<PathBuf>) -> Self {
         AsnrCompiler {
-            sources: value,
+            sources: value.into_iter().map(|p| AsnSource::Path(p)).collect(),
             output_path: default_output_dir(),
+            no_std: false,
         }
     }
 }
@@ -76,24 +84,54 @@ impl From<Vec<PathBuf>> for AsnrCompiler {
 impl From<PathBuf> for AsnrCompiler {
     fn from(value: PathBuf) -> Self {
         AsnrCompiler {
-            sources: vec![value],
+            sources: vec![AsnSource::Path(value)],
             output_path: default_output_dir(),
+            no_std: false,
+        }
+    }
+}
+
+impl From<&str> for AsnrCompiler {
+    fn from(value: &str) -> Self {
+        AsnrCompiler {
+            sources: vec![AsnSource::Literal(value.into())],
+            output_path: default_output_dir(),
+            no_std: false,
         }
     }
 }
 
 impl AsnrCompiler {
-    /// Add an ASN1 source to the compile command
+    /// Add an ASN1 source to the compile command by path
     /// * `path_to_source` - path to ASN1 file to include
-    pub fn add_asn_source(mut self, path_to_source: PathBuf) -> AsnrCompiler {
-        self.sources.push(path_to_source);
+    pub fn add_asn_by_path(mut self, path_to_source: PathBuf) -> AsnrCompiler {
+        self.sources.push(AsnSource::Path(path_to_source));
         self
     }
 
-    /// Add several ASN1 sources to the compile command
+    /// Add several ASN1 sources by path to the compile command
     /// * `path_to_source` - vector of paths to the ASN1 files to be included
-    pub fn add_asn_sources(mut self, paths_to_sources: Vec<PathBuf>) -> AsnrCompiler {
-        self.sources.extend(paths_to_sources.into_iter());
+    pub fn add_asn_sources_by_path(mut self, paths_to_sources: Vec<PathBuf>) -> AsnrCompiler {
+        self.sources
+            .extend(paths_to_sources.into_iter().map(|p| AsnSource::Path(p)));
+        self
+    }
+
+    /// Add a literal ASN1 source to the compile command
+    /// * `literal` - literal ASN1 statement to include
+    /// ```rust
+    /// # use asnr_compiler::Asnr;
+    /// Asnr::compiler().add_asn_literal("My-test-integer ::= INTEGER (1..128)").compile_to_string();
+    /// ```
+    pub fn add_asn_literal(mut self, literal: &str) -> AsnrCompiler {
+        self.sources.push(AsnSource::Literal(literal.into()));
+        self
+    }
+
+    /// Generate Rust representations compatible with an environment without the standard library
+    /// * `is_supporting` - whether the generated Rust should comply with no_std
+    pub fn no_std(mut self, is_supporting: bool) -> AsnrCompiler {
+        self.no_std = is_supporting;
         self
     }
 
@@ -112,17 +150,28 @@ impl AsnrCompiler {
         self
     }
 
-    /// Runs the ASNR compiler command.
+    /// Runs the ASNR compiler command and returns stringified Rust.
     /// Returns a Result wrapping a compilation result:
-    /// * _Ok_  - Vector of warnings raised during the compilation
+    /// * _Ok_  - tuple containing the stringified Rust representation of the ASN1 spec as well as a vector of warnings raised during the compilation
     /// * _Err_ - Unrecoverable error, no rust representations were generated
-    pub fn compile(self) -> Result<Vec<Box<dyn Error>>, Box<dyn Error>> {
-        let mut result = imports_and_generic_types(None);
+    pub fn compile_to_string(self) -> Result<(String, Vec<Box<dyn Error>>), Box<dyn Error>> {
+        self.internal_compile(false)
+    }
+
+    fn internal_compile(
+        &self,
+        include_clippy_allows: bool,
+    ) -> Result<(String, Vec<Box<dyn Error>>), Box<dyn Error>> {
+        let mut result = imports_and_generic_types(None, self.no_std, include_clippy_allows);
         let mut warnings = Vec::<Box<dyn Error>>::new();
         let mut modules: Vec<ToplevelDeclaration> = vec![];
-        for src in self.sources {
+        for src in &self.sources {
+            let stringified_src = match src {
+                AsnSource::Path(p) => read_to_string(p)?,
+                AsnSource::Literal(l) => l.clone(),
+            };
             modules.append(
-                &mut asn_spec(&read_to_string(src)?)?
+                &mut asn_spec(&stringified_src)?
                     .into_iter()
                     .flat_map(|(_, tld)| tld)
                     .collect(),
@@ -146,6 +195,16 @@ impl AsnrCompiler {
         warnings.append(&mut generator_errors);
 
         result = format_bindings(&result).unwrap_or(result);
+
+        Ok((result, warnings))
+    }
+
+    /// Runs the ASNR compiler command.
+    /// Returns a Result wrapping a compilation result:
+    /// * _Ok_  - Vector of warnings raised during the compilation
+    /// * _Err_ - Unrecoverable error, no rust representations were generated
+    pub fn compile(self) -> Result<Vec<Box<dyn Error>>, Box<dyn Error>> {
+        let (result, warnings) = self.internal_compile(true)?;
 
         fs::write(self.output_path, result)?;
 
@@ -221,17 +280,19 @@ mod tests {
         println!(
             "{:#?}",
             Asnr::compiler()
+                .no_std(true)
                 // .add_asn_source(PathBuf::from("test_asn1/AddGrpC.asn"))
-                .add_asn_source(PathBuf::from("test_asn1/ETSI-ITS-CDD.asn"))
-            //     .add_asn_source(PathBuf::from(
-            //         "test_asn1/CPM-OriginatingStationContainers.asn"
-            //     ))
-            //     .add_asn_source(PathBuf::from("test_asn1/CPM-PerceivedObjectContainer.asn"))
-            //     .add_asn_source(PathBuf::from("test_asn1/CPM-PerceptionRegionContainer.asn"))
-            //     .add_asn_source(PathBuf::from(
-            //         "test_asn1/CPM-SensorInformationContainer.asn"
-            //     ))
-            //    .add_asn_source(PathBuf::from("test_asn1/CPM-PDU-Descriptions.asn"))
+                // .add_asn_source(PathBuf::from("test_asn1/ETSI-ITS-CDD.asn"))
+                .add_asn_by_path(PathBuf::from("test_asn1/REGION.asn"))
+                //     .add_asn_source(PathBuf::from(
+                //         "test_asn1/CPM-OriginatingStationContainers.asn"
+                //     ))
+                //     .add_asn_source(PathBuf::from("test_asn1/CPM-PerceivedObjectContainer.asn"))
+                //     .add_asn_source(PathBuf::from("test_asn1/CPM-PerceptionRegionContainer.asn"))
+                //     .add_asn_source(PathBuf::from(
+                //         "test_asn1/CPM-SensorInformationContainer.asn"
+                //     ))
+                //    .add_asn_source(PathBuf::from("test_asn1/CPM-PDU-Descriptions.asn"))
                 .set_output_path(PathBuf::from("../asnr-transcoder/src/generated.rs"))
                 .compile()
                 .unwrap()

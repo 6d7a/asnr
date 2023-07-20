@@ -1,48 +1,76 @@
 use alloc::{boxed::Box, string::String, vec, vec::Vec};
-use asnr_grammar::types::{CharacterString, Sequence};
-use bitvec::{bits, prelude::Msb0};
+use asnr_grammar::{
+    types::{CharacterString, Sequence},
+    CharacterStringType,
+};
+use bitvec::{bits, field::BitField, prelude::Msb0, vec::BitVec, bitvec};
 use bitvec_nom::BSlice;
 use nom::{
     bytes::complete::take,
     combinator::{map, map_res},
     error::Error,
     multi::many_m_n,
-    AsBytes, IResult,
+    AsBytes,
 };
 use num::{FromPrimitive, Integer};
 
 use crate::{
     error::{DecodingError, DecodingErrorType},
     uper::per_visible::PerVisibleRangeConstraints,
-    Decode, DecodeMember, Decoder, DecoderForIndex,
+    Decode, DecodeMember, Decoder, DecoderForIndex, IResult,
 };
 
-use super::Uper;
-
-type BitIn<'a> = BSlice<'a, u8, Msb0>;
+use super::{Uper, BitIn};
 
 enum LengthDeterminant {
     Content(usize),
     ContentFragment(usize),
 }
 
+impl LengthDeterminant {
+  pub fn collect_value<'a>(&self, input: BitIn<'a>, factor: usize) -> IResult<BitIn<'a>, BitVec<u8, Msb0>> {
+    Self::recursive_collect(self, input, factor, bitvec![u8, Msb0;])
+  }
+
+  fn recursive_collect<'a>(&self, input: BitIn<'a>, factor: usize, mut temp: BitVec<u8, Msb0>) -> IResult<BitIn<'a>, BitVec<u8, Msb0>> {
+    match self {
+        LengthDeterminant::Content(c) => {
+          let input = map(
+            take(c * factor), 
+            |res: BitIn| temp.extend_from_bitslice(res.0)
+          )(input)?.0;
+          Ok((input, temp))
+        }
+        LengthDeterminant::ContentFragment(f) => {
+          let input = map(take(f * factor), |res: BitIn| temp.extend_from_bitslice(res.0))(input)?.0;
+          let (input, length_det) = decode_length_determinant(input)?;
+          length_det.recursive_collect(input, factor, temp)
+        },
+    }
+  }
+}
+
 impl<'a> Decoder<'a, BitIn<'a>> for Uper {
     fn decode_open_type(input: BitIn<'a>) -> IResult<BitIn<'a>, Vec<u8>> {
         let (input, ext_length) = decode_varlength_integer::<usize>(input, Some(0))?;
-        map(take(8 * ext_length), |buffer: BitIn| {
+        Ok(map(take(8 * ext_length), |buffer: BitIn| {
             buffer.as_bytes().to_vec()
-        })(input)
+        })(input)?)
     }
 
     fn decode_integer<O>(
         integer: asnr_grammar::types::Integer,
-    ) -> Result<Box<dyn FnMut(BitIn<'a>) -> IResult<BitIn<'a>, O>>, DecodingError>
+    ) -> Result<Box<dyn FnMut(BitIn<'a>) -> IResult<BitIn<'a>, O>>, DecodingError<BitIn<'a>>>
     where
         O: num::Integer + num::FromPrimitive + Copy,
     {
         let mut constraints = PerVisibleRangeConstraints::default();
         for c in integer.constraints {
-            constraints += c.try_into()?
+            constraints += c.try_into().map_err(|e: DecodingError<[u8; 0]>| DecodingError {
+              input: None,
+              details: e.details,
+              kind: e.kind
+            })?
         }
         if constraints.is_extensible() {
             if let Some(bit_length) = constraints.bit_size() {
@@ -51,7 +79,8 @@ impl<'a> Decoder<'a, BitIn<'a>> for Uper {
                     if is_extended {
                         decode_varlength_integer(input, None)
                     } else {
-                        map(read_int(bit_length), |i: O| i + constraints.min().unwrap())(input)
+                      let (input, i) = read_int::<O>(bit_length)(input)?;
+                        Ok((input,  i + constraints.min().unwrap()))
                     }
                 }))
             } else {
@@ -67,7 +96,8 @@ impl<'a> Decoder<'a, BitIn<'a>> for Uper {
         } else {
             if let Some(bit_length) = constraints.bit_size() {
                 Ok(Box::new(move |input: BitIn<'a>| -> IResult<BitIn<'a>, O> {
-                    map(read_int(bit_length), |i: O| i + constraints.min().unwrap())(input)
+                  let (input, i) = read_int::<O>(bit_length)(input)?;
+                    Ok((input, i + constraints.min().unwrap()))
                 }))
             } else {
                 Ok(Box::new(move |input: BitIn<'a>| -> IResult<BitIn<'a>, O> {
@@ -79,10 +109,14 @@ impl<'a> Decoder<'a, BitIn<'a>> for Uper {
 
     fn decode_enumerated<O: TryFrom<i128>>(
         enumerated: asnr_grammar::types::Enumerated,
-    ) -> Result<Box<dyn FnMut(BitIn) -> IResult<BitIn, O>>, DecodingError> {
+    ) -> Result<Box<dyn FnMut(BitIn) -> IResult<BitIn, O>>, DecodingError<BitIn<'a>>> {
         let mut constraints = PerVisibleRangeConstraints::default();
         for c in enumerated.clone().constraints {
-            constraints += c.try_into()?
+            constraints += c.try_into().map_err(|e: DecodingError<[u8; 0]>| DecodingError {
+              input: None,
+              details: e.details,
+              kind: e.kind
+            })?
         }
         constraints.as_enum_constraint(&enumerated);
         if constraints.is_extensible() {
@@ -90,15 +124,16 @@ impl<'a> Decoder<'a, BitIn<'a>> for Uper {
                 Ok(Box::new(move |input: BitIn| -> IResult<BitIn, O> {
                     let (input, is_extended) = read_bit(input)?;
                     if is_extended {
-                        map_res(decode_normally_small_number, |i| {
-                            let index = i + enumerated.extensible.unwrap();
-                            O::try_from(index as i128).map_err(|_| {
-                                nom::Err::Error(Error {
-                                    input,
-                                    code: nom::error::ErrorKind::OneOf,
-                                })
-                            })
-                        })(input)
+                      let (input, i) = decode_normally_small_number(input)?;
+                      let index =
+                      O::try_from((i + enumerated.extensible.unwrap()) as i128).map_err(|_| {
+                          DecodingError {
+                              details: "Failed to convert index to generic integer type.".into(),
+                              input: Some(input),
+                              kind: DecodingErrorType::GenericParsingError,
+                          }
+                      })?;
+                    Ok((input, index))
                     } else {
                         decode_enum_index_into(bit_length, input)
                     }
@@ -119,10 +154,14 @@ impl<'a> Decoder<'a, BitIn<'a>> for Uper {
 
     fn decode_choice<O: DecoderForIndex<'a, BitIn<'a>>>(
         choice: asnr_grammar::types::Choice,
-    ) -> Result<Box<dyn FnMut(BitIn<'a>) -> IResult<BitIn<'a>, O>>, DecodingError> {
+    ) -> Result<Box<dyn FnMut(BitIn<'a>) -> IResult<BitIn<'a>, O>>, DecodingError<BitIn<'a>>> {
         let mut constraints = PerVisibleRangeConstraints::default();
         for c in choice.clone().constraints {
-            constraints += c.try_into()?
+            constraints += c.try_into().map_err(|e: DecodingError<[u8; 0]>| DecodingError {
+              input: None,
+              details: e.details,
+              kind: e.kind
+            })?
         }
         constraints.as_choice_constraint(&choice);
         if constraints.is_extensible() {
@@ -170,10 +209,14 @@ impl<'a> Decoder<'a, BitIn<'a>> for Uper {
 
     fn decode_bit_string(
         bit_string: asnr_grammar::types::BitString,
-    ) -> Result<Box<dyn FnMut(BitIn<'a>) -> IResult<BitIn<'a>, Vec<bool>>>, DecodingError> {
+    ) -> Result<Box<dyn FnMut(BitIn<'a>) -> IResult<BitIn<'a>, Vec<bool>>>, DecodingError<BitIn<'a>>> {
         let mut constraints = PerVisibleRangeConstraints::default();
         for c in bit_string.clone().constraints {
-            constraints += c.try_into()?
+            constraints += c.try_into().map_err(|e: DecodingError<[u8; 0]>| DecodingError {
+              input: None,
+              details: e.details,
+              kind: e.kind
+            })?
         }
         constraints.as_unsigned_constraint();
         if constraints.is_extensible() {
@@ -182,27 +225,31 @@ impl<'a> Decoder<'a, BitIn<'a>> for Uper {
                     let (input, is_extended) = read_bit(input)?;
                     if is_extended {
                         let (input, length_det) = decode_varlength_integer(input, Some(0))?;
-                        many_m_n(length_det, length_det, read_bit)(input)
+                        n_times(input, read_bit, length_det)
                     } else {
                         let (input, length_det) = decode_semi_constrained_int(&constraints, input)?;
-                        many_m_n(length_det, length_det, read_bit)(input)
+                        n_times(input, read_bit, length_det)
                     }
                 },
             ))
         } else {
             Ok(Box::new(move |input| {
                 let (input, length_det) = decode_semi_constrained_int(&constraints, input)?;
-                many_m_n(length_det, length_det, read_bit)(input)
+                n_times(input, read_bit, length_det)
             }))
         }
     }
 
     fn decode_character_string(
         char_string: asnr_grammar::types::CharacterString,
-    ) -> Result<Box<dyn FnMut(BitIn<'a>) -> IResult<BitIn<'a>, String>>, DecodingError> {
+    ) -> Result<Box<dyn FnMut(BitIn<'a>) -> IResult<BitIn<'a>, String>>, DecodingError<BitIn<'a>>> {
         let mut constraints = PerVisibleRangeConstraints::default();
         for c in char_string.clone().constraints {
-            constraints += c.try_into()?
+            constraints += c.try_into().map_err(|e: DecodingError<[u8; 0]>| DecodingError {
+              input: None,
+              details: e.details,
+              kind: e.kind
+            })?
         }
         constraints.as_unsigned_constraint();
         if constraints.is_extensible() {
@@ -228,12 +275,11 @@ impl<'a> Decoder<'a, BitIn<'a>> for Uper {
 
     fn decode_sequence<T: DecodeMember<'a, BitIn<'a>> + Default>(
         sequence: asnr_grammar::types::Sequence,
-    ) -> Result<Box<dyn FnMut(BitIn<'a>) -> IResult<BitIn, T>>, DecodingError> {
+    ) -> Result<Box<dyn FnMut(BitIn<'a>) -> IResult<BitIn, T>>, DecodingError<BitIn<'a>>> {
         if let Some(extension_index) = sequence.extensible {
             Ok(Box::new(move |input| {
                 let (input, is_extended) = read_bit(input)?;
                 let (mut input, mut instance) = decode_unextended_sequence::<T>(&sequence, input)?;
-
                 input = if is_extended {
                     let (mut input, length) = decode_normally_small_number(input)?;
                     let mut extension_presence = vec![];
@@ -244,13 +290,20 @@ impl<'a> Decoder<'a, BitIn<'a>> for Uper {
                     }
                     for (index, present) in extension_presence.iter().enumerate() {
                         if *present {
-                            let (mut inner_input, ext_length) =
-                                decode_varlength_integer::<usize>(input, Some(0))?;
-                            (input, inner_input) = take(8 * ext_length)(inner_input)?;
-                            let _ = instance.decode_member_at_index::<Uper>(
-                                index + extension_index,
-                                inner_input,
-                            )?;
+                            let (mut inner_input, length_det) =
+                                decode_length_determinant(input)?;
+                            match length_det {
+                              LengthDeterminant::Content(ext_length) => {
+                                (input, inner_input) = take(8 * ext_length)(inner_input)?;
+                                let _ = instance.decode_member_at_index::<Uper>(
+                                    index + extension_index,
+                                    inner_input,
+                                )?;
+                              },
+                            LengthDeterminant::ContentFragment(_) => {
+                              todo!()
+                            }
+                          }
                         }
                     }
                     input
@@ -269,10 +322,14 @@ impl<'a> Decoder<'a, BitIn<'a>> for Uper {
     fn decode_sequence_of<T: Decode<'a, BitIn<'a>> + 'a>(
         sequence_of: asnr_grammar::types::SequenceOf,
         member_decoder: fn(BitIn<'a>) -> IResult<BitIn<'a>, T>,
-    ) -> Result<Box<dyn FnMut(BitIn<'a>) -> IResult<BitIn<'a>, Vec<T>> + 'a>, DecodingError> {
+    ) -> Result<Box<dyn FnMut(BitIn<'a>) -> IResult<BitIn<'a>, Vec<T>> + 'a>, DecodingError<BitIn<'a>>> {
         let mut constraints = PerVisibleRangeConstraints::default();
         for c in sequence_of.clone().constraints {
-            constraints += c.try_into()?
+            constraints += c.try_into().map_err(|e: DecodingError<[u8; 0]>| DecodingError {
+              input: None,
+              details: e.details,
+              kind: e.kind
+            })?
         }
         constraints.as_unsigned_constraint();
         if constraints.is_extensible() {
@@ -281,10 +338,10 @@ impl<'a> Decoder<'a, BitIn<'a>> for Uper {
                     let (input, is_extended) = read_bit(input)?;
                     if is_extended {
                         let (input, length_det) = decode_varlength_integer(input, Some(0))?;
-                        many_m_n(length_det, length_det, member_decoder)(input)
+                        n_times(input, member_decoder, length_det)
                     } else {
                         let (input, length_det) = decode_semi_constrained_int(&constraints, input)?;
-                        many_m_n(length_det, length_det, member_decoder)(input)
+                        n_times(input, member_decoder, length_det)
                     }
                 },
             ))
@@ -292,7 +349,7 @@ impl<'a> Decoder<'a, BitIn<'a>> for Uper {
             Ok(Box::new(
                 move |input: BitIn<'a>| -> IResult<BitIn<'a>, Vec<T>> {
                     let (input, length_det) = decode_semi_constrained_int(&constraints, input)?;
-                    many_m_n(length_det, length_det, member_decoder)(input)
+                    n_times(input, member_decoder, length_det)
                 },
             ))
         }
@@ -311,7 +368,12 @@ fn decode_unextended_sequence<'a, T: DecodeMember<'a, BitIn<'a>> + Default>(
     mut input: BitIn<'a>,
 ) -> IResult<BitIn<'a>, T> {
     let mut member_presence = vec![];
-    for m in sequence.members.iter() {
+    for (_, m) in sequence
+        .members
+        .iter()
+        .enumerate()
+        .filter(|(i, _)| sequence.extensible.map_or(true, |x| i < &x))
+    {
         if m.is_optional {
             let parsed = read_bit(input)?;
             input = parsed.0;
@@ -333,14 +395,15 @@ fn decode_enum_index_into<'a, O: TryFrom<i128>>(
     bit_length: usize,
     input: BitIn<'a>,
 ) -> IResult<BitIn<'a>, O> {
-    map_res(read_int::<i128>(bit_length), |i| {
-        O::try_from(i).map_err(|_| {
-            nom::Err::Error(Error {
-                input,
-                code: nom::error::ErrorKind::OneOf,
-            })
-        })
-    })(input)
+    let (input, i) = read_int::<i128>(bit_length)(input)?;
+    let index = O::try_from(i).map_err(|_| {
+      DecodingError {
+        input: Some(input),
+        details: "Failed to convert index to generic integer type.".into(),
+        kind: DecodingErrorType::GenericParsingError
+      }
+  })?;
+  Ok((input, index))
 }
 
 fn decode_choice_index_into<'a, O: DecoderForIndex<'a, BitIn<'a>>>(
@@ -360,9 +423,8 @@ fn decode_semi_constrained_int<'a>(
     constraints: &PerVisibleRangeConstraints,
     input: BitIn<'a>,
 ) -> IResult<BitIn<'a>, usize> {
-    map(read_int::<usize>(constraints.bit_size().unwrap()), |i| {
-        i + constraints.min::<usize>().unwrap()
-    })(input)
+    let (input, i) = read_int::<usize>(constraints.bit_size().unwrap())(input)?;
+    Ok((input, i + constraints.min::<usize>().unwrap()))
 }
 
 fn decode_sized_string<'a>(
@@ -370,10 +432,22 @@ fn decode_sized_string<'a>(
     length_det: usize,
     input: BitIn<'a>,
 ) -> IResult<BitIn<'a>, String> {
-    map(
-        take(char_string.r#type.char_bit_size() * length_det),
-        |buffer: BitIn| String::from_utf8_lossy(buffer.as_bytes()).into_owned(),
-    )(input)
+    let bit_size = char_string.r#type.char_bit_size();
+    let (input, mut buffer) = take(bit_size * length_det)(input)?;
+    match char_string.r#type {
+            CharacterStringType::IA5String
+            | CharacterStringType::PrintableString
+            | CharacterStringType::VisibleString => {
+                let mut char_vec = vec![];
+                while let Ok((new_buffer, c)) = take::<usize, BitIn, Error<BitIn>>(7_usize)(buffer)
+                {
+                    char_vec.push(c.0.load_be::<u8>() as char);
+                    buffer = new_buffer;
+                }
+                Ok((input, char_vec.into_iter().collect()))
+            }
+            _ => Ok((input, String::from_utf8_lossy(buffer.as_bytes()).into_owned())),
+        }
 }
 
 fn decode_varlength_integer<O: num::Integer + num::FromPrimitive + Copy>(
@@ -383,20 +457,22 @@ fn decode_varlength_integer<O: num::Integer + num::FromPrimitive + Copy>(
     let (input, length_det) = decode_length_determinant(input)?;
     match length_det {
         LengthDeterminant::Content(size) => {
-            map_res(take(8 * size), |buffer: BitIn| match (min, size) {
-                (Some(m), s) if m >= O::from_u8(0).unwrap() => {
-                    integer_from_bits::<O>(buffer, s, false).map(|i| i + m)
-                }
-                (Some(m), s) if m < O::from_u8(0).unwrap() => {
-                    integer_from_bits::<O>(buffer, s, true).map(|i| i + m)
-                }
-                (_, s) => integer_from_bits::<O>(buffer, s, true),
-            })(input)
+          let (input, mut buffer) = take(8 * size)(input)?;
+          match (min, size) {
+            (Some(m), s) if m >= O::from_u8(0).unwrap() => {
+                Ok((input, integer_from_bits::<O>(buffer, s, false).map(|i| i + m)?))
+            }
+            (Some(m), s) if m < O::from_u8(0).unwrap() => {
+              Ok((input, integer_from_bits::<O>(buffer, s, true).map(|i| i + m)?))
+            }
+            (_, s) => Ok((input, integer_from_bits::<O>(buffer, s, true)?))
+          }
         }
-        LengthDeterminant::ContentFragment(_size) => Err(nom::Err::Error(Error {
-            input: input,
-            code: nom::error::ErrorKind::Digit,
-        })),
+        LengthDeterminant::ContentFragment(_size) => Err(DecodingError {
+            input: Some(input),
+            details: "Variable-length integers larger than 64000 are not supported yet!".into(),
+            kind: DecodingErrorType::Unsupported,
+        }),
     }
 }
 
@@ -407,10 +483,11 @@ fn decode_normally_small_number(input: BitIn) -> IResult<BitIn, usize> {
         if let LengthDeterminant::Content(i) = length_det {
             Ok((input, i))
         } else {
-            Err(nom::Err::Error(Error {
-                input,
-                code: nom::error::ErrorKind::Digit,
-            }))
+            Err(DecodingError {
+              input: Some(input),
+              details: "Normally-small numbers larger than 63 are not supported yet!".into(),
+              kind: DecodingErrorType::Unsupported,
+          })
         }
     } else {
         read_int::<usize>(6)(input)
@@ -429,16 +506,20 @@ fn decode_length_determinant(input: BitIn) -> IResult<BitIn, LengthDeterminant> 
                 LengthDeterminant::ContentFragment(16000 * size_factor),
             ));
         }
-        return map(read_int::<usize>(14), |i| LengthDeterminant::Content(i))(input);
+        let (input, size) = read_int::<usize>(14)(input)?;
+        return Ok((input, LengthDeterminant::Content(size)))
     }
-    map(read_int::<usize>(7), |i| LengthDeterminant::Content(i))(input)
+    let (input, size) = read_int::<usize>(7)(input)?;
+    Ok((input, LengthDeterminant::Content(size)))
 }
 
 fn read_bit(input: BitIn) -> IResult<BitIn, bool> {
-    map(take(1u8), |is_true: BitIn| match is_true.first() {
-        Some(bit) => *bit.as_ref(),
-        None => unreachable!(),
-    })(input)
+  let (input, bool_buffer) = take(1u8)(input)?; 
+  Ok((input, bool_buffer[0]))
+    // match bool_buffer.get(0) {
+    //     Some(bit) => Ok((input, bool_buffer[0])),
+    //     None => unreachable!(),
+    // }
 }
 
 fn read_int<O>(bits: usize) -> impl FnMut(BitIn) -> IResult<BitIn, O>
@@ -446,10 +527,25 @@ where
     O: Integer + FromPrimitive,
 {
     move |input| {
-        map_res(take(bits), |int_bits: BitIn| {
-            O::from_u64(bits_to_int(int_bits)).ok_or("err")
-        })(input)
+        let (input, int_buffer) = take(bits)(input)?;
+        Ok((input, O::from_u64(bits_to_int(int_buffer)).ok_or(
+          DecodingError {
+              details: "Failed to convert index to generic integer type.".into(),
+              input: Some(input),
+              kind: DecodingErrorType::GenericParsingError,
+      })?))
     }
+}
+
+fn n_times<'a, T>(input: BitIn<'a>, parser: fn(BitIn<'a>) -> IResult<BitIn<'a>, T>, n: usize) -> IResult<BitIn<'a>, Vec<T>> {
+  let mut vector = vec![];
+  let mut input = input;
+  for _ in 0..n {
+    let (new_input, item) = parser(input)?;
+    vector.push(item);
+    input = new_input;
+  }
+  Ok((input, vector))
 }
 
 fn bits_to_int(input: BitIn) -> u64 {
@@ -467,10 +563,11 @@ fn integer_from_bits<I: num::Integer + num::FromPrimitive>(
     input: BitIn,
     byte_length: usize,
     signed: bool,
-) -> Result<I, DecodingError> {
+) -> Result<I, DecodingError<BitIn>> {
     let error = DecodingError {
         details: "Error parsing integer buffer.".into(),
         kind: DecodingErrorType::GenericParsingError,
+        input: Some(input)
     };
     if signed {
         match byte_length {
@@ -497,6 +594,7 @@ fn integer_from_bits<I: num::Integer + num::FromPrimitive>(
             _ => Err(DecodingError {
                 details: "ASNR currently does not support integers longer than 128 bits.".into(),
                 kind: DecodingErrorType::Unsupported,
+                input: Some(input),
             }),
         }
     } else {
@@ -524,6 +622,7 @@ fn integer_from_bits<I: num::Integer + num::FromPrimitive>(
             _ => Err(DecodingError {
                 details: "ASNR currently does not support integers longer than 128 bits.".into(),
                 kind: DecodingErrorType::Unsupported,
+                input: Some(input)
             }),
         }
     }
@@ -531,15 +630,17 @@ fn integer_from_bits<I: num::Integer + num::FromPrimitive>(
 
 #[cfg(test)]
 mod tests {
+    use asnr_compiler_derive::asn1_internal_tests;
 
-    use alloc::vec;
+    use core::fmt::Debug;
+    use alloc::{format, vec};
     use bitvec::prelude::*;
     use bitvec_nom::BSlice;
 
     use crate::uper::decoder::*;
     use asnr_grammar::{
         constraints::*,
-        types::{Enumeral, Enumerated, Integer},
+        types::{Enumeral, Enumerated, Integer, SequenceMember},
         *,
     };
 
@@ -702,49 +803,9 @@ mod tests {
 
     #[test]
     fn decodes_enum() {
-        #[derive(Debug, PartialEq)]
-        enum TestEnum {
-            One,
-            Two,
-            Three,
-            UnknownExt,
-        }
+        asn1_internal_tests!("TestEnum ::= ENUMERATED { One, Two, Three }");
 
-        impl TryFrom<i128> for TestEnum {
-            type Error = DecodingError;
-
-            fn try_from(value: i128) -> Result<Self, Self::Error> {
-                match value {
-                    x if x == Self::One as i128 => Ok(Self::One),
-                    x if x == Self::Two as i128 => Ok(Self::Two),
-                    x if x == Self::Three as i128 => Ok(Self::Three),
-                    _ => Ok(Self::UnknownExt),
-                }
-            }
-        }
-
-        let mut decoder = Uper::decode_enumerated::<TestEnum>(Enumerated {
-            extensible: None,
-            members: vec![
-                Enumeral {
-                    name: "One".into(),
-                    description: None,
-                    index: 0,
-                },
-                Enumeral {
-                    name: "Two".into(),
-                    description: None,
-                    index: 1,
-                },
-                Enumeral {
-                    name: "Three".into(),
-                    description: None,
-                    index: 2,
-                },
-            ],
-            constraints: vec![],
-        })
-        .unwrap();
+        let mut decoder = TestEnum::decoder().unwrap();
         assert_eq!(
             decoder(BSlice::from(bits![static u8, Msb0; 0,0]))
                 .unwrap()
@@ -763,45 +824,599 @@ mod tests {
                 .1,
             TestEnum::Three
         );
-        decoder = Uper::decode_enumerated::<TestEnum>(Enumerated {
-            extensible: Some(2),
-            members: vec![
-                Enumeral {
-                    name: "One".into(),
-                    description: None,
-                    index: 0,
-                },
-                Enumeral {
-                    name: "Two".into(),
-                    description: None,
-                    index: 1,
-                },
-                Enumeral {
-                    name: "Three".into(),
-                    description: None,
-                    index: 2,
-                },
-            ],
-            constraints: vec![],
-        })
-        .unwrap();
+    }
+
+    #[test]
+    fn decodes_extended_enum() {
+      asn1_internal_tests!("TestEnumExt ::= ENUMERATED { One, ..., Three }");
+
         assert_eq!(
             decoder(BSlice::from(bits![static u8, Msb0; 0,0,0]))
                 .unwrap()
                 .1,
-            TestEnum::One
+            TestEnumExt::One
         );
         assert_eq!(
             decoder(BSlice::from(bits![static u8, Msb0; 1,0,0,0,0,0,0,0]))
                 .unwrap()
                 .1,
-            TestEnum::Three
+            TestEnumExt::Three
         );
         assert_eq!(
             decoder(BSlice::from(bits![static u8, Msb0; 1,0,0,0,0,0,1,1]))
                 .unwrap()
                 .1,
-            TestEnum::UnknownExt
+            TestEnumExt::UnknownExt
+        );
+    }
+
+    #[test]
+    #[allow(non_camel_case_types)]
+    #[allow(non_snake_case)]
+    #[allow(non_upper_case_globals)]
+    #[allow(dead_code)]
+    #[allow(unused_mut)]
+    #[allow(unused_variables)]
+    fn decodes_unextended_sequence() {
+        /// Inner type
+        #[derive(Debug, Clone, PartialEq, Default)]
+        pub struct TestSequence_inner_item_code(pub u8);
+
+        impl<'a, I: AsBytes + Debug + 'a> Decode<'a, I> for TestSequence_inner_item_code {
+            fn decode<D>(input: I) -> IResult<I, Self>
+            where
+                D: Decoder<'a, I>,
+                Self: Sized,
+            {
+                TestSequence_inner_item_code::decoder::<D>()?(input)
+            }
+
+            fn decoder<D>() -> Result<Box<dyn FnMut(I) -> IResult<I, Self> + 'a>, DecodingError<I>>
+            where
+                D: Decoder<'a, I>,
+                Self: Sized,
+            {
+                let mut int_decoder = D::decode_integer(Integer {
+                    constraints: vec![Constraint::SubtypeConstraint(ElementSet {
+                        set: ElementOrSetOperation::Element(SubtypeElement::ValueRange {
+                            min: Some(ASN1Value::Integer(0)),
+                            max: Some(ASN1Value::Integer(254)),
+                            extensible: false,
+                        }),
+                        extensible: false,
+                    })],
+                    distinguished_values: None,
+                })?;
+                Ok(Box::new(move |input| {
+                    (*int_decoder)(input).map(|(remaining, res)| (remaining, Self(res)))
+                }))
+            }
+        }
+
+        /// Inner type
+        #[derive(Debug, Clone, PartialEq, Default)]
+        pub struct TestSequence_inner_item_name(pub String);
+
+        impl<'a, I: AsBytes + Debug + 'a> Decode<'a, I> for TestSequence_inner_item_name {
+            fn decode<D>(input: I) -> IResult<I, Self>
+            where
+                D: Decoder<'a, I>,
+                Self: Sized,
+            {
+                TestSequence_inner_item_name::decoder::<D>()?(input)
+            }
+
+            fn decoder<D>() -> Result<Box<dyn FnMut(I) -> IResult<I, Self> + 'a>, DecodingError<I>>
+            where
+                D: Decoder<'a, I>,
+                Self: Sized,
+            {
+                let mut charstring_decoder = D::decode_character_string(CharacterString {
+                    constraints: vec![Constraint::SubtypeConstraint(ElementSet {
+                        set: ElementOrSetOperation::Element(SubtypeElement::SizeConstraint(
+                            Box::new(ElementOrSetOperation::Element(SubtypeElement::ValueRange {
+                                min: Some(ASN1Value::Integer(3)),
+                                max: Some(ASN1Value::Integer(10)),
+                                extensible: false,
+                            })),
+                        )),
+                        extensible: false,
+                    })],
+                    r#type: CharacterStringType::IA5String,
+                })?;
+                Ok(Box::new(move |input| {
+                    (*charstring_decoder)(input).map(|(remaining, res)| (remaining, Self(res)))
+                }))
+            }
+        }
+
+        /// Inner type
+        #[derive(Debug, Clone, PartialEq, Default)]
+        pub enum TestSequence_inner_urgency {
+            #[default]
+            normal = 0,
+            high = 1,
+        }
+
+        impl TryFrom<i128> for TestSequence_inner_urgency {
+            type Error = DecodingError<[u8;0]>;
+
+            fn try_from(v: i128) -> Result<Self, Self::Error> {
+                match v {
+          x if x == Self::normal as i128 => Ok(Self::normal),
+		  x if x == Self::high as i128 => Ok(Self::high),
+          _ => Err(
+            DecodingError {
+              details:
+              format!("Invalid enumerated index decoding TestSequence_inner_urgency. Received index {}",v), kind: DecodingErrorType::InvalidEnumeratedIndex, input: None
+            }
+          ),
+      }
+            }
+        }
+
+        impl<'a, I: AsBytes + Debug + 'a> Decode<'a, I> for TestSequence_inner_urgency {
+            fn decode<D>(input: I) -> IResult<I, Self>
+            where
+                D: Decoder<'a, I>,
+                Self: Sized,
+            {
+                TestSequence_inner_urgency::decoder::<D>()?(input)
+            }
+
+            fn decoder<D>() -> Result<Box<dyn FnMut(I) -> IResult<I, Self> + 'a>, DecodingError<I>>
+            where
+                D: Decoder<'a, I>,
+                Self: Sized,
+            {
+                D::decode_enumerated(Enumerated {
+                    members: vec![
+                        Enumeral {
+                            name: "normal".into(),
+                            description: None,
+                            index: 0,
+                        },
+                        Enumeral {
+                            name: "high".into(),
+                            description: None,
+                            index: 1,
+                        },
+                    ],
+                    extensible: None,
+                    constraints: vec![],
+                })
+            }
+        }
+
+        #[derive(Debug, Clone, PartialEq, Default)]
+        pub struct TestSequence {
+            pub item_code: TestSequence_inner_item_code,
+            pub item_name: TestSequence_inner_item_name,
+            pub urgency: TestSequence_inner_urgency,
+        }
+
+        impl<'a, I: AsBytes + Debug + 'a> DecodeMember<'a, I> for TestSequence {
+            fn decode_member_at_index<D>(
+                &mut self,
+                index: usize,
+                input: I,
+            ) -> Result<I, DecodingError<I>>
+            where
+                D: Decoder<'a, I>,
+                Self: Sized,
+            {
+                let mut input = input;
+                match index {
+                    0 => {
+                        (input, self.item_code) = TestSequence_inner_item_code::decode::<D>(input)?
+                    }
+                    1 => {
+                        (input, self.item_name) = TestSequence_inner_item_name::decode::<D>(input)?
+                    }
+                    2 => (input, self.urgency) = TestSequence_inner_urgency::decode::<D>(input)?,
+                    i => {
+                        return Err(DecodingError {
+                          details:
+                          format!("Invalid member index decoding TestSequence. Received index {}",i), kind: DecodingErrorType::InvalidEnumeratedIndex, input: None
+                        })
+                    }
+                }
+                Ok(input)
+            }
+        }
+
+        impl<'a, I: AsBytes + Debug + 'a> Decode<'a, I> for TestSequence {
+            fn decode<D>(input: I) -> IResult<I, Self>
+            where
+                D: Decoder<'a, I>,
+                Self: Sized,
+            {
+                TestSequence::decoder::<D>()?(input)
+            }
+
+            fn decoder<D>() -> Result<Box<dyn FnMut(I) -> IResult<I, Self> + 'a>, DecodingError<I>>
+            where
+                D: Decoder<'a, I>,
+                Self: Sized,
+            {
+                D::decode_sequence(Sequence {
+                    constraints: vec![],
+                    extensible: None,
+                    members: vec![
+                        SequenceMember {
+                            name: "item-code".into(),
+                            tag: None,
+                            is_optional: false,
+                            r#type: ASN1Type::Integer(Integer {
+                                constraints: vec![Constraint::SubtypeConstraint(ElementSet {
+                                    set: ElementOrSetOperation::Element(
+                                        SubtypeElement::ValueRange {
+                                            min: Some(ASN1Value::Integer(0)),
+                                            max: Some(ASN1Value::Integer(254)),
+                                            extensible: false,
+                                        },
+                                    ),
+                                    extensible: false,
+                                })],
+                                distinguished_values: None,
+                            }),
+                            default_value: None,
+                            constraints: vec![],
+                        },
+                        SequenceMember {
+                            name: "item-name".into(),
+                            tag: None,
+                            is_optional: true,
+                            r#type: ASN1Type::CharacterString(CharacterString {
+                                constraints: vec![Constraint::SubtypeConstraint(ElementSet {
+                                    set: ElementOrSetOperation::Element(
+                                        SubtypeElement::SizeConstraint(Box::new(
+                                            ElementOrSetOperation::Element(
+                                                SubtypeElement::ValueRange {
+                                                    min: Some(ASN1Value::Integer(3)),
+                                                    max: Some(ASN1Value::Integer(10)),
+                                                    extensible: false,
+                                                },
+                                            ),
+                                        )),
+                                    ),
+                                    extensible: false,
+                                })],
+                                r#type: CharacterStringType::IA5String,
+                            }),
+                            default_value: None,
+                            constraints: vec![],
+                        },
+                        SequenceMember {
+                            name: "urgency".into(),
+                            tag: None,
+                            is_optional: true,
+                            r#type: ASN1Type::Enumerated(Enumerated {
+                                members: vec![
+                                    Enumeral {
+                                        name: "normal".into(),
+                                        description: None,
+                                        index: 0,
+                                    },
+                                    Enumeral {
+                                        name: "high".into(),
+                                        description: None,
+                                        index: 1,
+                                    },
+                                ],
+                                extensible: None,
+                                constraints: vec![],
+                            }),
+                            default_value: Some(ASN1Value::ElsewhereDeclaredValue("normal".into())),
+                            constraints: vec![],
+                        },
+                    ],
+                })
+            }
+        }
+
+        assert_eq!(
+            TestSequence::decode::<Uper>(BSlice::from(bits![static u8, Msb0; 
+              1,0,
+              0,0,0,1,1,0,1,1,
+              0,1,1,
+              1,0,1,0,0,1,1,
+              1,0,0,1,0,0,0,
+              1,0,0,0,1,0,1,
+              1,0,1,0,0,1,0,
+              1,0,1,0,0,1,0,
+              1,0,1,1,0,0,1]))
+            .unwrap()
+            .1,
+            TestSequence {
+                item_code: TestSequence_inner_item_code(27),
+                item_name: TestSequence_inner_item_name("SHERRY".into()),
+                urgency: TestSequence_inner_urgency::normal
+            }
+        );
+    }
+
+    #[test]
+    fn decodes_extened_sequence() {
+      // asn1!("My-int ::= INTEGER (0..24)");
+
+        /// Inner type
+        #[derive(Debug, Clone, PartialEq, Default)]
+        pub struct TestSequence_inner_item_code(pub u8);
+
+        impl<'a, I: AsBytes + Debug + 'a> Decode<'a, I> for TestSequence_inner_item_code {
+            fn decode<D>(input: I) -> IResult<I, Self>
+            where
+                D: Decoder<'a, I>,
+                Self: Sized,
+            {
+                TestSequence_inner_item_code::decoder::<D>()?(input)
+            }
+
+            fn decoder<D>() -> Result<Box<dyn FnMut(I) -> IResult<I, Self> + 'a>, DecodingError<I>>
+            where
+                D: Decoder<'a, I>,
+                Self: Sized,
+            {
+                let mut int_decoder = D::decode_integer(Integer {
+                    constraints: vec![Constraint::SubtypeConstraint(ElementSet {
+                        set: ElementOrSetOperation::Element(SubtypeElement::ValueRange {
+                            min: Some(ASN1Value::Integer(0)),
+                            max: Some(ASN1Value::Integer(254)),
+                            extensible: false,
+                        }),
+                        extensible: false,
+                    })],
+                    distinguished_values: None,
+                })?;
+                Ok(Box::new(move |input| {
+                    (*int_decoder)(input).map(|(remaining, res)| (remaining, Self(res)))
+                }))
+            }
+        }
+
+        /// Inner type
+        #[derive(Debug, Clone, PartialEq, Default)]
+        pub struct TestSequence_inner_item_name(pub String);
+
+        impl<'a, I: AsBytes + Debug + 'a> Decode<'a, I> for TestSequence_inner_item_name {
+            fn decode<D>(input: I) -> IResult<I, Self>
+            where
+                D: Decoder<'a, I>,
+                Self: Sized,
+            {
+                TestSequence_inner_item_name::decoder::<D>()?(input)
+            }
+
+            fn decoder<D>() -> Result<Box<dyn FnMut(I) -> IResult<I, Self> + 'a>, DecodingError<I>>
+            where
+                D: Decoder<'a, I>,
+                Self: Sized,
+            {
+                let mut charstring_decoder = D::decode_character_string(CharacterString {
+                    constraints: vec![Constraint::SubtypeConstraint(ElementSet {
+                        set: ElementOrSetOperation::Element(SubtypeElement::SizeConstraint(
+                            Box::new(ElementOrSetOperation::Element(SubtypeElement::ValueRange {
+                                min: Some(ASN1Value::Integer(3)),
+                                max: Some(ASN1Value::Integer(10)),
+                                extensible: false,
+                            })),
+                        )),
+                        extensible: false,
+                    })],
+                    r#type: CharacterStringType::IA5String,
+                })?;
+                Ok(Box::new(move |input| {
+                    (*charstring_decoder)(input).map(|(remaining, res)| (remaining, Self(res)))
+                }))
+            }
+        }
+
+        /// Inner type
+        #[derive(Debug, Clone, PartialEq, Default)]
+        pub enum TestSequence_inner_urgency {
+            #[default]
+            normal = 0,
+            high = 1,
+        }
+
+        impl TryFrom<i128> for TestSequence_inner_urgency {
+            type Error = DecodingError<[u8;0]>;
+
+            fn try_from(v: i128) -> Result<Self, Self::Error> {
+                match v {
+          x if x == Self::normal as i128 => Ok(Self::normal),
+		  x if x == Self::high as i128 => Ok(Self::high),
+          _ => Err(
+            DecodingError {
+              details:
+              format!("Invalid enumerated index decoding TestSequence_inner_urgency. Received index {}",v), kind: DecodingErrorType::InvalidEnumeratedIndex, input: None
+            }
+          ),
+      }
+            }
+        }
+
+        impl<'a, I: AsBytes + Debug + 'a> Decode<'a, I> for TestSequence_inner_urgency {
+            fn decode<D>(input: I) -> IResult<I, Self>
+            where
+                D: Decoder<'a, I>,
+                Self: Sized,
+            {
+                TestSequence_inner_urgency::decoder::<D>()?(input)
+            }
+
+            fn decoder<D>() -> Result<Box<dyn FnMut(I) -> IResult<I, Self> + 'a>, DecodingError<I>>
+            where
+                D: Decoder<'a, I>,
+                Self: Sized,
+            {
+                D::decode_enumerated(Enumerated {
+                    members: vec![
+                        Enumeral {
+                            name: "normal".into(),
+                            description: None,
+                            index: 0,
+                        },
+                        Enumeral {
+                            name: "high".into(),
+                            description: None,
+                            index: 1,
+                        },
+                    ],
+                    extensible: None,
+                    constraints: vec![],
+                })
+            }
+        }
+
+        #[derive(Debug, Clone, PartialEq, Default)]
+        pub struct TestSequence {
+            pub item_code: TestSequence_inner_item_code,
+            pub item_name: TestSequence_inner_item_name,
+            pub urgency: TestSequence_inner_urgency,
+            pub unknown_extension: Vec<u8>,
+        }
+
+        impl<'a, I: AsBytes + Debug + 'a> DecodeMember<'a, I> for TestSequence {
+            fn decode_member_at_index<D>(
+                &mut self,
+                index: usize,
+                input: I,
+            ) -> Result<I, DecodingError<I>>
+            where
+                D: Decoder<'a, I>,
+                Self: Sized,
+            {
+                let mut input = input;
+                match index {
+                    0 => {
+                        (input, self.item_code) = TestSequence_inner_item_code::decode::<D>(input)?
+                    }
+                    1 => {
+                        (input, self.item_name) = TestSequence_inner_item_name::decode::<D>(input)?
+                    }
+                    2 => (input, self.urgency) = TestSequence_inner_urgency::decode::<D>(input)?,
+                    _ => (input, self.unknown_extension) = D::decode_unknown_extension(input)?,
+                }
+                Ok(input)
+            }
+        }
+
+        impl<'a, I: AsBytes + Debug + 'a> Decode<'a, I> for TestSequence {
+            fn decode<D>(input: I) -> IResult<I, Self>
+            where
+                D: Decoder<'a, I>,
+                Self: Sized,
+            {
+                TestSequence::decoder::<D>()?(input)
+            }
+
+            fn decoder<D>() -> Result<Box<dyn FnMut(I) -> IResult<I, Self> + 'a>, DecodingError<I>>
+            where
+                D: Decoder<'a, I>,
+                Self: Sized,
+            {
+                D::decode_sequence(Sequence {
+                    constraints: vec![],
+                    extensible: Some(2),
+                    members: vec![
+                        SequenceMember {
+                            name: "item-code".into(),
+                            tag: None,
+                            is_optional: false,
+                            r#type: ASN1Type::Integer(Integer {
+                                constraints: vec![Constraint::SubtypeConstraint(ElementSet {
+                                    set: ElementOrSetOperation::Element(
+                                        SubtypeElement::ValueRange {
+                                            min: Some(ASN1Value::Integer(0)),
+                                            max: Some(ASN1Value::Integer(254)),
+                                            extensible: false,
+                                        },
+                                    ),
+                                    extensible: false,
+                                })],
+                                distinguished_values: None,
+                            }),
+                            default_value: None,
+                            constraints: vec![],
+                        },
+                        SequenceMember {
+                            name: "item-name".into(),
+                            tag: None,
+                            is_optional: true,
+                            r#type: ASN1Type::CharacterString(CharacterString {
+                                constraints: vec![Constraint::SubtypeConstraint(ElementSet {
+                                    set: ElementOrSetOperation::Element(
+                                        SubtypeElement::SizeConstraint(Box::new(
+                                            ElementOrSetOperation::Element(
+                                                SubtypeElement::ValueRange {
+                                                    min: Some(ASN1Value::Integer(3)),
+                                                    max: Some(ASN1Value::Integer(10)),
+                                                    extensible: false,
+                                                },
+                                            ),
+                                        )),
+                                    ),
+                                    extensible: false,
+                                })],
+                                r#type: CharacterStringType::IA5String,
+                            }),
+                            default_value: None,
+                            constraints: vec![],
+                        },
+                        SequenceMember {
+                            name: "urgency".into(),
+                            tag: None,
+                            is_optional: true,
+                            r#type: ASN1Type::Enumerated(Enumerated {
+                                members: vec![
+                                    Enumeral {
+                                        name: "normal".into(),
+                                        description: None,
+                                        index: 0,
+                                    },
+                                    Enumeral {
+                                        name: "high".into(),
+                                        description: None,
+                                        index: 1,
+                                    },
+                                ],
+                                extensible: None,
+                                constraints: vec![],
+                            }),
+                            default_value: Some(ASN1Value::ElsewhereDeclaredValue("normal".into())),
+                            constraints: vec![],
+                        },
+                    ],
+                })
+            }
+        }
+
+        assert_eq!(
+            TestSequence::decode::<Uper>(BSlice::from(bits![static u8, Msb0; 
+            1,
+            1,
+            0,0,0,1,1,0,1,1,
+            0,1,1,
+            1,0,1,0,0,1,1,
+            1,0,0,1,0,0,0,
+            1,0,0,0,1,0,1,
+            1,0,1,0,0,1,0,
+            1,0,1,0,0,1,0,
+            1,0,1,1,0,0,1,
+            0,0,0,0,0,0,1,
+            1,
+            0,0,0,0,0,0,0,1,
+            1,0,0,0,0,0,0,0]))
+            .unwrap()
+            .1,
+            TestSequence {
+                item_code: TestSequence_inner_item_code(27),
+                item_name: TestSequence_inner_item_name("SHERRY".into()),
+                urgency: TestSequence_inner_urgency::high,
+                unknown_extension: vec![]
+            }
         );
     }
 }

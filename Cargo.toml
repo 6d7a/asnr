@@ -2,6 +2,7 @@
 
 members = [
     "asnr-compiler",
+    "asnr-compiler-derive",
     "asnr-grammar",
     "asnr-grammar-derive",
     "asnr-transcoder",

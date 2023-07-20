@@ -2,7 +2,7 @@ use alloc::{borrow::ToOwned, boxed::Box, format, string::String, vec, vec::Vec};
 
 use crate::{
     error::{GrammarError, GrammarErrorType},
-    information_object::{ASN1Information, InformationObjectFields, ObjectSet},
+    information_object::{InformationObjectFields, ObjectSet},
     ASN1Type, ASN1Value, Declare, ToplevelDeclaration,
 };
 

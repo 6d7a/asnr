@@ -6,8 +6,12 @@ use asnr_grammar::{
     },
     ASN1Value, types::{Enumerated, Choice},
 };
+use bitvec::view::AsBits;
+use nom::AsBytes;
 
 use crate::error::DecodingError;
+
+use super::BitIn;
 
 trait PerVisible {
     fn per_visible(&self) -> bool;
@@ -83,9 +87,9 @@ impl AddAssign<PerVisibleRangeConstraints> for PerVisibleRangeConstraints {
 }
 
 impl TryFrom<Constraint> for PerVisibleRangeConstraints {
-    type Error = DecodingError;
+    type Error = DecodingError<[u8; 0]>;
 
-    fn try_from(value: Constraint) -> Result<PerVisibleRangeConstraints, DecodingError> {
+    fn try_from(value: Constraint) -> Result<PerVisibleRangeConstraints, DecodingError<[u8;0]>> {
         match value {
             Constraint::SubtypeConstraint(c) => match c.set {
                 ElementOrSetOperation::Element(e) => Some(e).try_into(),
@@ -97,10 +101,10 @@ impl TryFrom<Constraint> for PerVisibleRangeConstraints {
 }
 
 impl TryFrom<Option<SubtypeElement>> for PerVisibleRangeConstraints {
-    type Error = DecodingError;
+    type Error = DecodingError<[u8; 0]>;
     fn try_from(
         value: Option<SubtypeElement>,
-    ) -> Result<PerVisibleRangeConstraints, DecodingError> {
+    ) -> Result<PerVisibleRangeConstraints, DecodingError<[u8;0]>> {
         match value {
             None => Ok(Self::default()),
             Some(SubtypeElement::SingleValue { value, extensible }) => {
@@ -178,7 +182,7 @@ impl PerVisible for SubtypeElement {
 /// then the resulting constraint is not PER-visible.  
 /// If a constraint has an EXCEPT clause, the EXCEPT and the following value set is completely ignored,
 /// whether the value set following the EXCEPT is PER-visible or not.
-fn fold_constraint_set(set: &SetOperation) -> Result<Option<SubtypeElement>, DecodingError> {
+fn fold_constraint_set<I: AsBytes>(set: &SetOperation) -> Result<Option<SubtypeElement>, DecodingError<I>> {
     let folded_operant = match &*set.operant {
         ElementOrSetOperation::Element(e) => e.per_visible().then(|| e.clone()),
         ElementOrSetOperation::SetOperation(s) => fold_constraint_set(s)?,

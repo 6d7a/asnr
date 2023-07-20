@@ -8,9 +8,18 @@ version = "0.1.0"
 dependencies = [
  "asnr-grammar",
  "asnr-traits",
- "asnr-transcoder",
  "nom",
  "num",
+]
+
+[[package]]
+name = "asnr-compiler-derive"
+version = "0.1.0"
+dependencies = [
+ "asnr-compiler",
+ "asnr-grammar",
+ "asnr-transcoder",
+ "proc-macro2",
 ]
 
 [[package]]
@@ -39,6 +48,7 @@ version = "0.1.0"
 name = "asnr-transcoder"
 version = "0.1.0"
 dependencies = [
+ "asnr-compiler-derive",
  "asnr-grammar",
  "bitvec",
  "bitvec-nom",

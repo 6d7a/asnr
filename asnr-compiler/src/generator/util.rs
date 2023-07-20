@@ -329,8 +329,12 @@ pub fn format_extensible_sequence<'a>(_name: &String, extensible: bool) -> (Stri
         } else {
             format!(
                 r#"return Err(
-              nom::Err::Error(nom::error::Error {{ input, code: nom::error::ErrorKind::Fail }})
-            )"#
+        DecodingError {{
+          details: format!("Invalid member index decoding TestSequence. Received index {{}}",index), 
+          kind: DecodingErrorType::InvalidEnumeratedIndex, 
+          input: None
+        }})
+      )"#
             )
         },
     )

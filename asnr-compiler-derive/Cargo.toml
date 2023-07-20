@@ -1,0 +1,15 @@
+[package]
+name = "asnr-compiler-derive"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+proc-macro = true
+
+[dependencies]
+asnr-compiler = { path = "../asnr-compiler" }
+proc-macro2 = "1"
+
+[dev-dependencies]
+asnr-grammar = { path = "../asnr-grammar" }
+asnr-transcoder = { path = "../asnr-transcoder" }
