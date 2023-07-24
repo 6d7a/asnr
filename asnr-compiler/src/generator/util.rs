@@ -333,7 +333,7 @@ pub fn format_extensible_sequence<'a>(_name: &String, extensible: bool) -> (Stri
           details: format!("Invalid member index decoding TestSequence. Received index {{}}",index), 
           kind: DecodingErrorType::InvalidEnumeratedIndex, 
           input: None
-        }})
+        }}
       )"#
             )
         },

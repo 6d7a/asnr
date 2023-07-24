@@ -182,12 +182,27 @@ pub fn generate_enumerated<'a>(
 ) -> Result<String, GeneratorError> {
     if let ASN1Type::Enumerated(ref mut enumerated) = tld.r#type {
         enumerated.members.sort_by(|a, b| a.index.cmp(&b.index));
-        let enumerals = enumerated
+        let name = rustify_name(&tld.name);
+        let mut enumerals = enumerated
             .members
             .iter()
             .map(format_enumeral)
             .collect::<Vec<String>>()
             .join("\n\t");
+          if enumerated.extensible.is_some() {
+            enumerals.push_str("\n\tUnknownExtension")
+          }
+          let unknown_index_case = if enumerated.extensible.is_some() {
+            format!("Ok(Self::UnknownExtension)")
+          } else {
+            format!(r#"Err(
+              DecodingError {{
+                details: format!("Invalid enumerated index decoding {name}. Received index {{}}",v), 
+                kind: DecodingErrorType::InvalidEnumeratedIndex,
+                input: None
+              }}
+            )"#)
+          };
         let enumerals_from_int = enumerated
             .members
             .iter()
@@ -197,9 +212,10 @@ pub fn generate_enumerated<'a>(
         Ok(enumerated_template(
             format_comments(&tld.comments),
             custom_derive.unwrap_or(DERIVE_DEFAULT),
-            rustify_name(&tld.name),
+            name,
             enumerals,
             enumerals_from_int,
+            unknown_index_case,
             enumerated.declare(),
         ))
     } else {

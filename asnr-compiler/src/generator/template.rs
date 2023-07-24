@@ -267,6 +267,7 @@ pub fn enumerated_template(
     name: String,
     enumerals: String,
     enumerals_from_int: String,
+    unknown_index_case: String,
     enum_descriptor: String,
 ) -> String {
     format!(
@@ -283,13 +284,7 @@ pub fn enumerated_template(
     fn try_from(v: i128) -> Result<Self, Self::Error> {{
       match v {{
           {enumerals_from_int}
-          _ => Err(
-            DecodingError {{
-              details: format!("Invalid enumerated index decoding {name}. Received index {{}}",v), 
-              kind: DecodingErrorType::InvalidEnumeratedIndex,
-              input: None
-            }}
-          ),
+          _ => {unknown_index_case},
       }}
     }}
   }}

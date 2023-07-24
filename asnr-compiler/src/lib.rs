@@ -15,8 +15,8 @@
 //!
 //! fn main() {
 //!   match Asnr::compiler()                                    // Initialize the compiler
-//!     .add_asn_source(PathBuf::from("spec_1.asn"))            // add a single ASN1 source file
-//!     .add_asn_sources(vec![                                  // add several ASN1 source files
+//!     .add_asn_by_path(PathBuf::from("spec_1.asn"))            // add a single ASN1 source file
+//!     .add_asn_sources_by_path(vec![                                  // add several ASN1 source files
 //!         PathBuf::from("spec_2.asn"),
 //!         PathBuf::from("spec_3.asn"),
 //!     ])
