@@ -41,7 +41,7 @@ use std::{
 };
 
 use asnr_grammar::ToplevelDeclaration;
-use generator::{generate, template::imports_and_generic_types};
+use generator::{generate, templates::asnr::template::imports_and_generic_types, Generator};
 use parser::asn_spec;
 use validator::Validator;
 
@@ -64,11 +64,18 @@ impl Asnr {
     }
 }
 
+#[derive(Debug, PartialEq, Default)]
+pub enum Framework {
+  #[default] Asnr,
+  Rasn
+}
+
 #[derive(Default)]
 pub struct AsnrCompiler {
     sources: Vec<AsnSource>,
     output_path: PathBuf,
     no_std: bool,
+    framework: Framework
 }
 
 impl From<Vec<PathBuf>> for AsnrCompiler {
@@ -76,7 +83,7 @@ impl From<Vec<PathBuf>> for AsnrCompiler {
         AsnrCompiler {
             sources: value.into_iter().map(|p| AsnSource::Path(p)).collect(),
             output_path: default_output_dir(),
-            no_std: false,
+            ..Default::default()
         }
     }
 }
@@ -86,7 +93,7 @@ impl From<PathBuf> for AsnrCompiler {
         AsnrCompiler {
             sources: vec![AsnSource::Path(value)],
             output_path: default_output_dir(),
-            no_std: false,
+            ..Default::default()
         }
     }
 }
@@ -96,7 +103,7 @@ impl From<&str> for AsnrCompiler {
         AsnrCompiler {
             sources: vec![AsnSource::Literal(value.into())],
             output_path: default_output_dir(),
-            no_std: false,
+            ..Default::default()
         }
     }
 }
@@ -115,6 +122,14 @@ impl AsnrCompiler {
         self.sources
             .extend(paths_to_sources.into_iter().map(|p| AsnSource::Path(p)));
         self
+    }
+
+    /// Define, which framework should be used for representing ASN1 in Rust.
+    /// * Framework::Asnr uses the `asnr-grammar` and `asnr-trancoder` crates
+    /// * Framework::Rasn uses [rasn](https://github.com/XAMPPRocky/rasn)
+    pub fn framework(mut self, framework: Framework) -> AsnrCompiler {
+      self.framework = framework;
+      self
     }
 
     /// Add a literal ASN1 source to the compile command
@@ -181,7 +196,7 @@ impl AsnrCompiler {
         let (generated, mut generator_errors) = valid_tlds.into_iter().fold(
             (String::new(), Vec::<Box<dyn Error>>::new()),
             |(mut rust, mut errors), tld| {
-                match generate(tld, None) {
+                match generate(&self.framework, tld, None) {
                     Ok(r) => {
                         rust = rust + &r + "\n";
                     }

@@ -1,3 +1,4 @@
+use crate::Framework;
 use asnr_grammar::{
     information_object::{
         InformationObjectClass, ObjectFieldIdentifier, SyntaxApplication, SyntaxExpression,
@@ -7,11 +8,12 @@ use asnr_grammar::{
     *,
 };
 
-use super::{
-    builder::StringifiedNameType,
+use crate::generator::{
     error::{GeneratorError, GeneratorErrorType},
     generate,
 };
+
+use super::builder::StringifiedNameType;
 
 const RUST_KEYWORDS: [&'static str; 38] = [
     "as", "async", "await", "break", "const", "continue", "crate", "dyn", "else", "enum", "extern",
@@ -360,6 +362,7 @@ fn declare_inner_sequence_member(
     parent_name: &String,
 ) -> Result<String, GeneratorError> {
     generate(
+        &Framework::Asnr,
         ToplevelDeclaration::Type(ToplevelTypeDeclaration {
             parameterization: None,
             comments: " Inner type ".into(),
@@ -375,6 +378,7 @@ fn declare_inner_choice_option(
     parent_name: &String,
 ) -> Result<String, GeneratorError> {
     generate(
+        &Framework::Asnr,
         ToplevelDeclaration::Type(ToplevelTypeDeclaration {
             parameterization: None,
             comments: " Inner type ".into(),
@@ -392,9 +396,9 @@ fn inner_name(name: &String, parent_name: &String) -> String {
 pub fn rustify_name(name: &String) -> String {
     let name = name.replace("-", "_");
     if RUST_KEYWORDS.contains(&name.as_str()) {
-      String::from("r#") + &name
+        String::from("r#") + &name
     } else {
-      name
+        name
     }
 }
 
@@ -402,7 +406,7 @@ pub fn rustify_name(name: &String) -> String {
 mod tests {
     use asnr_grammar::types::*;
 
-    use crate::generator::util::format_enumeral;
+    use super::format_enumeral;
 
     #[test]
     fn formats_enumeral() {
