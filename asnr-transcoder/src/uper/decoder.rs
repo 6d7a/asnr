@@ -7,9 +7,8 @@ use bitvec::{bits, field::BitField, prelude::Msb0, vec::BitVec, bitvec};
 use bitvec_nom::BSlice;
 use nom::{
     bytes::complete::take,
-    combinator::{map, map_res},
+    combinator::{map},
     error::Error,
-    multi::many_m_n,
     AsBytes,
 };
 use num::{FromPrimitive, Integer};
@@ -110,7 +109,7 @@ impl<'a> Decoder<'a, BitIn<'a>> for Uper {
     fn decode_enumerated<O: TryFrom<i128>>(
         enumerated: asnr_grammar::types::Enumerated,
     ) -> Result<Box<dyn FnMut(BitIn) -> IResult<BitIn, O>>, DecodingError<BitIn<'a>>> {
-        let mut constraints = PerVisibleRangeConstraints::default();
+        let mut constraints = PerVisibleRangeConstraints::from(&enumerated);
         for c in enumerated.clone().constraints {
             constraints += c.try_into().map_err(|e: DecodingError<[u8; 0]>| DecodingError {
               input: None,
@@ -118,7 +117,6 @@ impl<'a> Decoder<'a, BitIn<'a>> for Uper {
               kind: e.kind
             })?
         }
-        constraints.as_enum_constraint(&enumerated);
         if constraints.is_extensible() {
             if let Some(bit_length) = constraints.bit_size() {
                 Ok(Box::new(move |input: BitIn| -> IResult<BitIn, O> {
@@ -155,7 +153,7 @@ impl<'a> Decoder<'a, BitIn<'a>> for Uper {
     fn decode_choice<O: DecoderForIndex<'a, BitIn<'a>>>(
         choice: asnr_grammar::types::Choice,
     ) -> Result<Box<dyn FnMut(BitIn<'a>) -> IResult<BitIn<'a>, O>>, DecodingError<BitIn<'a>>> {
-        let mut constraints = PerVisibleRangeConstraints::default();
+        let mut constraints = PerVisibleRangeConstraints::from(&choice);
         for c in choice.clone().constraints {
             constraints += c.try_into().map_err(|e: DecodingError<[u8; 0]>| DecodingError {
               input: None,
@@ -163,7 +161,6 @@ impl<'a> Decoder<'a, BitIn<'a>> for Uper {
               kind: e.kind
             })?
         }
-        constraints.as_choice_constraint(&choice);
         if constraints.is_extensible() {
             if let Some(bit_length) = constraints.bit_size() {
                 Ok(Box::new(move |input: BitIn| -> IResult<BitIn, O> {
@@ -640,7 +637,7 @@ mod tests {
     use crate::uper::decoder::*;
     use asnr_grammar::{
         constraints::*,
-        types::{Enumeral, Enumerated, Integer, SequenceMember},
+        types::Integer,
         *,
     };
 
@@ -918,5 +915,18 @@ mod tests {
                 unknown_extension: vec![]
             }
         );
+    }
+
+    #[test]
+    fn decodes_extended_choice() {
+      asn1_internal_tests!("Choice-example ::= CHOICE {normal NULL, high NULL, ..., medium NULL }");
+      assert_eq!(
+        Choice_example::decode::<Uper>(BSlice::from(bits![static u8, Msb0; 0,0])).unwrap().1,
+        Choice_example::normal(Choice_example_inner_normal)
+      );
+      assert_eq!(
+        Choice_example::decode::<Uper>(BSlice::from(bits![static u8, Msb0; 1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0])).unwrap().1,
+        Choice_example::medium(Choice_example_inner_medium)
+      )
     }
 }

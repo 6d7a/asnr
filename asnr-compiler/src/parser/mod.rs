@@ -187,7 +187,13 @@ mod tests {
     use core::panic;
     use std::vec;
 
-    use asnr_grammar::{constraints::*, information_object::*, types::*, *, parameterization::{Parameterization, ParameterizationArgument}};
+    use asnr_grammar::{
+        constraints::*,
+        information_object::*,
+        parameterization::{Parameterization, ParameterizationArgument},
+        types::*,
+        *,
+    };
 
     use crate::parser::top_level_information_declaration;
 
@@ -562,7 +568,9 @@ mod tests {
                                     constraints: vec![Constraint::TableConstraint(
                                         TableConstraint {
                                             object_set: ObjectSet {
-                                                values: vec![ObjectSetValue::Reference("Set".into())],
+                                                values: vec![ObjectSetValue::Reference(
+                                                    "Set".into()
+                                                )],
                                                 extensible: None
                                             },
                                             linked_fields: vec![]
@@ -583,16 +591,20 @@ mod tests {
                                     field_path: vec![ObjectFieldIdentifier::MultipleValue(
                                         "&Type".into()
                                     )],
-                                    constraints: vec![Constraint::TableConstraint(TableConstraint {
-                                        object_set: ObjectSet {
-                                            values: vec![ObjectSetValue::Reference("Set".into())],
-                                            extensible: None
-                                        },
-                                        linked_fields: vec![RelationalConstraint {
-                                            field_name: "regionId".into(),
-                                            level: 0
-                                        }]
-                                    })]
+                                    constraints: vec![Constraint::TableConstraint(
+                                        TableConstraint {
+                                            object_set: ObjectSet {
+                                                values: vec![ObjectSetValue::Reference(
+                                                    "Set".into()
+                                                )],
+                                                extensible: None
+                                            },
+                                            linked_fields: vec![RelationalConstraint {
+                                                field_name: "regionId".into(),
+                                                level: 0
+                                            }]
+                                        }
+                                    )]
                                 }
                             ),
                             default_value: None,
@@ -607,6 +619,50 @@ mod tests {
                         name: "Set".into()
                     }]
                 })
+            }
+        )
+    }
+
+    #[test]
+    fn parses_choice() {
+        assert_eq!(
+            top_level_type_declaration(
+                r#"Choice-example ::= CHOICE
+                {normal NULL,
+                high NULL,
+                ...,
+                medium NULL }"#
+            )
+            .unwrap()
+            .1,
+            ToplevelTypeDeclaration {
+                comments: "".into(),
+                name: "Choice-example".into(),
+                r#type: ASN1Type::Choice(Choice {
+                    extensible: Some(2),
+                    options: vec![
+                        ChoiceOption {
+                            name: "normal".into(),
+                            tag: None,
+                            r#type: ASN1Type::Null,
+                            constraints: vec![]
+                        },
+                        ChoiceOption {
+                            name: "high".into(),
+                            tag: None,
+                            r#type: ASN1Type::Null,
+                            constraints: vec![]
+                        },
+                        ChoiceOption {
+                            name: "medium".into(),
+                            tag: None,
+                            r#type: ASN1Type::Null,
+                            constraints: vec![]
+                        }
+                    ],
+                    constraints: vec![]
+                }),
+                parameterization: None
             }
         )
     }

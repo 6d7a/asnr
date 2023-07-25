@@ -1,15 +1,15 @@
 use nom::{
-  bytes::complete::tag,
-  character::complete::char,
-  combinator::{into, opt},
-  multi::many0,
-  sequence::{terminated, tuple},
-  IResult,
+    bytes::complete::tag,
+    character::complete::char,
+    combinator::{into, opt},
+    multi::many0,
+    sequence::{terminated, tuple},
+    IResult,
 };
 
-use asnr_grammar::{*, types::*};
+use asnr_grammar::{types::*, *};
 
-use super::{*, constraint::constraint};
+use super::{constraint::constraint, *};
 
 /// Tries to parse an ASN1 CHOICE
 ///
@@ -22,30 +22,79 @@ use super::{*, constraint::constraint};
 /// structs within the same global scope.
 /// If the match fails, the parser will not consume the input and will return an error.
 pub fn choice<'a>(input: &'a str) -> IResult<&'a str, ASN1Type> {
-  map(
-      preceded(
-          skip_ws_and_comments(tag(CHOICE)),
-          in_braces(tuple((
-              many0(terminated(
-                  skip_ws_and_comments(choice_option),
-                  optional_comma,
-              )),
-              opt(terminated(extension_marker, opt(char(COMMA)))),
-              opt(many0(terminated(
-                  skip_ws_and_comments(choice_option),
-                  optional_comma,
-              ))),
-          ))),
-      ),
-      |m| ASN1Type::Choice(m.into()),
-  )(input)
+    map(
+        preceded(
+            skip_ws_and_comments(tag(CHOICE)),
+            in_braces(tuple((
+                many0(terminated(
+                    skip_ws_and_comments(choice_option),
+                    optional_comma,
+                )),
+                opt(terminated(extension_marker, opt(char(COMMA)))),
+                opt(many0(terminated(
+                    skip_ws_and_comments(choice_option),
+                    optional_comma,
+                ))),
+            ))),
+        ),
+        |m| ASN1Type::Choice(m.into()),
+    )(input)
 }
 
 fn choice_option<'a>(input: &'a str) -> IResult<&'a str, ChoiceOption> {
-  into(tuple((
-      skip_ws_and_comments(identifier),
-      opt(asn_tag),
-      skip_ws_and_comments(asn1_type),
-      opt(skip_ws_and_comments(constraint))
-  )))(input)
+    into(tuple((
+        skip_ws_and_comments(identifier),
+        opt(asn_tag),
+        skip_ws_and_comments(asn1_type),
+        opt(skip_ws_and_comments(constraint)),
+    )))(input)
+}
+
+#[cfg(test)]
+mod tests {
+    use asnr_grammar::{
+        types::{Choice, ChoiceOption},
+        ASN1Type,
+    };
+
+    use crate::parser::choice;
+
+    #[test]
+    fn parses_extensible_choice() {
+        assert_eq!(
+            choice(
+                r#"CHOICE
+    {normal NULL,
+    high NULL,
+    ...,
+    medium NULL }"#
+            )
+            .unwrap()
+            .1,
+            ASN1Type::Choice(Choice {
+                extensible: Some(2),
+                options: vec![
+                    ChoiceOption {
+                        name: "normal".into(),
+                        tag: None,
+                        r#type: ASN1Type::Null,
+                        constraints: vec![]
+                    },
+                    ChoiceOption {
+                        name: "high".into(),
+                        tag: None,
+                        r#type: ASN1Type::Null,
+                        constraints: vec![]
+                    },
+                    ChoiceOption {
+                        name: "medium".into(),
+                        tag: None,
+                        r#type: ASN1Type::Null,
+                        constraints: vec![]
+                    }
+                ],
+                constraints: vec![]
+            })
+        )
+    }
 }

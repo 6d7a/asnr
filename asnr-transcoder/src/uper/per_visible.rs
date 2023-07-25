@@ -49,29 +49,33 @@ impl PerVisibleRangeConstraints {
       self.min.map(|m| I::from_i128(m)).flatten()
     }
 
-    pub fn as_enum_constraint(&mut self, enumerated: &Enumerated) {
-        *self += PerVisibleRangeConstraints {
-            min: Some(0),
-            max: Some(enumerated.members.len() as i128 - 1),
-            extensible: enumerated.extensible.is_some()
-        };
-    }
-
-    pub fn as_choice_constraint(&mut self, choice: &Choice) {
+    pub fn as_unsigned_constraint(&mut self) {
       *self += PerVisibleRangeConstraints {
           min: Some(0),
-          max: Some(choice.options.len() as i128 - 1),
-          extensible: choice.extensible.is_some()
+          max: None,
+          extensible: self.is_extensible()
       };
-   }
+  }
+}
 
-    pub fn as_unsigned_constraint(&mut self) {
-        *self += PerVisibleRangeConstraints {
-            min: Some(0),
-            max: None,
-            extensible: self.is_extensible()
-        };
+impl From<&Enumerated> for PerVisibleRangeConstraints {
+    fn from(value: &Enumerated) -> Self {
+      PerVisibleRangeConstraints {
+        min: Some(0),
+        max: Some(value.extensible.map_or(value.members.len() - 1, |i| i - 1) as i128),
+        extensible: value.extensible.is_some()
+      }
     }
+}
+
+impl From<&Choice> for PerVisibleRangeConstraints {
+  fn from(value: &Choice) -> Self {
+    PerVisibleRangeConstraints {
+      min: Some(0),
+      max: Some(value.extensible.map_or(value.options.len() - 1, |i| i - 1) as i128),
+      extensible: value.extensible.is_some()
+    }
+  }
 }
 
 impl AddAssign<PerVisibleRangeConstraints> for PerVisibleRangeConstraints {
