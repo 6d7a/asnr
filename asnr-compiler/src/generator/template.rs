@@ -412,7 +412,7 @@ pub enum {name} {{
 }}
 
 impl<'a, I: AsBytes + Debug + 'a> DecoderForIndex<'a, I> for {name} {{
-  fn decoder_for_index<D>(v: i128) -> Result<fn(I) -> IResult<I, Self>, DecodingError> where D: Decoder<'a, I>, Self: Sized {{
+  fn decoder_for_index<D>(v: i128) -> Result<fn(I) -> IResult<I, Self>, DecodingError<I>> where D: Decoder<'a, I>, Self: Sized {{
     match v {{
         {options_from_int}
         {unknown_index_case}
