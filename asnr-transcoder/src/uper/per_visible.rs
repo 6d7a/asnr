@@ -58,7 +58,9 @@ impl PerVisibleRangeConstraints {
         let lies_within =
             self.min.map_or(true, |m| as_i128 >= m) && self.max.map_or(true, |m| as_i128 <= m);
         if !lies_within && !self.is_extensible() {
-            Err(EncodingError { details: "Provided value that violates non-extensible constraints!".into() })
+            Err(EncodingError {
+                details: "Provided value that violates non-extensible constraints!".into(),
+            })
         } else {
             Ok(lies_within)
         }
