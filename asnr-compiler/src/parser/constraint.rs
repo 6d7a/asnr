@@ -127,7 +127,10 @@ fn value_range<'a>(input: &'a str) -> IResult<&'a str, SubtypeElement> {
         skip_ws_and_comments(map(
             tuple((
                 terminated(
-                    alt((value(None, tag(MIN)), map(asn1_value, |v| Some(v)))),
+                    alt((
+                        value(None, tag(MIN)), 
+                        map(asn1_value, |v| Some(v))
+                    )),
                     skip_ws_and_comments(opt(char(GREATER_THAN))),
                 ),
                 preceded(

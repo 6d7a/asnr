@@ -1,4 +1,5 @@
 use alloc::{boxed::Box, format};
+use asnr_grammar::types::Integer;
 use bitvec::{bitvec, prelude::Msb0, vec::BitVec, view::BitView};
 
 use crate::{error::EncodingError, Encoder};
@@ -9,11 +10,8 @@ type BitOut = BitVec<u8, Msb0>;
 
 impl Encoder<u8, BitOut> for Uper {
     fn encode_integer<I>(
-        integer: asnr_grammar::types::Integer,
-    ) -> Result<
-        alloc::boxed::Box<dyn FnMut(I, BitOut) -> Result<BitOut, crate::error::EncodingError>>,
-        crate::error::EncodingError,
-    >
+        integer: Integer,
+    ) -> Result<Box<dyn FnMut(I, BitOut) -> Result<BitOut, EncodingError>>, EncodingError>
     where
         I: num::Integer + num::ToPrimitive + num::FromPrimitive + Copy,
     {
@@ -88,7 +86,11 @@ impl Encoder<u8, BitOut> for Uper {
                 Ok(Box::new(
                     move |encodable, output| -> Result<BitOut, EncodingError> {
                         constraints.lies_within(&encodable)?;
-                        encode_constrained_integer(encodable - constraints.min().unwrap(), bit_length, output)
+                        encode_constrained_integer(
+                            encodable - constraints.min().unwrap(),
+                            bit_length,
+                            output,
+                        )
                     },
                 ))
             } else {
@@ -113,6 +115,11 @@ impl Encoder<u8, BitOut> for Uper {
                 ))
             }
         }
+    }
+
+    fn encode_boolean(value: bool, mut output: BitOut) -> Result<BitOut, EncodingError> {
+        output.push(value);
+        Ok(output)
     }
 }
 
@@ -290,5 +297,31 @@ mod tests {
             bitvec![u8, Msb0; 0,0,0,0,0,0,1,0, 0,0,0,0,0,0,0,1, 0,0,0,0,0,0,0,0]
         );
         assert!(TestInteger::encode::<Uper>(&TestInteger(-2), bitvec![u8, Msb0;]).is_err())
+    }
+
+    #[test]
+    fn encodes_unconstrained_integer() {
+        asn1_internal_tests!("TestInteger ::= INTEGER");
+        assert_eq!(
+            TestInteger::encode::<Uper>(&TestInteger(4096), bitvec![u8, Msb0;]).unwrap(),
+            bitvec![u8, Msb0; 0,0,0,0,0,0,1,0, 0,0,0,1,0,0,0,0, 0,0,0,0,0,0,0,0]
+        );
+    }
+
+    #[test]
+    fn encodes_downwards_unconstrained_integer() {
+        asn1_internal_tests!("TestInteger ::= INTEGER(MIN..65535)");
+        assert_eq!(
+            TestInteger::encode::<Uper>(&TestInteger(127), bitvec![u8, Msb0;]).unwrap(),
+            bitvec![u8, Msb0; 0,0,0,0,0,0,0,1, 0,1,1,1,1,1,1,1]
+        );
+        assert_eq!(
+            TestInteger::encode::<Uper>(&TestInteger(-128), bitvec![u8, Msb0;]).unwrap(),
+            bitvec![u8, Msb0; 0,0,0,0,0,0,0,1, 1,0,0,0,0,0,0,0]
+        );
+        assert_eq!(
+            TestInteger::encode::<Uper>(&TestInteger(128), bitvec![u8, Msb0;]).unwrap(),
+            bitvec![u8, Msb0; 0,0,0,0,0,0,0,1, 0,0,0,0,0,0,0,0, 1,0,0,0,0,0,0,0]
+        );
     }
 }
