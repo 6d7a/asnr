@@ -11,7 +11,7 @@ pub fn imports_and_generic_types(
         r#"{}
 {}
 use asnr_grammar::{{*, types::*, constraints::*, information_object::*}};
-use asnr_transcoder::{{error::{{DecodingError, DecodingErrorType}}, Decode, Decoder, DecodeMember, DecoderForIndex, Describe, AsBytes, IResult}};
+use asnr_transcoder::{{*, error::*}};
 
 /// This empty struct represents the ASN1 NULL value. 
 pub struct ASN1_NULL;
@@ -63,6 +63,16 @@ where
 pub const DECODER_SIGNATURE: &str = r#"fn decoder<D>() -> Result<Box<dyn FnMut(I) -> IResult<I, Self> + 'a>, DecodingError<I>>
     where
         D: Decoder<'a, I>,
+        Self: Sized,"#;
+
+pub const ENCODE_SIGNATURE: &str = r#"fn encode<E>(encodable: &Self, output: O) -> Result<O, EncodingError>
+    where
+        E: Encoder<T, O>,
+        Self: Sized,"#;
+
+pub const ENCODER_SIGNATURE: &str = r#"fn encoder<E>() -> Result<Box<dyn FnMut(&Self, O) -> Result<O, EncodingError>>, EncodingError>
+    where
+        E: Encoder<T, O>,
         Self: Sized,"#;
 
 pub fn type_reference_value_template(
@@ -150,6 +160,19 @@ impl<'a, I: AsBytes + Debug + 'a> Decode<'a, I> for {name} {{
   {{
     let mut int_decoder = D::decode_integer({int_descriptor})?;
     Ok(Box::new(move |input| (*int_decoder)(input).map(|(remaining, res)| (remaining, Self(res)))))
+  }}
+}}
+
+impl<T, O: Extend<T> + Debug + 'static> Encode<T, O> for {name} {{
+  {ENCODE_SIGNATURE}
+  {{
+    {name}::encoder::<E>()?(encodable, output)
+  }}
+
+  {ENCODER_SIGNATURE}
+  {{
+    let mut int_encoder = E::encode_integer::<{integer_type}>({int_descriptor})?;
+    Ok(Box::new(move |encodable, output| (*int_encoder)(encodable.0, output)))
   }}
 }}
 "#

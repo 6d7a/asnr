@@ -1,17 +1,17 @@
-use core::ops::{AddAssign};
+use core::ops::AddAssign;
 
 use asnr_grammar::{
-    constraints::{
-        Constraint, ElementOrSetOperation, SetOperation, SetOperator, SubtypeElement,
-    },
-    ASN1Value, types::{Enumerated, Choice},
+    constraints::{Constraint, ElementOrSetOperation, SetOperation, SetOperator, SubtypeElement},
+    types::{Choice, Enumerated},
+    ASN1Value,
 };
 use bitvec::view::AsBits;
 use nom::AsBytes;
+use num::ToPrimitive;
 
-use crate::error::DecodingError;
+use crate::error::{DecodingError, EncodingError};
 
-use super::BitIn;
+use super::{bit_length, BitIn};
 
 trait PerVisible {
     fn per_visible(&self) -> bool;
@@ -25,66 +25,81 @@ pub struct PerVisibleRangeConstraints {
 
 impl Default for PerVisibleRangeConstraints {
     fn default() -> Self {
-        Self { min: None, max: None, extensible: false }
+        Self {
+            min: None,
+            max: None,
+            extensible: false,
+        }
     }
 }
 
 impl PerVisibleRangeConstraints {
     pub fn bit_size(&self) -> Option<usize> {
-        self.min.zip(self.max).map(|(min, max)| {
-            let range = max - min;
-            let mut power = 1;
-            while (range + 1) > 2_i128.pow(power) {
-                power += 1;
-            }
-            power as usize
-        })
+        self.min
+            .zip(self.max)
+            .map(|(min, max)| bit_length(min, max))
     }
 
     pub fn is_extensible(&self) -> bool {
-      self.extensible
+        self.extensible
     }
 
     pub fn min<I: num::Integer + num::FromPrimitive>(&self) -> Option<I> {
-      self.min.map(|m| I::from_i128(m)).flatten()
+        self.min.map(|m| I::from_i128(m)).flatten()
+    }
+
+    pub fn lies_within<I: num::Integer + ToPrimitive>(
+        &self,
+        value: &I,
+    ) -> Result<bool, EncodingError> {
+        let as_i128 = value.to_i128().ok_or(EncodingError {
+            details: "Failed to convert integer to u128!".into(),
+        })?;
+        let lies_within =
+            self.min.map_or(true, |m| as_i128 >= m) && self.max.map_or(true, |m| as_i128 <= m);
+        if !lies_within && !self.is_extensible() {
+            Err(EncodingError { details: "Provided value that violates non-extensible constraints!".into() })
+        } else {
+            Ok(lies_within)
+        }
     }
 
     pub fn as_unsigned_constraint(&mut self) {
-      *self += PerVisibleRangeConstraints {
-          min: Some(0),
-          max: None,
-          extensible: self.is_extensible()
-      };
-  }
+        *self += PerVisibleRangeConstraints {
+            min: Some(0),
+            max: None,
+            extensible: self.is_extensible(),
+        };
+    }
 }
 
 impl From<&Enumerated> for PerVisibleRangeConstraints {
     fn from(value: &Enumerated) -> Self {
-      PerVisibleRangeConstraints {
-        min: Some(0),
-        max: Some(value.extensible.map_or(value.members.len() - 1, |i| i - 1) as i128),
-        extensible: value.extensible.is_some()
-      }
+        PerVisibleRangeConstraints {
+            min: Some(0),
+            max: Some(value.extensible.map_or(value.members.len() - 1, |i| i - 1) as i128),
+            extensible: value.extensible.is_some(),
+        }
     }
 }
 
 impl From<&Choice> for PerVisibleRangeConstraints {
-  fn from(value: &Choice) -> Self {
-    PerVisibleRangeConstraints {
-      min: Some(0),
-      max: Some(value.extensible.map_or(value.options.len() - 1, |i| i - 1) as i128),
-      extensible: value.extensible.is_some()
+    fn from(value: &Choice) -> Self {
+        PerVisibleRangeConstraints {
+            min: Some(0),
+            max: Some(value.extensible.map_or(value.options.len() - 1, |i| i - 1) as i128),
+            extensible: value.extensible.is_some(),
+        }
     }
-  }
 }
 
 impl AddAssign<PerVisibleRangeConstraints> for PerVisibleRangeConstraints {
     fn add_assign(&mut self, rhs: PerVisibleRangeConstraints) {
         self.min = self.min.max(rhs.min);
         self.max = match (self.max, rhs.max) {
-          (Some(m1), Some(m2)) => Some(m1.min(m2)),
-          (None, Some(m)) | (Some(m), None) => Some(m),
-          _ => None
+            (Some(m1), Some(m2)) => Some(m1.min(m2)),
+            (None, Some(m)) | (Some(m), None) => Some(m),
+            _ => None,
         };
         self.extensible = self.extensible || rhs.extensible;
     }
@@ -93,7 +108,7 @@ impl AddAssign<PerVisibleRangeConstraints> for PerVisibleRangeConstraints {
 impl TryFrom<Constraint> for PerVisibleRangeConstraints {
     type Error = DecodingError<[u8; 0]>;
 
-    fn try_from(value: Constraint) -> Result<PerVisibleRangeConstraints, DecodingError<[u8;0]>> {
+    fn try_from(value: Constraint) -> Result<PerVisibleRangeConstraints, DecodingError<[u8; 0]>> {
         match value {
             Constraint::SubtypeConstraint(c) => match c.set {
                 ElementOrSetOperation::Element(e) => Some(e).try_into(),
@@ -108,7 +123,7 @@ impl TryFrom<Option<SubtypeElement>> for PerVisibleRangeConstraints {
     type Error = DecodingError<[u8; 0]>;
     fn try_from(
         value: Option<SubtypeElement>,
-    ) -> Result<PerVisibleRangeConstraints, DecodingError<[u8;0]>> {
+    ) -> Result<PerVisibleRangeConstraints, DecodingError<[u8; 0]>> {
         match value {
             None => Ok(Self::default()),
             Some(SubtypeElement::SingleValue { value, extensible }) => {
@@ -132,7 +147,7 @@ impl TryFrom<Option<SubtypeElement>> for PerVisibleRangeConstraints {
                 ElementOrSetOperation::Element(e) => Some(e).try_into(),
                 ElementOrSetOperation::SetOperation(s) => fold_constraint_set(&s)?.try_into(),
             },
-            _ => unreachable!()
+            _ => unreachable!(),
         }
     }
 }
@@ -140,8 +155,8 @@ impl TryFrom<Option<SubtypeElement>> for PerVisibleRangeConstraints {
 impl PerVisible for Constraint {
     fn per_visible(&self) -> bool {
         match self {
-          Constraint::SubtypeConstraint(s) => s.set.per_visible(),
-          _ => false,
+            Constraint::SubtypeConstraint(s) => s.set.per_visible(),
+            _ => false,
         }
     }
 }
@@ -186,7 +201,9 @@ impl PerVisible for SubtypeElement {
 /// then the resulting constraint is not PER-visible.  
 /// If a constraint has an EXCEPT clause, the EXCEPT and the following value set is completely ignored,
 /// whether the value set following the EXCEPT is PER-visible or not.
-fn fold_constraint_set<I: AsBytes>(set: &SetOperation) -> Result<Option<SubtypeElement>, DecodingError<I>> {
+fn fold_constraint_set<I: AsBytes>(
+    set: &SetOperation,
+) -> Result<Option<SubtypeElement>, DecodingError<I>> {
     let folded_operant = match &*set.operant {
         ElementOrSetOperation::Element(e) => e.per_visible().then(|| e.clone()),
         ElementOrSetOperation::SetOperation(s) => fold_constraint_set(s)?,
