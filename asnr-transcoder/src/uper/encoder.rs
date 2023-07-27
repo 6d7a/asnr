@@ -121,6 +121,22 @@ impl Encoder<u8, BitOut> for Uper {
         output.push(value);
         Ok(output)
     }
+
+    fn encode_null(output: BitOut) -> Result<BitOut, EncodingError> {
+        Ok(output)
+    }
+
+    fn encode_bit_string(
+      bit_string: asnr_grammar::types::BitString,
+      ) -> Result<Box<dyn FnMut(Vec<bool>, BitOut) -> Result<BitOut, EncodingError>>, EncodingError> {
+        let mut constraints = PerVisibleRangeConstraints::default_unsigned();
+        for c in bit_string.constraints {
+            constraints += c.try_into().map_err(|e| EncodingError {
+                details: format!("Failed to parse bit string constraints"),
+            })?
+        }
+        todo!()
+    }
 }
 
 fn wrap_in_length_determinant<I>(
@@ -181,10 +197,9 @@ where
             Ok(align(pad(1, output)))
         }
         None => {
-            let bit_length_signed = bit_length(0, int_as_i128.abs()) + 1;
+            let bit_length_signed = bit_length(0, int_as_i128.abs() - 1) + 1;
             Ok(align(
-                int_as_i128.to_be_bytes()[(128 - bit_length_signed)..]
-                    .view_bits::<Msb0>()
+                int_as_i128.to_be_bytes().view_bits::<Msb0>()[(128 - bit_length_signed)..]
                     .to_bitvec(),
             ))
         }
@@ -213,9 +228,9 @@ fn pad(bytes: usize, mut output: BitOut) -> BitOut {
 }
 
 fn align(output: BitOut) -> BitOut {
-    let mut missing_bits = 8 - output.len() % 8;
+    let missing_bits = 8 - output.len() % 8;
     if missing_bits == 8 {
-        missing_bits = 0;
+        return output;
     }
     pad(missing_bits, output)
 }
@@ -321,7 +336,29 @@ mod tests {
         );
         assert_eq!(
             TestInteger::encode::<Uper>(&TestInteger(128), bitvec![u8, Msb0;]).unwrap(),
-            bitvec![u8, Msb0; 0,0,0,0,0,0,0,1, 0,0,0,0,0,0,0,0, 1,0,0,0,0,0,0,0]
+            bitvec![u8, Msb0; 0,0,0,0,0,0,1,0, 0,0,0,0,0,0,0,0, 1,0,0,0,0,0,0,0]
+        );
+    }
+
+    #[test]
+    fn encodes_boolean() {
+        asn1_internal_tests!("TestBool ::= BOOLEAN");
+        assert_eq!(
+            TestBool::encode::<Uper>(&TestBool(true), bitvec![u8, Msb0;]).unwrap(),
+            bitvec![u8, Msb0; 1]
+        );
+        assert_eq!(
+          TestBool::encode::<Uper>(&TestBool(false), bitvec![u8, Msb0;]).unwrap(),
+          bitvec![u8, Msb0; 0]
+      );
+    }
+
+    #[test]
+    fn encodes_null() {
+        asn1_internal_tests!("TestNull ::= NULL");
+        assert_eq!(
+            TestNull::encode::<Uper>(&TestNull, bitvec![u8, Msb0;]).unwrap(),
+            bitvec![u8, Msb0;]
         );
     }
 }

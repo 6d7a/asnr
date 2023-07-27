@@ -34,6 +34,14 @@ impl Default for PerVisibleRangeConstraints {
 }
 
 impl PerVisibleRangeConstraints {
+    pub fn default_unsigned() -> Self {
+        Self {
+            min: Some(0),
+            max: None,
+            extensible: false,
+        }
+    }
+
     pub fn bit_size(&self) -> Option<usize> {
         self.min
             .zip(self.max)

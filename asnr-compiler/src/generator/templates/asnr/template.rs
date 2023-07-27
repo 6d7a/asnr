@@ -293,6 +293,18 @@ impl<'a, I: AsBytes + Debug + 'a> Decode<'a, I> for {name} {{
     Ok(Box::new(|input| D::decode_null(input)))
   }}
 }}
+
+impl<T, O: Extend<T> + Debug + 'static> Encode<T, O> for {name} {{
+  {ENCODE_SIGNATURE}
+  {{
+    {name}::encoder::<E>()?(encodable, output)
+  }}
+
+  {ENCODER_SIGNATURE}
+  {{
+    Ok(Box::new(move |_, output| E::encode_null(output)))
+  }}
+}}
 "#
     )
 }

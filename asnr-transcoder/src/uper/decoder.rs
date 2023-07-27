@@ -230,6 +230,7 @@ impl<'a> Decoder<'a, BitIn<'a>> for Uper {
                 },
             ))
         } else {
+          //FIXME: This does not cover constrained bit strings
             Ok(Box::new(move |input| {
                 let (input, length_det) = decode_semi_constrained_int(&constraints, input)?;
                 n_times(input, read_bit, length_det)
@@ -240,7 +241,7 @@ impl<'a> Decoder<'a, BitIn<'a>> for Uper {
     fn decode_character_string(
         char_string: asnr_grammar::types::CharacterString,
     ) -> Result<Box<dyn FnMut(BitIn<'a>) -> IResult<BitIn<'a>, String>>, DecodingError<BitIn<'a>>> {
-        let mut constraints = PerVisibleRangeConstraints::default();
+        let mut constraints = PerVisibleRangeConstraints::default_unsigned();
         for c in char_string.clone().constraints {
             constraints += c.try_into().map_err(|e: DecodingError<[u8; 0]>| DecodingError {
               input: None,
@@ -248,7 +249,6 @@ impl<'a> Decoder<'a, BitIn<'a>> for Uper {
               kind: e.kind
             })?
         }
-        constraints.as_unsigned_constraint();
         if constraints.is_extensible() {
             Ok(Box::new(
                 move |input: BitIn<'a>| -> IResult<BitIn<'a>, String> {
