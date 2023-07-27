@@ -454,20 +454,17 @@ fn decode_varlength_integer<O: num::Integer + num::FromPrimitive + Copy>(
     let (input, length_det) = decode_length_determinant(input)?;
     match length_det {
         LengthDeterminant::Content(size) => {
-          let (input, mut buffer) = take(8 * size)(input)?;
+          let (input, buffer) = take(8 * size)(input)?;
           match (min, size) {
-            (Some(m), s) if m >= O::from_u8(0).unwrap() => {
+            (Some(m), s) => {
                 Ok((input, integer_from_bits::<O>(buffer, s, false).map(|i| i + m)?))
-            }
-            (Some(m), s) if m < O::from_u8(0).unwrap() => {
-              Ok((input, integer_from_bits::<O>(buffer, s, true).map(|i| i + m)?))
             }
             (_, s) => Ok((input, integer_from_bits::<O>(buffer, s, true)?))
           }
         }
         LengthDeterminant::ContentFragment(_size) => Err(DecodingError {
             input: Some(input),
-            details: "Variable-length integers larger than 64000 are not supported yet!".into(),
+            details: "Variable-length integers larger than 64000 bytes are not supported yet!".into(),
             kind: DecodingErrorType::Unsupported,
         }),
     }
@@ -500,7 +497,7 @@ fn decode_length_determinant(input: BitIn) -> IResult<BitIn, LengthDeterminant> 
             //TODO: Check that size factor is in range 1..=4
             return Ok((
                 input,
-                LengthDeterminant::ContentFragment(16000 * size_factor),
+                LengthDeterminant::ContentFragment(16384 * size_factor),
             ));
         }
         let (input, size) = read_int::<usize>(14)(input)?;
@@ -513,10 +510,6 @@ fn decode_length_determinant(input: BitIn) -> IResult<BitIn, LengthDeterminant> 
 fn read_bit(input: BitIn) -> IResult<BitIn, bool> {
   let (input, bool_buffer) = take(1u8)(input)?; 
   Ok((input, bool_buffer[0]))
-    // match bool_buffer.get(0) {
-    //     Some(bit) => Ok((input, bool_buffer[0])),
-    //     None => unreachable!(),
-    // }
 }
 
 fn read_int<O>(bits: usize) -> impl FnMut(BitIn) -> IResult<BitIn, O>
