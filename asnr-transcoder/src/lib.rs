@@ -108,4 +108,8 @@ pub trait Encoder<T, O: Extend<T> + Debug + 'static> {
     where
         I: num::Integer + num::ToPrimitive + num::FromPrimitive + Copy;
     fn encode_boolean(value: bool, output: O) -> Result<O, EncodingError>;
+    fn encode_null(output: O) -> Result<O, EncodingError>;
+    fn encode_bit_string(
+      bit_string: BitString,
+  ) -> Result<Box<dyn FnMut(Vec<bool>, O) -> Result<O, EncodingError>>, EncodingError>;
 }
