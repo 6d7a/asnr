@@ -26,7 +26,6 @@ pub enum Constraint {
     SubtypeConstraint(ElementSet),
     TableConstraint(TableConstraint),
     Parameter(Vec<Parameter>),
-    //CharacterConstraint(CharacterConstraint)
 }
 
 impl Constraint {
@@ -360,7 +359,7 @@ pub enum SubtypeElement {
         max: Option<ASN1Value>,
         extensible: bool,
     },
-    // PermittedAlphabet
+    PermittedAlphabet(Box<ElementOrSetOperation>),
     SizeConstraint(Box<ElementOrSetOperation>),
     TypeConstraint(ASN1Type),
     SingleTypeConstraint(InnerTypeConstraint),
@@ -383,6 +382,7 @@ impl SubtypeElement {
                 value,
                 extensible: _,
             } => value.link_elsewhere_declared(identifier, tlds),
+            SubtypeElement::PermittedAlphabet(e) => e.link_cross_reference(identifier, tlds),
             SubtypeElement::ContainedSubtype {
                 subtype,
                 extensible: _,
@@ -418,6 +418,7 @@ impl SubtypeElement {
                 value,
                 extensible: _,
             } => value.is_elsewhere_declared(),
+            SubtypeElement::PermittedAlphabet(e) => e.has_cross_reference(),
             SubtypeElement::ContainedSubtype {
                 subtype,
                 extensible: _,
@@ -493,6 +494,12 @@ impl Declare for SubtypeElement {
                 format!(
                     "SubtypeElement::SingleValue {{ value: {}, extensible: {extensible} }}",
                     value.declare()
+                )
+            }
+            SubtypeElement::PermittedAlphabet(permitted) => {
+                format!(
+                    "SubtypeElement::PermittedAlphabet(Box::new({}))",
+                    permitted.declare()
                 )
             }
             SubtypeElement::ContainedSubtype {

@@ -113,3 +113,9 @@ impl<I: AsBytes + Debug> Display for DecodingError<I> {
 pub struct EncodingError {
     pub details: String,
 }
+
+impl<I: AsBytes> From<DecodingError<I>> for EncodingError {
+    fn from(value: DecodingError<I>) -> Self {
+        EncodingError { details: value.details }
+    }
+}

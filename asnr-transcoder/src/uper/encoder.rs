@@ -1,12 +1,16 @@
-use alloc::{boxed::Box, format};
+use alloc::{boxed::Box, format, vec::Vec};
 use asnr_grammar::types::Integer;
 use bitvec::{bitvec, prelude::Msb0, vec::BitVec, view::BitView};
 
-use crate::{error::EncodingError, Encoder};
+use crate::{
+    error::{DecodingError, EncodingError},
+    Encoder,
+};
 
 use super::{bit_length, per_visible::PerVisibleRangeConstraints, Uper};
 
 type BitOut = BitVec<u8, Msb0>;
+type AsBytesDummy = [u8; 0];
 
 impl Encoder<u8, BitOut> for Uper {
     fn encode_integer<I>(
@@ -22,20 +26,14 @@ impl Encoder<u8, BitOut> for Uper {
             })?
         }
         if constraints.is_extensible() {
-            if let Some(bit_length) = constraints.bit_size() {
+            if let Some(bit_length) = constraints.bit_length() {
                 Ok(Box::new(
                     move |encodable, mut output| -> Result<BitOut, EncodingError> {
-                        let extends_constraints = constraints.lies_within(&encodable)?;
-                        if extends_constraints {
-                            output.push(false);
-                        } else {
-                            output.push(true);
-                        }
+                        let extends_constraints =
+                            write_extended_bit(&constraints, encodable, &mut output)?;
                         if extends_constraints {
                             let varlength = encode_varlength_integer(encodable, None)?;
-                            if varlength.len() % 8 != 0 {
-                                return Err(EncodingError { details: "Variable-length integer's encoding violates byte-alignment!".into() });
-                            }
+                            assert_byte_alignment(varlength.len())?;
                             wrap_in_length_determinant::<I>(
                                 varlength.len() / 8,
                                 varlength,
@@ -54,24 +52,18 @@ impl Encoder<u8, BitOut> for Uper {
             } else {
                 Ok(Box::new(
                     move |encodable, mut output| -> Result<BitOut, EncodingError> {
-                        let extends_constraints = constraints.lies_within(&encodable)?;
-                        if extends_constraints {
-                            output.push(false);
-                        } else {
-                            output.push(true);
-                        }
-                        let varlength = if extends_constraints {
-                            encode_varlength_integer(encodable, None)?
-                        } else {
-                            encode_varlength_integer(encodable, constraints.min())?
-                        };
-                        if varlength.len() % 8 != 0 {
-                            return Err(EncodingError {
-                                details:
-                                    "Variable-length integer's encoding violates byte-alignment!"
-                                        .into(),
-                            });
-                        }
+                        let extends_constraints =
+                            write_extended_bit(&constraints, encodable, &mut output)?;
+
+                        let varlength = encode_varlength_integer(
+                            encodable,
+                            if extends_constraints {
+                                None
+                            } else {
+                                constraints.min()
+                            },
+                        )?;
+                        assert_byte_alignment(varlength.len())?;
                         wrap_in_length_determinant::<I>(
                             varlength.len() / 8,
                             varlength,
@@ -82,7 +74,7 @@ impl Encoder<u8, BitOut> for Uper {
                 ))
             }
         } else {
-            if let Some(bit_length) = constraints.bit_size() {
+            if let Some(bit_length) = constraints.bit_length() {
                 Ok(Box::new(
                     move |encodable, output| -> Result<BitOut, EncodingError> {
                         constraints.lies_within(&encodable)?;
@@ -98,13 +90,7 @@ impl Encoder<u8, BitOut> for Uper {
                     move |encodable, output| -> Result<BitOut, EncodingError> {
                         constraints.lies_within(&encodable)?;
                         let varlength = encode_varlength_integer(encodable, constraints.min())?;
-                        if varlength.len() % 8 != 0 {
-                            return Err(EncodingError {
-                                details:
-                                    "Variable-length integer's encoding violates byte-alignment!"
-                                        .into(),
-                            });
-                        }
+                        assert_byte_alignment(varlength.len())?;
                         wrap_in_length_determinant::<I>(
                             varlength.len() / 8,
                             varlength,
@@ -127,32 +113,121 @@ impl Encoder<u8, BitOut> for Uper {
     }
 
     fn encode_bit_string(
-      bit_string: asnr_grammar::types::BitString,
-      ) -> Result<Box<dyn FnMut(Vec<bool>, BitOut) -> Result<BitOut, EncodingError>>, EncodingError> {
+        bit_string: asnr_grammar::types::BitString,
+    ) -> Result<Box<dyn FnMut(Vec<bool>, BitOut) -> Result<BitOut, EncodingError>>, EncodingError>
+    {
         let mut constraints = PerVisibleRangeConstraints::default_unsigned();
         for c in bit_string.constraints {
-            constraints += c.try_into().map_err(|e| EncodingError {
-                details: format!("Failed to parse bit string constraints"),
-            })?
+            constraints += c
+                .try_into()
+                .map_err(|_: DecodingError<AsBytesDummy>| EncodingError {
+                    details: format!("Failed to parse bit string constraints"),
+                })?
         }
-        todo!()
+        if constraints.is_extensible() {
+            Ok(Box::new(
+                move |encodable: Vec<bool>, mut output: BitOut| -> Result<BitOut, EncodingError> {
+                    let actual_length = encodable.len();
+                    let _ = write_extended_bit(&constraints, actual_length, &mut output)?;
+                    let to_wrap = encodable.into_iter().fold(bitvec![u8, Msb0;], |acc, curr| {
+                        Self::encode_boolean(curr, acc).unwrap()
+                    });
+                    with_size_length_determinant(actual_length, &constraints, to_wrap, output)
+                },
+            ))
+        } else {
+            Ok(Box::new(
+                move |encodable: Vec<bool>, output: BitOut| -> Result<BitOut, EncodingError> {
+                    let actual_length = encodable.len();
+                    let to_wrap = encodable.into_iter().fold(bitvec![u8, Msb0;], |acc, curr| {
+                        Self::encode_boolean(curr, acc).unwrap()
+                    });
+                    with_size_length_determinant(actual_length, &constraints, to_wrap, output)
+                },
+            ))
+        }
+    }
+}
+
+fn assert_byte_alignment(length: usize) -> Result<(), EncodingError> {
+    if length % 8 != 0 {
+        return Err(EncodingError {
+            details: "Variable-length integer's encoding violates byte-alignment!".into(),
+        });
+    }
+    Ok(())
+}
+
+fn write_extended_bit<I>(
+    constraints: &PerVisibleRangeConstraints,
+    encodable: I,
+    output: &mut BitOut,
+) -> Result<bool, EncodingError>
+where
+    I: num::Integer + num::ToPrimitive + num::FromPrimitive + Copy,
+{
+    let within_constraints = constraints.lies_within(&encodable)?;
+    if within_constraints {
+        output.push(false);
+    } else {
+        output.push(true);
+    }
+    Ok(within_constraints)
+}
+
+/// Wraps the provided buffer in a length determinant for size constraints
+/// ### Params
+/// * `actual_size` - number of counted items (i.e. size) of the encoded value. An _item_ can be an octet, a character, a member of a collection, depending on the ASN1 type that is encoded.
+/// * `constraints` - specification of the encoded type's constraints
+/// * `to_wrap` - BitVec containing the encoded value that should receive a size length determinant prefix
+/// * `output` - the output buffer that the sized value should be appended to
+/// ### Reference in ASN1 Complete (Larmouth 302)
+/// >* _With no PER-visible size constraint, or a constraint that allows counts
+/// in excess of 64K, we encode a general length determinant._
+/// >* _For abstract values outside the root, a general length determinant is again used._
+/// >* _With a size constraint that gives a fixed value for the count, there
+/// is no length determinant encoding._
+/// >* _Otherwise, we encode the count exactly like an integer with the equivalent constraint_
+fn with_size_length_determinant(
+    actual_size: usize,
+    constraints: &PerVisibleRangeConstraints,
+    mut to_wrap: BitOut,
+    output: BitOut,
+) -> Result<BitOut, EncodingError> {
+    if let (Some(bit_length), Some(Some(_)), true) = (
+        constraints.bit_length(),
+        constraints
+            .range_width::<AsBytesDummy>()?
+            .map(|w| (w <= 65536).then(|| w)),
+        constraints.lies_within(&actual_size)?,
+    ) {
+        let mut output = encode_constrained_integer(
+            actual_size - constraints.min().unwrap_or(0),
+            bit_length,
+            output,
+        )?;
+        output.append(&mut to_wrap);
+        Ok(output)
+    } else {
+        wrap_in_length_determinant(actual_size, to_wrap, Some(0), output)
     }
 }
 
 fn wrap_in_length_determinant<I>(
-    length: usize,
+    length_offset: usize,
     mut to_wrap: BitOut,
     min: Option<I>,
-    output: BitOut,
+    mut output: BitOut,
 ) -> Result<BitOut, EncodingError> {
-    match length {
+    match length_offset {
         x if x < 128 => {
-            let mut length_det = encode_constrained_integer(x, 8, bitvec![u8, Msb0;])?;
+            let mut length_det = encode_constrained_integer(x, 8, output)?;
             length_det.append(&mut to_wrap);
             Ok(length_det)
         }
         x if x < 16384 => {
-            let mut length_det = encode_constrained_integer(x, 14, bitvec![u8, Msb0; 1, 0])?;
+            output.append(&mut bitvec![u8, Msb0; 1, 0]);
+            let mut length_det = encode_constrained_integer(x, 14, output)?;
             length_det.append(&mut to_wrap);
             Ok(length_det)
         }
@@ -163,7 +238,7 @@ fn wrap_in_length_determinant<I>(
                 _ => (bitvec![u8, Msb0; 1,1,0,0,0,1,0,0], 65536),
             };
             fragment.extend(to_wrap[..fragment_size].iter());
-            wrap_in_length_determinant(length - fragment_size, fragment, min, output)
+            wrap_in_length_determinant(length_offset - fragment_size, fragment, min, output)
         }
     }
 }
@@ -286,39 +361,39 @@ mod tests {
     fn encodes_simple_constrained_integer() {
         asn1_internal_tests!("TestInteger ::= INTEGER(3..6)");
         assert_eq!(
-            TestInteger::encode::<Uper>(&TestInteger(3), bitvec![u8, Msb0;]).unwrap(),
+            TestInteger::encode::<Uper>(TestInteger(3), bitvec![u8, Msb0;]).unwrap(),
             bitvec![u8, Msb0; 0,0]
         );
         assert_eq!(
-            TestInteger::encode::<Uper>(&TestInteger(5), bitvec![u8, Msb0;]).unwrap(),
+            TestInteger::encode::<Uper>(TestInteger(5), bitvec![u8, Msb0;]).unwrap(),
             bitvec![u8, Msb0; 1,0]
         );
-        assert!(TestInteger::encode::<Uper>(&TestInteger(7), bitvec![u8, Msb0;]).is_err())
+        assert!(TestInteger::encode::<Uper>(TestInteger(7), bitvec![u8, Msb0;]).is_err())
     }
 
     #[test]
     fn encodes_semi_constrained_integer() {
         asn1_internal_tests!("TestInteger ::= INTEGER(-1..MAX)");
         assert_eq!(
-            TestInteger::encode::<Uper>(&TestInteger(3), bitvec![u8, Msb0;]).unwrap(),
+            TestInteger::encode::<Uper>(TestInteger(3), bitvec![u8, Msb0;]).unwrap(),
             bitvec![u8, Msb0; 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0, 0]
         );
         assert_eq!(
-            TestInteger::encode::<Uper>(&TestInteger(127), bitvec![u8, Msb0;]).unwrap(),
+            TestInteger::encode::<Uper>(TestInteger(127), bitvec![u8, Msb0;]).unwrap(),
             bitvec![u8, Msb0; 0,0,0,0,0,0,0,1, 1,0,0,0,0,0,0,0]
         );
         assert_eq!(
-            TestInteger::encode::<Uper>(&TestInteger(255), bitvec![u8, Msb0;]).unwrap(),
+            TestInteger::encode::<Uper>(TestInteger(255), bitvec![u8, Msb0;]).unwrap(),
             bitvec![u8, Msb0; 0,0,0,0,0,0,1,0, 0,0,0,0,0,0,0,1, 0,0,0,0,0,0,0,0]
         );
-        assert!(TestInteger::encode::<Uper>(&TestInteger(-2), bitvec![u8, Msb0;]).is_err())
+        assert!(TestInteger::encode::<Uper>(TestInteger(-2), bitvec![u8, Msb0;]).is_err())
     }
 
     #[test]
     fn encodes_unconstrained_integer() {
         asn1_internal_tests!("TestInteger ::= INTEGER");
         assert_eq!(
-            TestInteger::encode::<Uper>(&TestInteger(4096), bitvec![u8, Msb0;]).unwrap(),
+            TestInteger::encode::<Uper>(TestInteger(4096), bitvec![u8, Msb0;]).unwrap(),
             bitvec![u8, Msb0; 0,0,0,0,0,0,1,0, 0,0,0,1,0,0,0,0, 0,0,0,0,0,0,0,0]
         );
     }
@@ -327,15 +402,15 @@ mod tests {
     fn encodes_downwards_unconstrained_integer() {
         asn1_internal_tests!("TestInteger ::= INTEGER(MIN..65535)");
         assert_eq!(
-            TestInteger::encode::<Uper>(&TestInteger(127), bitvec![u8, Msb0;]).unwrap(),
+            TestInteger::encode::<Uper>(TestInteger(127), bitvec![u8, Msb0;]).unwrap(),
             bitvec![u8, Msb0; 0,0,0,0,0,0,0,1, 0,1,1,1,1,1,1,1]
         );
         assert_eq!(
-            TestInteger::encode::<Uper>(&TestInteger(-128), bitvec![u8, Msb0;]).unwrap(),
+            TestInteger::encode::<Uper>(TestInteger(-128), bitvec![u8, Msb0;]).unwrap(),
             bitvec![u8, Msb0; 0,0,0,0,0,0,0,1, 1,0,0,0,0,0,0,0]
         );
         assert_eq!(
-            TestInteger::encode::<Uper>(&TestInteger(128), bitvec![u8, Msb0;]).unwrap(),
+            TestInteger::encode::<Uper>(TestInteger(128), bitvec![u8, Msb0;]).unwrap(),
             bitvec![u8, Msb0; 0,0,0,0,0,0,1,0, 0,0,0,0,0,0,0,0, 1,0,0,0,0,0,0,0]
         );
     }
@@ -344,21 +419,135 @@ mod tests {
     fn encodes_boolean() {
         asn1_internal_tests!("TestBool ::= BOOLEAN");
         assert_eq!(
-            TestBool::encode::<Uper>(&TestBool(true), bitvec![u8, Msb0;]).unwrap(),
+            TestBool::encode::<Uper>(TestBool(true), bitvec![u8, Msb0;]).unwrap(),
             bitvec![u8, Msb0; 1]
         );
         assert_eq!(
-          TestBool::encode::<Uper>(&TestBool(false), bitvec![u8, Msb0;]).unwrap(),
-          bitvec![u8, Msb0; 0]
-      );
+            TestBool::encode::<Uper>(TestBool(false), bitvec![u8, Msb0;]).unwrap(),
+            bitvec![u8, Msb0; 0]
+        );
     }
 
     #[test]
     fn encodes_null() {
         asn1_internal_tests!("TestNull ::= NULL");
         assert_eq!(
-            TestNull::encode::<Uper>(&TestNull, bitvec![u8, Msb0;]).unwrap(),
+            TestNull::encode::<Uper>(TestNull, bitvec![u8, Msb0;]).unwrap(),
             bitvec![u8, Msb0;]
         );
+    }
+
+    #[test]
+    fn encodes_fixed_size_bit_string() {
+        asn1_internal_tests!("TestBitString ::= BIT STRING (3)");
+        assert_eq!(
+            TestBitString::encode::<Uper>(
+                TestBitString(vec![true, false, true]),
+                bitvec![u8, Msb0;]
+            )
+            .unwrap(),
+            bitvec![u8, Msb0; 1,0,1]
+        );
+    }
+
+    #[test]
+    fn encodes_constrained_bit_string() {
+        asn1_internal_tests!("TestBitString ::= BIT STRING (3..4)");
+        assert_eq!(
+            TestBitString::encode::<Uper>(
+                TestBitString(vec![false, false, true]),
+                bitvec![u8, Msb0;]
+            )
+            .unwrap(),
+            bitvec![u8, Msb0; 0,0,0,1]
+        );
+        assert_eq!(
+            TestBitString::encode::<Uper>(
+                TestBitString(vec![false, false, true, true]),
+                bitvec![u8, Msb0;]
+            )
+            .unwrap(),
+            bitvec![u8, Msb0; 1,0,0,1,1]
+        );
+        assert!(TestBitString::encode::<Uper>(
+            TestBitString(vec![false, false, true, true, true]),
+            bitvec![u8, Msb0;]
+        )
+        .is_err())
+    }
+
+    #[test]
+    fn encodes_semi_constrained_bit_string() {
+        asn1_internal_tests!("TestBitString ::= BIT STRING (3..MAX)");
+        assert_eq!(
+            TestBitString::encode::<Uper>(
+                TestBitString(vec![false, false, true]),
+                bitvec![u8, Msb0;]
+            )
+            .unwrap(),
+            bitvec![u8, Msb0; 0,0,0,0,0,0,1,1, 0,0,1]
+        );
+        assert!(TestBitString::encode::<Uper>(
+            TestBitString(vec![false, false]),
+            bitvec![u8, Msb0;]
+        )
+        .is_err())
+    }
+
+    #[test]
+    fn encodes_unconstrained_bit_string() {
+        asn1_internal_tests!("TestBitString ::= BIT STRING");
+        assert_eq!(
+            TestBitString::encode::<Uper>(TestBitString(vec![]), bitvec![u8, Msb0;]).unwrap(),
+            bitvec![u8, Msb0; 0,0,0,0,0,0,0,0]
+        );
+    }
+
+    #[test]
+    fn encodes_extended_fixed_size_bit_string() {
+        asn1_internal_tests!("TestBitString ::= BIT STRING (3,...)");
+        assert_eq!(
+            TestBitString::encode::<Uper>(TestBitString(vec![]), bitvec![u8, Msb0;]).unwrap(),
+            bitvec![u8, Msb0; 1,0,0,0,0,0,0,0,0]
+        );
+    }
+
+    #[test]
+    fn encodes_extended_constrained_bit_string() {
+        asn1_internal_tests!("TestBitString ::= BIT STRING (3..4,...)");
+        assert_eq!(
+            TestBitString::encode::<Uper>(
+                TestBitString(vec![false, false, true, true, true]),
+                bitvec![u8, Msb0;]
+            )
+            .unwrap(),
+            bitvec![u8, Msb0; 1, 0,0,0,0,0,1,0,1, 0,0,1,1,1]
+        );
+        assert_eq!(
+            TestBitString::encode::<Uper>(
+                TestBitString(vec![false, false, true, true]),
+                bitvec![u8, Msb0;]
+            )
+            .unwrap(),
+            bitvec![u8, Msb0; 0,1,0,0,1,1]
+        );
+    }
+
+    #[test]
+    fn encodes_extended_semi_constrained_bit_string() {
+        asn1_internal_tests!("TestBitString ::= BIT STRING (3..MAX,...)");
+        assert_eq!(
+            TestBitString::encode::<Uper>(
+                TestBitString(vec![false, false, true]),
+                bitvec![u8, Msb0;]
+            )
+            .unwrap(),
+            bitvec![u8, Msb0; 0, 0,0,0,0,0,0,1,1, 0,0,1]
+        );
+        assert_eq!(
+            TestBitString::encode::<Uper>(TestBitString(vec![false, false]), bitvec![u8, Msb0;])
+                .unwrap(),
+            bitvec![u8, Msb0; 1, 0,0,0,0,0,0,1,0, 0,0]
+        )
     }
 }

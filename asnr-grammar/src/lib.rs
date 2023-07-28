@@ -1,11 +1,11 @@
 //! The `asnr-grammar` crate describes the single elements of the ASN1 notation.
-//! It includes constants for the various ASN1 keywords and types to represent the 
+//! It includes constants for the various ASN1 keywords and types to represent the
 //! single ASN1 data elements in an intermediate representation from which the
 //! generator module produces de-/encodable types.
 //! The intermediate representation aims to preserve as much information as possible
 //! from the original specification, even though some of that information might not actually
-//! be relevant for decoding and encoding in any of the common encoding rules 
-//! (inner type constraints are such an example). 
+//! be relevant for decoding and encoding in any of the common encoding rules
+//! (inner type constraints are such an example).
 #![no_std]
 extern crate alloc;
 extern crate asnr_traits;
@@ -31,8 +31,8 @@ use alloc::{
 use constraints::Constraint;
 use error::GrammarError;
 use information_object::{
-    InformationObjectClass, InformationObjectFieldReference, ObjectFieldIdentifier,
-    ToplevelInformationDeclaration, ObjectSet,
+    InformationObjectClass, InformationObjectFieldReference, ObjectFieldIdentifier, ObjectSet,
+    ToplevelInformationDeclaration,
 };
 use parameterization::Parameterization;
 use types::*;
@@ -677,6 +677,15 @@ impl ToString for ASN1Type {
     }
 }
 
+pub const NUMERIC_STRING_CHARSET: [char; 11] =
+    [' ', '0', '1', '2', '3', '4', '5', '6', '7', '8', '9'];
+pub const PRINTABLE_STRING_CHARSET: [char; 76] = [
+    'A', 'B', 'C', 'E', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R',
+    'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z', 'a', 'b', 'c', 'e', 'd', 'e', 'f', 'g', 'h', 'i', 'j',
+    'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z', '0', '1', '2',
+    '3', '4', '5', '6', '7', '8', '9', ' ', '\'', '(', ')', '+', ',', '-', '.', '/', ':', '=', '?',
+];
+
 /// The types of an ASN1 character strings.
 #[derive(Debug, Clone, PartialEq)]
 pub enum CharacterStringType {
@@ -699,7 +708,29 @@ impl CharacterStringType {
         match self {
             Self::NumericString => 4,
             Self::IA5String | Self::PrintableString | Self::VisibleString => 7,
-            _ => 8
+            _ => 8,
+        }
+    }
+
+    pub fn character_set(&self) -> Vec<char> {
+        match self {
+            CharacterStringType::NumericString => NUMERIC_STRING_CHARSET.to_vec(),
+            CharacterStringType::VisibleString | CharacterStringType::PrintableString => PRINTABLE_STRING_CHARSET.to_vec(),
+            CharacterStringType::IA5String => (0..128u32)
+                .into_iter()
+                .map(|i| char::from_u32(i).unwrap())
+                .collect(),
+            CharacterStringType::TeletexString => todo!(),
+            CharacterStringType::VideotexString => todo!(),
+            CharacterStringType::GraphicString => todo!(),
+            CharacterStringType::GeneralString => todo!(),
+            CharacterStringType::UniversalString => todo!(),
+            CharacterStringType::UTF8String => (0..u16::MAX as u32)
+            .into_iter()
+            .filter_map(|i| char::from_u32(i))
+            .collect(),
+            CharacterStringType::BMPString => todo!(),
+            _ => todo!()
         }
     }
 }
@@ -766,6 +797,17 @@ impl ASN1Value {
         } else {
             Err(GrammarError {
                 details: format!("Cannot unwrap {:?} as integer!", self),
+                kind: error::GrammarErrorType::UnpackingError,
+            })
+        }
+    }
+
+    pub fn unwrap_as_char_vec(&self) -> Result<Vec<char>, GrammarError> {
+        if let ASN1Value::String(s) = self {
+            Ok(s.chars().collect())
+        } else {
+            Err(GrammarError {
+                details: format!("Cannot unwrap {:?} as vector of chars!", self),
                 kind: error::GrammarErrorType::UnpackingError,
             })
         }

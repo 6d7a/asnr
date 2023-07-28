@@ -81,6 +81,7 @@ fn subtype_element<'a>(input: &'a str) -> IResult<&'a str, SubtypeElement> {
         single_type_constraint,
         multiple_type_constraints,
         size_constraint,
+        permitted_alphabet_constraint,
         value_range,
         single_value,
         contained_subtype,
@@ -127,10 +128,7 @@ fn value_range<'a>(input: &'a str) -> IResult<&'a str, SubtypeElement> {
         skip_ws_and_comments(map(
             tuple((
                 terminated(
-                    alt((
-                        value(None, tag(MIN)), 
-                        map(asn1_value, |v| Some(v))
-                    )),
+                    alt((value(None, tag(MIN)), map(asn1_value, |v| Some(v)))),
                     skip_ws_and_comments(opt(char(GREATER_THAN))),
                 ),
                 preceded(
@@ -162,6 +160,29 @@ fn size_constraint<'a>(input: &'a str) -> IResult<&'a str, SubtypeElement> {
     opt_delimited::<char, SubtypeElement, char, Error<&str>, _, _, _>(
         skip_ws_and_comments(char(LEFT_PARENTHESIS)),
         skip_ws_and_comments(into(preceded(tag(SIZE), single_constraint))),
+        skip_ws_and_comments(char(RIGHT_PARENTHESIS)),
+    )(input)
+}
+
+/// Parses a PermittedAlphabet constraint.
+/// ### Reference in X680
+/// >* _51.7.1 The "PermittedAlphabet" notation shall be: `PermittedAlphabet ::= FROM Constraint`_
+/// >* _51.7.2 A "PermittedAlphabet" specifies all values which can be constructed using a sub-alphabet of the parent string. This notation can only be applied to restricted character string types._
+/// >* _51.7.3 The "Constraint" shall use the "SubtypeConstraint" alternative of "ConstraintSpec". Each "SubtypeElements" within that "SubtypeConstraint" shall be one of the four alternatives "SingleValue", "ContainedSubtype", "ValueRange", and "SizeConstraint". The sub-alphabet includes precisely those characters which appear in one or more of the values of the parent string type which are allowed by the "Constraint"._
+/// >* _51.7.4 If "Constraint" is extensible, then the set of values selected by the permitted alphabet constraint is extensible. The set of values in the root are those permitted by the root of "Constraint", and the extension additions are those values permitted by the root together with the extension-additions of "Constraint", excluding those values already in the root._
+fn permitted_alphabet_constraint<'a>(input: &'a str) -> IResult<&'a str, SubtypeElement> {
+    opt_delimited::<char, SubtypeElement, char, Error<&str>, _, _, _>(
+        skip_ws_and_comments(char(LEFT_PARENTHESIS)),
+        skip_ws_and_comments(map(
+            preceded(
+                tag(FROM),
+                in_parentheses(alt((
+                    map(set_operation, |v| ElementOrSetOperation::SetOperation(v)),
+                    map(subtype_element, |v| ElementOrSetOperation::Element(v)),
+                ))),
+            ),
+            |i| SubtypeElement::PermittedAlphabet(Box::new(i)),
+        )),
         skip_ws_and_comments(char(RIGHT_PARENTHESIS)),
     )(input)
 }
@@ -757,5 +778,118 @@ mod tests {
                 linked_fields: vec![]
             })]
         );
+    }
+
+    #[test]
+    fn parses_character_value_range() {
+        assert_eq!(
+            value_range(r#""a".."z""#).unwrap().1,
+            SubtypeElement::ValueRange {
+                min: Some(ASN1Value::String("a".to_owned())),
+                max: Some(ASN1Value::String("z".to_owned())),
+                extensible: false
+            }
+        )
+    }
+
+    #[test]
+    fn parses_permitted_alphabet_constraint() {
+        assert_eq!(
+            permitted_alphabet_constraint(r#"(FROM ("a".."z" | "A".."Z" | "0".."9" | ".-"))"#)
+                .unwrap()
+                .1,
+            SubtypeElement::PermittedAlphabet(Box::new(ElementOrSetOperation::SetOperation(
+                SetOperation {
+                    base: SubtypeElement::ValueRange {
+                        min: Some(ASN1Value::String("a".to_owned())),
+                        max: Some(ASN1Value::String("z".to_owned())),
+                        extensible: false
+                    },
+                    operator: SetOperator::Union,
+                    operant: Box::new(ElementOrSetOperation::SetOperation(SetOperation {
+                        base: SubtypeElement::ValueRange {
+                            min: Some(ASN1Value::String("A".to_owned())),
+                            max: Some(ASN1Value::String("Z".to_owned())),
+                            extensible: false
+                        },
+                        operator: SetOperator::Union,
+                        operant: Box::new(ElementOrSetOperation::SetOperation(SetOperation {
+                            base: SubtypeElement::ValueRange {
+                                min: Some(ASN1Value::String("0".to_owned())),
+                                max: Some(ASN1Value::String("9".to_owned())),
+                                extensible: false
+                            },
+                            operator: SetOperator::Union,
+                            operant: Box::new(ElementOrSetOperation::Element(
+                                SubtypeElement::SingleValue {
+                                    value: ASN1Value::String(".-".to_owned()),
+                                    extensible: false
+                                }
+                            ))
+                        }))
+                    }))
+                }
+            )))
+        )
+    }
+
+    #[test]
+    fn parses_serial_constraints() {
+        assert_eq!(
+            constraint(r#"(FROM ("a".."z" | "A".."Z" | "0".."9" | ".-")) (SIZE (1..255))"#)
+                .unwrap()
+                .1,
+            vec![
+                Constraint::SubtypeConstraint(ElementSet {
+                    set: ElementOrSetOperation::Element(SubtypeElement::PermittedAlphabet(
+                        Box::new(ElementOrSetOperation::SetOperation(SetOperation {
+                            base: SubtypeElement::ValueRange {
+                                min: Some(ASN1Value::String("a".to_owned())),
+                                max: Some(ASN1Value::String("z".to_owned())),
+                                extensible: false
+                            },
+                            operator: SetOperator::Union,
+                            operant: Box::new(ElementOrSetOperation::SetOperation(SetOperation {
+                                base: SubtypeElement::ValueRange {
+                                    min: Some(ASN1Value::String("A".to_owned())),
+                                    max: Some(ASN1Value::String("Z".to_owned())),
+                                    extensible: false
+                                },
+                                operator: SetOperator::Union,
+                                operant: Box::new(ElementOrSetOperation::SetOperation(
+                                    SetOperation {
+                                        base: SubtypeElement::ValueRange {
+                                            min: Some(ASN1Value::String("0".to_owned())),
+                                            max: Some(ASN1Value::String("9".to_owned())),
+                                            extensible: false
+                                        },
+                                        operator: SetOperator::Union,
+                                        operant: Box::new(ElementOrSetOperation::Element(
+                                            SubtypeElement::SingleValue {
+                                                value: ASN1Value::String(".-".to_owned()),
+                                                extensible: false
+                                            }
+                                        ))
+                                    }
+                                ))
+                            }))
+                        }))
+                    )),
+                    extensible: false
+                }),
+                Constraint::SubtypeConstraint(ElementSet {
+                    set: ElementOrSetOperation::Element(
+                        SubtypeElement::SizeConstraint(Box::new(ElementOrSetOperation::Element(
+                            SubtypeElement::ValueRange {
+                                min: Some(ASN1Value::Integer(1)),
+                                max: Some(ASN1Value::Integer(255)),
+                                extensible: false
+                            }
+                        )))
+                    ),
+                    extensible: false
+                })
+            ]
+        )
     }
 }

@@ -33,12 +33,12 @@ pub trait Decode<'a, I: AsBytes + Debug + 'a> {
 }
 
 pub trait Encode<T, O: Extend<T> + Debug + 'static> {
-    fn encode<E>(encodable: &Self, output: O) -> Result<O, EncodingError>
+    fn encode<E>(encodable: Self, output: O) -> Result<O, EncodingError>
     where
         E: Encoder<T, O>,
         Self: Sized;
 
-    fn encoder<E>() -> Result<Box<dyn FnMut(&Self, O) -> Result<O, EncodingError>>, EncodingError>
+    fn encoder<E>() -> Result<Box<dyn FnMut(Self, O) -> Result<O, EncodingError>>, EncodingError>
     where
         E: Encoder<T, O>,
         Self: Sized;

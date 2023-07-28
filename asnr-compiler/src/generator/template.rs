@@ -65,12 +65,12 @@ pub const DECODER_SIGNATURE: &str = r#"fn decoder<D>() -> Result<Box<dyn FnMut(I
         D: Decoder<'a, I>,
         Self: Sized,"#;
 
-pub const ENCODE_SIGNATURE: &str = r#"fn encode<E>(encodable: &Self, output: O) -> Result<O, EncodingError>
+pub const ENCODE_SIGNATURE: &str = r#"fn encode<E>(encodable: Self, output: O) -> Result<O, EncodingError>
     where
         E: Encoder<T, O>,
         Self: Sized,"#;
 
-pub const ENCODER_SIGNATURE: &str = r#"fn encoder<E>() -> Result<Box<dyn FnMut(&Self, O) -> Result<O, EncodingError>>, EncodingError>
+pub const ENCODER_SIGNATURE: &str = r#"fn encoder<E>() -> Result<Box<dyn FnMut(Self, O) -> Result<O, EncodingError>>, EncodingError>
     where
         E: Encoder<T, O>,
         Self: Sized,"#;
@@ -201,6 +201,20 @@ impl<'a, I: AsBytes + Debug + 'a> Decode<'a, I> for {name} {{
   {{
     let mut bitstring_decoder = D::decode_bit_string({bitstr_descriptor})?;
     Ok(Box::new(move |input| (*bitstring_decoder)(input).map(|(remaining, res)| (remaining, Self(res)))))
+  }}
+}}
+
+
+impl<T, O: Extend<T> + Debug + 'static> Encode<T, O> for {name} {{
+  {ENCODE_SIGNATURE}
+  {{
+    {name}::encoder::<E>()?(encodable, output)
+  }}
+
+  {ENCODER_SIGNATURE}
+  {{
+    let mut bit_string_encoder = E::encode_bit_string({bitstr_descriptor})?;
+    Ok(Box::new(move |encodable, output| (*bit_string_encoder)(encodable.0, output)))
   }}
 }}
 "#,
