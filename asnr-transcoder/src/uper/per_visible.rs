@@ -1,20 +1,31 @@
 use core::ops::AddAssign;
 
+use alloc::{format, vec::Vec};
 use asnr_grammar::{
     constraints::{Constraint, ElementOrSetOperation, SetOperation, SetOperator, SubtypeElement},
     types::{Choice, Enumerated},
-    ASN1Value,
+    ASN1Value, CharacterStringType,
 };
-use bitvec::view::AsBits;
 use nom::AsBytes;
 use num::ToPrimitive;
 
 use crate::error::{DecodingError, EncodingError};
 
-use super::{bit_length, BitIn};
+use super::bit_length;
 
 trait PerVisible {
     fn per_visible(&self) -> bool;
+}
+
+pub struct PerVisibleAlphabetConstraints {
+    character_set: Vec<char>,
+    extensible: bool,
+}
+
+impl PerVisibleAlphabetConstraints {
+  pub fn default_for(string_type: CharacterStringType) -> Self {
+    Self { character_set: (), extensible: false }
+  }
 }
 
 pub struct PerVisibleRangeConstraints {
@@ -42,7 +53,7 @@ impl PerVisibleRangeConstraints {
         }
     }
 
-    pub fn bit_size(&self) -> Option<usize> {
+    pub fn bit_length(&self) -> Option<usize> {
         self.min
             .zip(self.max)
             .map(|(min, max)| bit_length(min, max))
@@ -54,6 +65,19 @@ impl PerVisibleRangeConstraints {
 
     pub fn min<I: num::Integer + num::FromPrimitive>(&self) -> Option<I> {
         self.min.map(|m| I::from_i128(m)).flatten()
+    }
+
+    pub fn range_width<I: AsBytes>(&self) -> Result<Option<usize>, DecodingError<I>> {
+        self.min
+            .zip(self.max)
+            .map(|(min, max)| {
+                (max - min).try_into().map_err(|err| DecodingError {
+                    details: format!("Error computing constraint range width: {:?}", err),
+                    input: None,
+                    kind: crate::error::DecodingErrorType::GenericParsingError,
+                })
+            })
+            .transpose()
     }
 
     pub fn lies_within<I: num::Integer + ToPrimitive>(
@@ -137,10 +161,10 @@ impl TryFrom<Option<SubtypeElement>> for PerVisibleRangeConstraints {
         match value {
             None => Ok(Self::default()),
             Some(SubtypeElement::SingleValue { value, extensible }) => {
-                let val = value.unwrap_as_integer()?;
+                let val = value.unwrap_as_integer().ok();
                 Ok(Self {
-                    min: Some(val),
-                    max: Some(val),
+                    min: val,
+                    max: val,
                     extensible,
                 })
             }
@@ -149,8 +173,8 @@ impl TryFrom<Option<SubtypeElement>> for PerVisibleRangeConstraints {
                 max,
                 extensible,
             }) => Ok(Self {
-                min: min.map(|i| i.unwrap_as_integer()).transpose()?,
-                max: max.map(|i| i.unwrap_as_integer()).transpose()?,
+                min: min.map(|i| i.unwrap_as_integer().ok()).flatten(),
+                max: max.map(|i| i.unwrap_as_integer().ok()).flatten(),
                 extensible,
             }),
             Some(SubtypeElement::SizeConstraint(s)) => match *s {
@@ -198,6 +222,7 @@ impl PerVisible for SubtypeElement {
                 max: _,
                 extensible: _,
             } => true,
+            SubtypeElement::PermittedAlphabet(p) => p.per_visible(),
             SubtypeElement::SizeConstraint(s) => s.per_visible(),
             _ => false,
         }

@@ -1,14 +1,23 @@
 use nom::{
     branch::alt,
-    bytes::complete::tag,
+    bytes::complete::{tag, take_until},
+    character::streaming::char,
     combinator::{map, opt},
-    sequence::{pair},
+    multi::many1,
+    sequence::{delimited, pair},
     IResult,
 };
 
 use asnr_grammar::*;
 
 use super::{common::*, constraint::constraint};
+
+pub fn character_string_value<'a>(input: &'a str) -> IResult<&'a str, ASN1Value> {
+    map(
+        delimited(tag("\""), take_until("\""), tag("\"")),
+        |m: &str| ASN1Value::String(m.to_owned()),
+    )(input)
+}
 
 /// Tries to parse an ASN1 Character String type
 ///
@@ -47,6 +56,8 @@ pub fn character_string<'a>(input: &'a str) -> IResult<&'a str, ASN1Type> {
 mod tests {
     use asnr_grammar::{constraints::*, types::*, *};
 
+    use crate::parser::{character_string::character_string_value, asn1_value};
+
     use super::character_string;
 
     #[test]
@@ -67,21 +78,15 @@ mod tests {
         assert_eq!(
             character_string(sample).unwrap().1,
             ASN1Type::CharacterString(CharacterString {
-                constraints: vec![Constraint::SubtypeConstraint(
-                  ElementSet {
-                      set: ElementOrSetOperation::Element(
-                          SubtypeElement::SizeConstraint(Box::new(
-                              ElementOrSetOperation::Element(
-                                  SubtypeElement::SingleValue {
-                                      value: ASN1Value::Integer(8),
-                                      extensible: false
-                                  }
-                              )
-                          ))
-                      ),
-                      extensible: false
-                  }
-              )],
+                constraints: vec![Constraint::SubtypeConstraint(ElementSet {
+                    set: ElementOrSetOperation::Element(SubtypeElement::SizeConstraint(Box::new(
+                        ElementOrSetOperation::Element(SubtypeElement::SingleValue {
+                            value: ASN1Value::Integer(8),
+                            extensible: false
+                        })
+                    ))),
+                    extensible: false
+                })],
                 r#type: CharacterStringType::OctetString
             })
         )
@@ -93,18 +98,16 @@ mod tests {
         assert_eq!(
             character_string(sample).unwrap().1,
             ASN1Type::CharacterString(CharacterString {
-                constraints: vec![Constraint::SubtypeConstraint(
-                  ElementSet {
-                      set: ElementOrSetOperation::Element(
-                          SubtypeElement::SizeConstraint(Box::new(
-                              ElementOrSetOperation::Element(
-                                  SubtypeElement::ValueRange { min: Some(ASN1Value::Integer(8)), max: Some(ASN1Value::Integer(18)), extensible: false }
-                              )
-                          ))
-                      ),
-                      extensible: false
-                  }
-              )],
+                constraints: vec![Constraint::SubtypeConstraint(ElementSet {
+                    set: ElementOrSetOperation::Element(SubtypeElement::SizeConstraint(Box::new(
+                        ElementOrSetOperation::Element(SubtypeElement::ValueRange {
+                            min: Some(ASN1Value::Integer(8)),
+                            max: Some(ASN1Value::Integer(18)),
+                            extensible: false
+                        })
+                    ))),
+                    extensible: false
+                })],
                 r#type: CharacterStringType::OctetString
             })
         )
@@ -117,21 +120,15 @@ mod tests {
         assert_eq!(
             character_string(sample).unwrap().1,
             ASN1Type::CharacterString(CharacterString {
-                constraints: vec![Constraint::SubtypeConstraint(
-                  ElementSet {
-                      set: ElementOrSetOperation::Element(
-                          SubtypeElement::SizeConstraint(Box::new(
-                              ElementOrSetOperation::Element(
-                                  SubtypeElement::SingleValue {
-                                      value: ASN1Value::Integer(2),
-                                      extensible: true
-                                  }
-                              )
-                          ))
-                      ),
-                      extensible: false
-                  }
-              )],
+                constraints: vec![Constraint::SubtypeConstraint(ElementSet {
+                    set: ElementOrSetOperation::Element(SubtypeElement::SizeConstraint(Box::new(
+                        ElementOrSetOperation::Element(SubtypeElement::SingleValue {
+                            value: ASN1Value::Integer(2),
+                            extensible: true
+                        })
+                    ))),
+                    extensible: false
+                })],
                 r#type: CharacterStringType::OctetString
             })
         )
@@ -143,20 +140,28 @@ mod tests {
         assert_eq!(
             character_string(sample).unwrap().1,
             ASN1Type::CharacterString(CharacterString {
-                constraints: vec![Constraint::SubtypeConstraint(
-                  ElementSet {
-                      set: ElementOrSetOperation::Element(
-                          SubtypeElement::SizeConstraint(Box::new(
-                              ElementOrSetOperation::Element(
-                                  SubtypeElement::ValueRange { min: Some(ASN1Value::Integer(8)), max: Some(ASN1Value::Integer(18)), extensible: true }
-                              )
-                          ))
-                      ),
-                      extensible: false
-                  }
-              )],
+                constraints: vec![Constraint::SubtypeConstraint(ElementSet {
+                    set: ElementOrSetOperation::Element(SubtypeElement::SizeConstraint(Box::new(
+                        ElementOrSetOperation::Element(SubtypeElement::ValueRange {
+                            min: Some(ASN1Value::Integer(8)),
+                            max: Some(ASN1Value::Integer(18)),
+                            extensible: true
+                        })
+                    ))),
+                    extensible: false
+                })],
                 r#type: CharacterStringType::OctetString
             })
         )
+    }
+
+    #[test]
+    fn parses_character_string_value() {
+      assert_eq!(character_string_value("\"a\"").unwrap().1, ASN1Value::String("a".to_owned()))
+    }
+
+    #[test]
+    fn parses_character_string_asn1_value() {
+      assert_eq!(asn1_value("\"a\"").unwrap().1, ASN1Value::String("a".to_owned()))
     }
 }

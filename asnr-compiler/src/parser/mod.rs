@@ -22,7 +22,7 @@ use asnr_grammar::{information_object::*, *};
 use self::{
     bit_string::{bit_string, bit_string_value},
     boolean::{boolean, boolean_value},
-    character_string::character_string,
+    character_string::{character_string, character_string_value},
     choice::*,
     common::*,
     constraint::constraint,
@@ -121,6 +121,7 @@ pub fn asn1_value<'a>(input: &'a str) -> IResult<&'a str, ASN1Value> {
         bit_string_value,
         boolean_value,
         integer_value,
+        character_string_value,
         elsewhere_declared_value,
     ))(input)
 }
