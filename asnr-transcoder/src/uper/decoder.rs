@@ -14,7 +14,7 @@ use crate::{
     Decode, DecodeMember, Decoder, DecoderForIndex, IResult,
 };
 
-use super::{BitIn, Uper};
+use super::{BitIn, Uper, AsBytesDummy};
 
 enum LengthDeterminant {
     Content(usize),
@@ -71,7 +71,7 @@ impl<'a> Decoder<'a, BitIn<'a>> for Uper {
         O: num::Integer + num::FromPrimitive + Copy,
     {
         let mut constraints = PerVisibleRangeConstraints::default();
-        for c in integer.constraints {
+        for c in &integer.constraints {
             constraints += c
                 .try_into()
                 .map_err(|e: DecodingError<[u8; 0]>| DecodingError {
@@ -110,7 +110,7 @@ impl<'a> Decoder<'a, BitIn<'a>> for Uper {
         enumerated: asnr_grammar::types::Enumerated,
     ) -> Result<Box<dyn FnMut(BitIn) -> IResult<BitIn, O>>, DecodingError<BitIn<'a>>> {
         let mut constraints = PerVisibleRangeConstraints::from(&enumerated);
-        for c in enumerated.clone().constraints {
+        for c in &enumerated.constraints {
             constraints += c
                 .try_into()
                 .map_err(|e: DecodingError<[u8; 0]>| DecodingError {
@@ -154,7 +154,7 @@ impl<'a> Decoder<'a, BitIn<'a>> for Uper {
         choice: asnr_grammar::types::Choice,
     ) -> Result<Box<dyn FnMut(BitIn<'a>) -> IResult<BitIn<'a>, O>>, DecodingError<BitIn<'a>>> {
         let mut constraints = PerVisibleRangeConstraints::from(&choice);
-        for c in choice.clone().constraints {
+        for c in &choice.constraints {
             constraints += c
                 .try_into()
                 .map_err(|e: DecodingError<[u8; 0]>| DecodingError {
@@ -211,10 +211,10 @@ impl<'a> Decoder<'a, BitIn<'a>> for Uper {
     ) -> Result<Box<dyn FnMut(BitIn<'a>) -> IResult<BitIn<'a>, Vec<bool>>>, DecodingError<BitIn<'a>>>
     {
         let mut constraints = PerVisibleRangeConstraints::default_unsigned();
-        for c in bit_string.clone().constraints {
+        for c in &bit_string.constraints {
             constraints += c
                 .try_into()
-                .map_err(|e: DecodingError<[u8; 0]>| DecodingError {
+                .map_err(|e: DecodingError<AsBytesDummy>| DecodingError {
                     input: None,
                     details: e.details,
                     kind: e.kind,
@@ -242,10 +242,10 @@ impl<'a> Decoder<'a, BitIn<'a>> for Uper {
     ) -> Result<Box<dyn FnMut(BitIn<'a>) -> IResult<BitIn<'a>, String>>, DecodingError<BitIn<'a>>>
     {
         let mut constraints = PerVisibleRangeConstraints::default_unsigned();
-        for c in char_string.clone().constraints {
+        for c in &char_string.constraints {
             constraints += c
                 .try_into()
-                .map_err(|e: DecodingError<[u8; 0]>| DecodingError {
+                .map_err(|e: DecodingError<AsBytesDummy>| DecodingError {
                     input: None,
                     details: e.details,
                     kind: e.kind,
@@ -321,7 +321,7 @@ impl<'a> Decoder<'a, BitIn<'a>> for Uper {
         DecodingError<BitIn<'a>>,
     > {
         let mut constraints = PerVisibleRangeConstraints::default();
-        for c in sequence_of.clone().constraints {
+        for c in &sequence_of.constraints {
             constraints += c
                 .try_into()
                 .map_err(|e: DecodingError<[u8; 0]>| DecodingError {

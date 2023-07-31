@@ -23,13 +23,14 @@ pub mod utils;
 
 use alloc::{
     borrow::ToOwned,
+    collections::BTreeMap,
     format,
     string::{String, ToString},
     vec,
     vec::Vec,
 };
 use constraints::Constraint;
-use error::GrammarError;
+use error::{GrammarError, GrammarErrorType};
 use information_object::{
     InformationObjectClass, InformationObjectFieldReference, ObjectFieldIdentifier, ObjectSet,
     ToplevelInformationDeclaration,
@@ -687,7 +688,7 @@ pub const PRINTABLE_STRING_CHARSET: [char; 76] = [
 ];
 
 /// The types of an ASN1 character strings.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Copy)]
 pub enum CharacterStringType {
     OctetString,
     NumericString,
@@ -712,13 +713,18 @@ impl CharacterStringType {
         }
     }
 
-    pub fn character_set(&self) -> Vec<char> {
+    pub fn character_set(&self) -> BTreeMap<usize, char> {
         match self {
-            CharacterStringType::NumericString => NUMERIC_STRING_CHARSET.to_vec(),
-            CharacterStringType::VisibleString | CharacterStringType::PrintableString => PRINTABLE_STRING_CHARSET.to_vec(),
+            CharacterStringType::NumericString => {
+                NUMERIC_STRING_CHARSET.into_iter().enumerate().collect()
+            }
+            CharacterStringType::VisibleString | CharacterStringType::PrintableString => {
+                PRINTABLE_STRING_CHARSET.into_iter().enumerate().collect()
+            }
             CharacterStringType::IA5String => (0..128u32)
                 .into_iter()
                 .map(|i| char::from_u32(i).unwrap())
+                .enumerate()
                 .collect(),
             CharacterStringType::TeletexString => todo!(),
             CharacterStringType::VideotexString => todo!(),
@@ -726,11 +732,12 @@ impl CharacterStringType {
             CharacterStringType::GeneralString => todo!(),
             CharacterStringType::UniversalString => todo!(),
             CharacterStringType::UTF8String => (0..u16::MAX as u32)
-            .into_iter()
-            .filter_map(|i| char::from_u32(i))
-            .collect(),
+                .into_iter()
+                .filter_map(|i| char::from_u32(i))
+                .enumerate()
+                .collect(),
             CharacterStringType::BMPString => todo!(),
-            _ => todo!()
+            _ => todo!(),
         }
     }
 }
@@ -791,6 +798,83 @@ pub enum ASN1Value {
 }
 
 impl ASN1Value {
+    pub fn max(
+        &self,
+        other: &ASN1Value,
+        char_set: Option<&BTreeMap<usize, char>>,
+    ) -> Result<ASN1Value, GrammarError> {
+        self.min_max(other, char_set, false)
+    }
+
+    pub fn min(
+        &self,
+        other: &ASN1Value,
+        char_set: Option<&BTreeMap<usize, char>>,
+    ) -> Result<ASN1Value, GrammarError> {
+        self.min_max(other, char_set, true)
+    }
+
+    fn min_max(
+        &self,
+        other: &ASN1Value,
+        char_set: Option<&BTreeMap<usize, char>>,
+        getting_mininum: bool,
+    ) -> Result<ASN1Value, GrammarError> {
+        match (self, other, char_set) {
+            (ASN1Value::Integer(s), ASN1Value::Integer(o), _) => {
+                if getting_mininum {
+                    Ok(ASN1Value::Integer(*s.min(o)))
+                } else {
+                    Ok(ASN1Value::Integer(*s.max(o)))
+                }
+            }
+            (ASN1Value::String(s), ASN1Value::String(o), Some(set)) => {
+                if s.len() != 1 || o.len() != 1 {
+                    return Err(GrammarError {
+                        details: format!(
+                            "Unsupported operation for ASN1Values {:?} and {:?}",
+                            self, other
+                        ),
+                        kind: GrammarErrorType::UnpackingError,
+                    });
+                }
+                let s_as_char = s.chars().next().unwrap();
+                let o_as_char = o.chars().next().unwrap();
+                match (
+                    set.iter().find(|(_, c)| s_as_char == **c),
+                    set.iter().find(|(_, c)| o_as_char == **c),
+                ) {
+                    (Some((self_i,_)), Some((other_i,_))) => {
+                        let return_self = if getting_mininum {
+                            self_i <= other_i
+                        } else {
+                            self_i >= other_i
+                        };
+                        if return_self {
+                            Ok(self.clone())
+                        } else {
+                            Ok(other.clone())
+                        }
+                    }
+                    _ => Err(GrammarError {
+                        details: format!(
+                            "Failed to find ASN1Values {:?} and {:?} in character set {:?}",
+                            self, other, char_set
+                        ),
+                        kind: GrammarErrorType::UnpackingError,
+                    }),
+                }
+            }
+            _ => Err(GrammarError {
+                details: format!(
+                    "Unsupported operation for ASN1Values {:?} and {:?}",
+                    self, other
+                ),
+                kind: GrammarErrorType::UnpackingError,
+            }),
+        }
+    }
+
     pub fn unwrap_as_integer(&self) -> Result<i128, GrammarError> {
         if let ASN1Value::Integer(i) = self {
             Ok(*i)
