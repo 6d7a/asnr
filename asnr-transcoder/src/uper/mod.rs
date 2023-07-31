@@ -8,6 +8,7 @@ mod per_visible;
 pub struct Uper;
 
 pub(crate) type BitIn<'a> = BSlice<'a, u8, Msb0>;
+pub(crate) type AsBytesDummy = [u8; 0];
 
 pub(crate) fn bit_length(min: i128, max: i128) -> usize {
     let number_of_values = max - min + 1;

@@ -7,10 +7,9 @@ use crate::{
     Encoder,
 };
 
-use super::{bit_length, per_visible::PerVisibleRangeConstraints, Uper};
+use super::{bit_length, per_visible::PerVisibleRangeConstraints, Uper, AsBytesDummy};
 
 type BitOut = BitVec<u8, Msb0>;
-type AsBytesDummy = [u8; 0];
 
 impl Encoder<u8, BitOut> for Uper {
     fn encode_integer<I>(
@@ -20,7 +19,7 @@ impl Encoder<u8, BitOut> for Uper {
         I: num::Integer + num::ToPrimitive + num::FromPrimitive + Copy,
     {
         let mut constraints = PerVisibleRangeConstraints::default();
-        for c in integer.constraints {
+        for c in &integer.constraints {
             constraints += c.try_into().map_err(|e| EncodingError {
                 details: format!("Failed to parse integer constraints"),
             })?
@@ -117,7 +116,7 @@ impl Encoder<u8, BitOut> for Uper {
     ) -> Result<Box<dyn FnMut(Vec<bool>, BitOut) -> Result<BitOut, EncodingError>>, EncodingError>
     {
         let mut constraints = PerVisibleRangeConstraints::default_unsigned();
-        for c in bit_string.constraints {
+        for c in &bit_string.constraints {
             constraints += c
                 .try_into()
                 .map_err(|_: DecodingError<AsBytesDummy>| EncodingError {
