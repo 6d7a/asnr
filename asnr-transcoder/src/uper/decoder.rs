@@ -1,9 +1,6 @@
 use alloc::{boxed::Box, string::String, vec, vec::Vec};
-use asnr_grammar::{
-    types::{CharacterString, Sequence},
-    CharacterStringType, NUMERIC_STRING_CHARSET,
-};
-use bitvec::{bits, bitvec, field::BitField, prelude::Msb0, vec::BitVec};
+use asnr_grammar::types::Sequence;
+use bitvec::{bits, bitvec, prelude::Msb0, vec::BitVec};
 use bitvec_nom::BSlice;
 use nom::{bytes::complete::take, combinator::map, error::Error, AsBytes};
 use num::{FromPrimitive, Integer};
@@ -14,7 +11,7 @@ use crate::{
     Decode, DecodeMember, Decoder, DecoderForIndex, IResult,
 };
 
-use super::{BitIn, Uper, AsBytesDummy};
+use super::{per_visible::PerVisibleAlphabetConstraints, AsBytesDummy, BitIn, Uper};
 
 enum LengthDeterminant {
     Content(usize),
@@ -66,7 +63,7 @@ impl<'a> Decoder<'a, BitIn<'a>> for Uper {
 
     fn decode_integer<O>(
         integer: asnr_grammar::types::Integer,
-    ) -> Result<Box<dyn FnMut(BitIn<'a>) -> IResult<BitIn<'a>, O>>, DecodingError<BitIn<'a>>>
+    ) -> Result<Box<dyn Fn(BitIn<'a>) -> IResult<BitIn<'a>, O>>, DecodingError<BitIn<'a>>>
     where
         O: num::Integer + num::FromPrimitive + Copy,
     {
@@ -108,7 +105,7 @@ impl<'a> Decoder<'a, BitIn<'a>> for Uper {
 
     fn decode_enumerated<O: TryFrom<i128>>(
         enumerated: asnr_grammar::types::Enumerated,
-    ) -> Result<Box<dyn FnMut(BitIn) -> IResult<BitIn, O>>, DecodingError<BitIn<'a>>> {
+    ) -> Result<Box<dyn Fn(BitIn) -> IResult<BitIn, O>>, DecodingError<BitIn<'a>>> {
         let mut constraints = PerVisibleRangeConstraints::from(&enumerated);
         for c in &enumerated.constraints {
             constraints += c
@@ -152,7 +149,7 @@ impl<'a> Decoder<'a, BitIn<'a>> for Uper {
 
     fn decode_choice<O: DecoderForIndex<'a, BitIn<'a>>>(
         choice: asnr_grammar::types::Choice,
-    ) -> Result<Box<dyn FnMut(BitIn<'a>) -> IResult<BitIn<'a>, O>>, DecodingError<BitIn<'a>>> {
+    ) -> Result<Box<dyn Fn(BitIn<'a>) -> IResult<BitIn<'a>, O>>, DecodingError<BitIn<'a>>> {
         let mut constraints = PerVisibleRangeConstraints::from(&choice);
         for c in &choice.constraints {
             constraints += c
@@ -208,7 +205,7 @@ impl<'a> Decoder<'a, BitIn<'a>> for Uper {
 
     fn decode_bit_string(
         bit_string: asnr_grammar::types::BitString,
-    ) -> Result<Box<dyn FnMut(BitIn<'a>) -> IResult<BitIn<'a>, Vec<bool>>>, DecodingError<BitIn<'a>>>
+    ) -> Result<Box<dyn Fn(BitIn<'a>) -> IResult<BitIn<'a>, Vec<bool>>>, DecodingError<BitIn<'a>>>
     {
         let mut constraints = PerVisibleRangeConstraints::default_unsigned();
         for c in &bit_string.constraints {
@@ -224,8 +221,7 @@ impl<'a> Decoder<'a, BitIn<'a>> for Uper {
             Ok(Box::new(
                 move |input: BitIn<'a>| -> IResult<BitIn<'a>, Vec<bool>> {
                     let (input, is_extended) = read_bit(input)?;
-                    let (input, length_det) =
-                        size_length_det(is_extended, &constraints, input)?;
+                    let (input, length_det) = size_length_det(is_extended, &constraints, input)?;
                     n_times(input, read_bit, length_det)
                 },
             ))
@@ -239,38 +235,46 @@ impl<'a> Decoder<'a, BitIn<'a>> for Uper {
 
     fn decode_character_string(
         char_string: asnr_grammar::types::CharacterString,
-    ) -> Result<Box<dyn FnMut(BitIn<'a>) -> IResult<BitIn<'a>, String>>, DecodingError<BitIn<'a>>>
+    ) -> Result<Box<dyn Fn(BitIn<'a>) -> IResult<BitIn<'a>, String>>, DecodingError<BitIn<'a>>>
     {
-        let mut constraints = PerVisibleRangeConstraints::default_unsigned();
+        let mut range_constraints = PerVisibleRangeConstraints::default_unsigned();
+        let mut permitted_alphabet = PerVisibleAlphabetConstraints::default_for(char_string.r#type);
         for c in &char_string.constraints {
-            constraints += c
-                .try_into()
-                .map_err(|e: DecodingError<AsBytesDummy>| DecodingError {
-                    input: None,
-                    details: e.details,
-                    kind: e.kind,
-                })?
+            range_constraints +=
+                c.try_into()
+                    .map_err(|e: DecodingError<AsBytesDummy>| DecodingError {
+                        input: None,
+                        details: e.details,
+                        kind: e.kind,
+                    })?;
+            PerVisibleAlphabetConstraints::try_new(c, char_string.r#type)?
+                .map(|mut p| permitted_alphabet += &mut p);
         }
-        if constraints.is_extensible() {
+        permitted_alphabet.finalize();
+        if range_constraints.is_extensible() {
             Ok(Box::new(
                 move |input: BitIn<'a>| -> IResult<BitIn<'a>, String> {
-                    let (input, is_extended) = read_bit(input)?;
+                    let (input, is_extended) = if permitted_alphabet.is_known_multiplier_string() {
+                      read_bit(input)?
+                    } else {
+                      (input, true)
+                    };
                     let (input, length_det) =
-                        size_length_det(is_extended, &constraints, input)?;
-                    decode_sized_string(&char_string, length_det, input)
+                        size_length_det(is_extended, &range_constraints, input)?;
+                    decode_sized_string(&permitted_alphabet, length_det, input)
                 },
             ))
         } else {
             Ok(Box::new(move |input| {
-                let (input, length_det) = decode_unextensible_int(&constraints, input)?;
-                decode_sized_string(&char_string, length_det, input)
+                let (input, length_det) = size_length_det(false, &range_constraints, input)?;
+                decode_sized_string(&permitted_alphabet, length_det, input)
             }))
         }
     }
 
     fn decode_sequence<T: DecodeMember<'a, BitIn<'a>> + Default>(
         sequence: asnr_grammar::types::Sequence,
-    ) -> Result<Box<dyn FnMut(BitIn<'a>) -> IResult<BitIn, T>>, DecodingError<BitIn<'a>>> {
+    ) -> Result<Box<dyn Fn(BitIn<'a>) -> IResult<BitIn, T>>, DecodingError<BitIn<'a>>> {
         if let Some(extension_index) = sequence.extensible {
             Ok(Box::new(move |input| {
                 let (input, is_extended) = read_bit(input)?;
@@ -317,7 +321,7 @@ impl<'a> Decoder<'a, BitIn<'a>> for Uper {
         sequence_of: asnr_grammar::types::SequenceOf,
         member_decoder: fn(BitIn<'a>) -> IResult<BitIn<'a>, T>,
     ) -> Result<
-        Box<dyn FnMut(BitIn<'a>) -> IResult<BitIn<'a>, Vec<T>> + 'a>,
+        Box<dyn Fn(BitIn<'a>) -> IResult<BitIn<'a>, Vec<T>> + 'a>,
         DecodingError<BitIn<'a>>,
     > {
         let mut constraints = PerVisibleRangeConstraints::default();
@@ -335,8 +339,7 @@ impl<'a> Decoder<'a, BitIn<'a>> for Uper {
             Ok(Box::new(
                 move |input: BitIn<'a>| -> IResult<BitIn<'a>, Vec<T>> {
                     let (input, is_extended) = read_bit(input)?;
-                    let (input, length_det) =
-                        size_length_det(is_extended, &constraints, input)?;
+                    let (input, length_det) = size_length_det(is_extended, &constraints, input)?;
                     n_times(input, member_decoder, length_det)
                 },
             ))
@@ -367,18 +370,18 @@ fn size_length_det<'a>(
         .range_width()?
         .map(|w| (w <= 65536).then(|| w))
         .flatten()
-        .is_some() && !is_extended
+        .is_some()
+        && !is_extended
     {
         decode_unextensible_int::<usize>(&*constraints, input)
     } else {
         match decode_length_determinant(input)? {
-          (input, LengthDeterminant::Content(len)) => Ok((input, len)),
-          _ => Err(DecodingError {
-            input: Some(input),
-            details: "Size counts larger than 65536 items are not supported yet!"
-                .into(),
-            kind: DecodingErrorType::Unsupported,
-        }),
+            (input, LengthDeterminant::Content(len)) => Ok((input, len)),
+            _ => Err(DecodingError {
+                input: Some(input),
+                details: "Size counts larger than 65536 items are not supported yet!".into(),
+                kind: DecodingErrorType::Unsupported,
+            }),
         }
     }
 }
@@ -460,35 +463,37 @@ where
 }
 
 fn decode_sized_string<'a>(
-    char_string: &CharacterString,
+    permitted_alphabet: &PerVisibleAlphabetConstraints,
     length_det: usize,
     input: BitIn<'a>,
 ) -> IResult<BitIn<'a>, String> {
-    let bit_size = char_string.r#type.char_bit_size();
+    let bit_size = permitted_alphabet.bit_length();
+    if bit_size == 0 {
+        return decode_sized_string(
+            &permitted_alphabet.fall_back_to_standard_charset(),
+            length_det,
+            input,
+        );
+    }
     let (input, mut buffer) = take(bit_size * length_det)(input)?;
-    match char_string.r#type {
-        CharacterStringType::IA5String
-        | CharacterStringType::PrintableString
-        | CharacterStringType::VisibleString => {
-            let mut char_vec = vec![];
-            while let Ok((new_buffer, c)) = take::<usize, BitIn, Error<BitIn>>(7_usize)(buffer) {
-                char_vec.push(c.0.load_be::<u8>() as char);
-                buffer = new_buffer;
-            }
-            Ok((input, char_vec.into_iter().collect()))
-        },
-        CharacterStringType::NumericString => {
-          let mut char_vec = vec![];
-            while let Ok((new_buffer, i)) = read_int::<usize>(4)(buffer) {
-                char_vec.push(NUMERIC_STRING_CHARSET[i]);
-                buffer = new_buffer;
-            }
-            Ok((input, char_vec.into_iter().collect()))
+    if permitted_alphabet.is_known_multiplier_string() {
+        let mut char_vec = vec![];
+        while let Ok((new_buffer, i)) = read_int::<usize>(bit_size)(buffer) {
+            char_vec.push(permitted_alphabet.get_char_by_index(i).map_err(
+                |e: DecodingError<[u8; 0]>| DecodingError {
+                    input: None,
+                    details: e.details,
+                    kind: e.kind,
+                },
+            )?);
+            buffer = new_buffer;
         }
-        _ => Ok((
+        Ok((input, char_vec.into_iter().collect()))
+    } else {
+        Ok((
             input,
             String::from_utf8_lossy(buffer.as_bytes()).into_owned(),
-        )),
+        ))
     }
 }
 
@@ -890,12 +895,6 @@ mod tests {
     }
 
     #[test]
-    #[allow(non_camel_case_types)]
-    #[allow(non_snake_case)]
-    #[allow(non_upper_case_globals)]
-    #[allow(dead_code)]
-    #[allow(unused_mut)]
-    #[allow(unused_variables)]
     fn decodes_unextended_sequence() {
         asn1_internal_tests!(
             "TestSequence ::= SEQUENCE
@@ -1023,11 +1022,9 @@ mod tests {
     fn decodes_deceptive_min_bit_string() {
         asn1_internal_tests!("BitStringExample ::= BIT STRING (MIN..3)");
         assert_eq!(
-            BitStringExample::decode::<Uper>(BSlice::from(
-                bits![static u8, Msb0; 0, 1, 1]
-            ))
-            .unwrap()
-            .1,
+            BitStringExample::decode::<Uper>(BSlice::from(bits![static u8, Msb0; 0, 1, 1]))
+                .unwrap()
+                .1,
             BitStringExample(vec![true])
         );
     }
@@ -1036,47 +1033,55 @@ mod tests {
     fn decodes_unconstrained_bit_string() {
         asn1_internal_tests!("BitStringExample ::= BIT STRING");
         assert_eq!(
-          BitStringExample::decode::<Uper>(BSlice::from(
-              bits![static u8, Msb0; 0,0,0,0,0,1,0,1, 0,0,1,0,1]
-          ))
-          .unwrap()
-          .1,
-          BitStringExample(vec![false, false, true, false, true])
-      );
+            BitStringExample::decode::<Uper>(BSlice::from(
+                bits![static u8, Msb0; 0,0,0,0,0,1,0,1, 0,0,1,0,1]
+            ))
+            .unwrap()
+            .1,
+            BitStringExample(vec![false, false, true, false, true])
+        );
     }
 
     #[test]
     fn decodes_extended_fixed_size_bit_string() {
         asn1_internal_tests!("BitStringExample ::= BIT STRING (8,...)");
         assert_eq!(
-            BitStringExample::decode::<Uper>(BSlice::from(bits![static u8, Msb0; 0,0,0,1,0,1,1,0,0]))
-                .unwrap()
-                .1,
+            BitStringExample::decode::<Uper>(BSlice::from(
+                bits![static u8, Msb0; 0,0,0,1,0,1,1,0,0]
+            ))
+            .unwrap()
+            .1,
             BitStringExample(vec![false, false, true, false, true, true, false, false])
         );
         assert_eq!(
-          BitStringExample::decode::<Uper>(BSlice::from(bits![static u8, Msb0; 1, 0,0,0,0,0,0,0,1, 0]))
-              .unwrap()
-              .1,
-          BitStringExample(vec![false])
-      );
+            BitStringExample::decode::<Uper>(BSlice::from(
+                bits![static u8, Msb0; 1, 0,0,0,0,0,0,0,1, 0]
+            ))
+            .unwrap()
+            .1,
+            BitStringExample(vec![false])
+        );
     }
 
     #[test]
     fn decodes_extended_constrained_bit_string() {
         asn1_internal_tests!("BitStringExample ::= BIT STRING (4..8,...)");
         assert_eq!(
-            BitStringExample::decode::<Uper>(BSlice::from(bits![static u8, Msb0; 0,0,0,1,0,0,1,0,1]))
-                .unwrap()
-                .1,
+            BitStringExample::decode::<Uper>(BSlice::from(
+                bits![static u8, Msb0; 0,0,0,1,0,0,1,0,1]
+            ))
+            .unwrap()
+            .1,
             BitStringExample(vec![false, false, true, false, true])
         );
         assert_eq!(
-          BitStringExample::decode::<Uper>(BSlice::from(bits![static u8, Msb0; 1,0,0,0,0,0,0,0,1,0]))
-              .unwrap()
-              .1,
-          BitStringExample(vec![false])
-      );
+            BitStringExample::decode::<Uper>(BSlice::from(
+                bits![static u8, Msb0; 1,0,0,0,0,0,0,0,1,0]
+            ))
+            .unwrap()
+            .1,
+            BitStringExample(vec![false])
+        );
     }
 
     #[test]
@@ -1091,10 +1096,106 @@ mod tests {
             BitStringExample(vec![false, false, true, false, true])
         );
         assert_eq!(
-          BitStringExample::decode::<Uper>(BSlice::from(bits![static u8, Msb0; 1,0,0,0,0,0,0,0,1,0]))
-              .unwrap()
-              .1,
-          BitStringExample(vec![false])
-      );
+            BitStringExample::decode::<Uper>(BSlice::from(
+                bits![static u8, Msb0; 1,0,0,0,0,0,0,0,1,0]
+            ))
+            .unwrap()
+            .1,
+            BitStringExample(vec![false])
+        );
+    }
+
+    #[test]
+    fn decodes_range_size_character_string() {
+        asn1_internal_tests!("NumericStringExample ::= NumericString (SIZE(1..16))");
+
+        assert_eq!(
+            NumericStringExample::decode::<Uper>(BSlice::from(
+                bits![static u8, Msb0; 0,0,1,1, 0,0,1,0, 1,0,0,0, 0,0,0,1, 0,0,1,1]
+            ))
+            .unwrap()
+            .1,
+            NumericStringExample("1702".into())
+        );
+    }
+
+    #[test]
+    fn decodes_range_size_character_string_with_alphabet_constraint() {
+        asn1_internal_tests!(
+            r#"NumericStringExample ::= NumericString (SIZE(1..16) INTERSECTION FROM("0123"))"#
+        );
+
+        assert_eq!(
+            NumericStringExample::decode::<Uper>(BSlice::from(
+                bits![static u8, Msb0; 0,0,1,1, 0,0, 1,0, 1,1, 0,1]
+            ))
+            .unwrap()
+            .1,
+            NumericStringExample("0231".into())
+        );
+    }
+
+    #[test]
+    fn decodes_fixed_size_character_string_with_alphabet_constraint() {
+        asn1_internal_tests!(r#"Digit ::= UTF8String (SIZE(1) INTERSECTION FROM("0123456789"))"#);
+
+        assert_eq!(
+            Digit::decode::<Uper>(BSlice::from(bits![static u8, Msb0; 1,0,0,0]))
+                .unwrap()
+                .1,
+            Digit("8".into())
+        );
+    }
+
+    #[test]
+    fn decodes_unconstrained_character_string_with_alphabet_constraint() {
+        asn1_internal_tests!(r#"Greeting ::= UTF8String (FROM("HELO"))"#);
+
+        assert_eq!(
+            Greeting::decode::<Uper>(BSlice::from(
+                bits![static u8, Msb0; 0,0,0,0,0,1,0,1, 0,1, 0,0, 1,0, 1,0, 1,1]
+            ))
+            .unwrap()
+            .1,
+            Greeting("HELLO".into())
+        );
+    }
+
+    #[test]
+    fn decodes_unconstrained_variable_size_character_string() {
+        asn1_internal_tests!(r#"Greeting ::= GraphicString"#);
+        assert_eq!(
+            Greeting::decode::<Uper>(BSlice::from(
+                bits![static u8, Msb0; 
+                0,0,0,0,0,1,0,0, 
+                1,1,1,1,0,0,0,0,
+                1,0,0,1,1,1,1,1,
+                1,0,0,1,0,0,1,0,
+                1,0,0,1,0,1,1,0,
+                ]
+            ))
+            .unwrap()
+            .1,
+            Greeting("💖".into())
+        );
+    }
+
+    #[test]
+    fn decodes_extended_variable_size_character_string() {
+        asn1_internal_tests!(r#"Greeting ::= GraphicString (SIZE(1..29876,...))"#);
+        assert_eq!(
+            Greeting::decode::<Uper>(BSlice::from(
+                bits![static u8, Msb0; 
+                0,0,0,0,0,1,0,0, 
+                1,1,1,1,0,0,0,0,
+                1,0,0,1,1,1,1,1,
+                1,0,0,1,0,0,1,0,
+                1,0,0,1,0,1,1,0,
+                ]
+            ))
+            .unwrap()
+            .1,
+            Greeting("💖".into())
+        );
     }
 }

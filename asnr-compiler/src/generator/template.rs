@@ -60,7 +60,7 @@ where
     D: Decoder<'a, I>,
     Self: Sized,"#;
 
-pub const DECODER_SIGNATURE: &str = r#"fn decoder<D>() -> Result<Box<dyn FnMut(I) -> IResult<I, Self> + 'a>, DecodingError<I>>
+pub const DECODER_SIGNATURE: &str = r#"fn decoder<D>() -> Result<Box<dyn Fn(I) -> IResult<I, Self> + 'a>, DecodingError<I>>
     where
         D: Decoder<'a, I>,
         Self: Sized,"#;
@@ -70,7 +70,7 @@ pub const ENCODE_SIGNATURE: &str = r#"fn encode<E>(encodable: Self, output: O) -
         E: Encoder<T, O>,
         Self: Sized,"#;
 
-pub const ENCODER_SIGNATURE: &str = r#"fn encoder<E>() -> Result<Box<dyn FnMut(Self, O) -> Result<O, EncodingError>>, EncodingError>
+pub const ENCODER_SIGNATURE: &str = r#"fn encoder<E>() -> Result<Box<dyn Fn(Self, O) -> Result<O, EncodingError>>, EncodingError>
     where
         E: Encoder<T, O>,
         Self: Sized,"#;
@@ -244,6 +244,19 @@ impl<'a, I: AsBytes + Debug + 'a> Decode<'a, I> for {name} {{
     Ok(Box::new(move |input| (*charstring_decoder)(input).map(|(remaining, res)| (remaining, Self(res)))))
   }}
 }}
+
+impl<T, O: Extend<T> + Debug + 'static> Encode<T, O> for {name} {{
+  {ENCODE_SIGNATURE}
+  {{
+    {name}::encoder::<E>()?(encodable, output)
+  }}
+
+  {ENCODER_SIGNATURE}
+  {{
+    let mut char_string_encoder = E::encode_character_string({charstr_descriptor})?;
+    Ok(Box::new(move |encodable, output| (*char_string_encoder)(encodable.0.as_str(), output)))
+  }}
+}}
 "#,
     )
 }
@@ -361,6 +374,18 @@ pub fn enumerated_template(
       D::decode_enumerated({enum_descriptor})
     }}
   }}
+
+  impl<T, O: Extend<T> + Debug + 'static> Encode<T, O> for {name} {{
+    {ENCODE_SIGNATURE}
+    {{
+      {name}::encoder::<E>()?(encodable, output)
+    }}
+  
+    {ENCODER_SIGNATURE}
+    {{
+      Ok(Box::new(move |encodable, output| Ok(output)))
+    }}
+  }}
   "#,
     )
 }
@@ -373,6 +398,7 @@ pub fn sequence_template(
     member_declaration: String,
     extension_decl: String,
     decode_member_body: String,
+    encoder_member_body: String,
     extension_decoder: String,
     seq_descriptor: String,
 ) -> String {
@@ -398,6 +424,18 @@ pub fn sequence_template(
       }}
       Ok(input)
     }}
+  }}
+
+  impl<T, O: Extend<T> + Debug + 'static> EncoderForIndex<T, O> for {name} {{
+    fn encoder_for_index<E>(index: i128) -> Result<fn(&Self, O) -> Result<O, EncodingError>, EncodingError>
+    where
+        E: Encoder<T, O>,
+        Self: Sized {{
+          match index {{
+            {encoder_member_body}
+            _ => Err(EncodingError {{ details: format!("No sequence member at field index {{index}}!") }})
+          }}
+        }}
   }}
   
   impl<'a, I: AsBytes + Debug + 'a> Decode<'a, I> for {name} {{

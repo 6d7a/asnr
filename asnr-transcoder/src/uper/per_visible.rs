@@ -1,15 +1,8 @@
 use core::ops::AddAssign;
 
-use alloc::{
-    collections::{BTreeMap, BTreeSet},
-    format,
-    string::String,
-    vec::Vec,
-};
+use alloc::{collections::BTreeMap, format, string::String, vec::Vec};
 use asnr_grammar::{
-    constraints::{
-        Constraint, ElementOrSetOperation, ElementSet, SetOperation, SetOperator, SubtypeElement,
-    },
+    constraints::{Constraint, ElementOrSetOperation, SetOperation, SetOperator, SubtypeElement},
     error::{GrammarError, GrammarErrorType},
     types::{Choice, Enumerated},
     ASN1Value, CharacterStringType,
@@ -28,14 +21,15 @@ trait PerVisible {
 #[derive(Debug, PartialEq)]
 pub struct PerVisibleAlphabetConstraints {
     string_type: CharacterStringType,
-    character_set: BTreeMap<usize, char>,
+    character_by_index: BTreeMap<usize, char>,
+    index_by_character: Option<BTreeMap<char, usize>>,
 }
 
 impl PerVisibleAlphabetConstraints {
-    pub fn try_new(
+    pub fn try_new<I: AsBytes>(
         constraint: &Constraint,
         string_type: CharacterStringType,
-    ) -> Result<Option<Self>, DecodingError<AsBytesDummy>> {
+    ) -> Result<Option<Self>, DecodingError<I>> {
         match constraint {
             Constraint::SubtypeConstraint(c) => match &c.set {
                 ElementOrSetOperation::Element(e) => Self::from_subtype_elem(Some(e), string_type),
@@ -48,17 +42,36 @@ impl PerVisibleAlphabetConstraints {
         }
     }
 
-    fn from_subtype_elem(
+    fn from_subtype_elem<I: AsBytes>(
         element: Option<&SubtypeElement>,
         string_type: CharacterStringType,
-    ) -> Result<Option<Self>, DecodingError<AsBytesDummy>> {
+    ) -> Result<Option<Self>, DecodingError<I>> {
         match element {
             None => Ok(None),
-            Some(SubtypeElement::SingleValue { value, extensible }) => match (value, extensible) {
-                (ASN1Value::String(s), false) => Ok(Some(PerVisibleAlphabetConstraints {
+            Some(SubtypeElement::PermittedAlphabet(elem_or_set)) => match &**elem_or_set {
+                ElementOrSetOperation::Element(e) => Self::from_subtype_elem(Some(e), string_type),
+                ElementOrSetOperation::SetOperation(s) => Self::from_subtype_elem(
+                    fold_constraint_set(s, Some(&string_type.character_set()))?.as_ref(),
                     string_type,
-                    character_set: s.chars().enumerate().collect(),
-                })),
+                ),
+            },
+            Some(SubtypeElement::SingleValue { value, extensible }) => match (value, extensible) {
+                (ASN1Value::String(s), false) => {
+                    let mut char_subset = s
+                        .chars()
+                        .map(|c| find_char_index(&string_type.character_set(), c).map(|i| (i, c)))
+                        .collect::<Result<Vec<(usize, char)>, _>>()?;
+                    char_subset.sort_by(|(a, _), (b, _)| a.cmp(b));
+                    Ok(Some(PerVisibleAlphabetConstraints {
+                        string_type,
+                        character_by_index: char_subset
+                            .iter()
+                            .map(|(_, c)| *c)
+                            .enumerate()
+                            .collect(),
+                        index_by_character: None,
+                    }))
+                }
                 _ => Ok(None),
             },
             Some(SubtypeElement::ValueRange {
@@ -89,10 +102,12 @@ impl PerVisibleAlphabetConstraints {
                 }
                 Ok(Some(PerVisibleAlphabetConstraints {
                     string_type,
-                    character_set: char_set
-                        .into_iter()
-                        .filter(|(i, c)| (lower..=upper).contains(&i))
+                    character_by_index: char_set
+                        .iter()
+                        .filter_map(|(i, c)| (lower..=upper).contains(&i).then(|| *c))
+                        .enumerate()
                         .collect(),
+                    index_by_character: None,
                 }))
             }
             _ => Ok(None),
@@ -100,33 +115,80 @@ impl PerVisibleAlphabetConstraints {
     }
 
     pub fn bit_length(&self) -> usize {
-        let charset_size = self.character_set.len() as i128;
-        bit_length(charset_size, charset_size)
+        if self.is_known_multiplier_string() {
+            let charset_size = self.character_by_index.len() as i128;
+            bit_length(0, charset_size - 1)
+        } else {
+            8
+        }
+    }
+
+    pub fn is_known_multiplier_string(&self) -> bool {
+        if self.string_type == CharacterStringType::UTF8String
+            && (self.character_by_index.len() != self.string_type.character_set().len())
+        {
+            true
+        } else {
+            self.string_type.is_known_multiplier_string()
+        }
+    }
+
+    pub fn finalize(&mut self) {
+        self.index_by_character = Some(
+            self.character_by_index
+                .iter()
+                .map(|(i, c)| (*c, *i))
+                .collect(),
+        )
     }
 
     pub fn get_char_by_index(&self, index: usize) -> Result<&char, DecodingError<AsBytesDummy>> {
-        self.character_set.get(&index).ok_or(DecodingError {
+        self.character_by_index.get(&index).ok_or(DecodingError {
             details: format!(
                 "No character at index {index} of character set {:?}",
-                self.character_set
+                self.character_by_index
             ),
             kind: crate::error::DecodingErrorType::GenericParsingError,
             input: None,
         })
     }
 
+    pub fn index_by_character_map(
+        &self,
+    ) -> Result<&BTreeMap<char, usize>, DecodingError<AsBytesDummy>> {
+        if self.index_by_character.is_none() {
+            return Err(DecodingError {
+                details: format!("PerVisibleAlphabetConstraints have  to be finalized!"),
+                input: None,
+                kind: crate::error::DecodingErrorType::ConstraintError,
+            });
+        }
+        Ok(&self.index_by_character.as_ref().unwrap())
+    }
+
     pub fn default_for(string_type: CharacterStringType) -> Self {
         Self {
-            character_set: string_type.character_set(),
+            character_by_index: BTreeMap::new(),
             string_type,
+            index_by_character: None,
         }
+    }
+
+    pub fn fall_back_to_standard_charset(&self) -> Self {
+        let mut s = Self {
+            character_by_index: self.string_type.character_set(),
+            string_type: self.string_type,
+            index_by_character: None,
+        };
+        s.finalize();
+        s
     }
 }
 
-fn find_string_index(
+fn find_string_index<I: AsBytes>(
     value: &String,
     char_set: &BTreeMap<usize, char>,
-) -> Result<usize, DecodingError<AsBytesDummy>> {
+) -> Result<usize, DecodingError<I>> {
     let as_char = value.chars().next().unwrap();
     find_char_index(char_set, as_char)
 }
@@ -149,7 +211,7 @@ fn find_char_index<I: AsBytes>(
 
 impl AddAssign<&mut PerVisibleAlphabetConstraints> for PerVisibleAlphabetConstraints {
     fn add_assign(&mut self, rhs: &mut PerVisibleAlphabetConstraints) {
-        self.character_set.append(&mut rhs.character_set)
+        self.character_by_index.append(&mut rhs.character_by_index)
     }
 }
 
@@ -271,28 +333,30 @@ impl TryFrom<&Constraint> for PerVisibleRangeConstraints {
         value: &Constraint,
     ) -> Result<PerVisibleRangeConstraints, DecodingError<AsBytesDummy>> {
         match value {
-            Constraint::SubtypeConstraint(c) => match c.set {
+            Constraint::SubtypeConstraint(c) => match &c.set {
                 ElementOrSetOperation::Element(e) => Some(e).try_into(),
-                ElementOrSetOperation::SetOperation(s) => fold_constraint_set(&s, None)?.try_into(),
+                ElementOrSetOperation::SetOperation(s) => {
+                    fold_constraint_set(&s, None)?.as_ref().try_into()
+                }
             },
             _ => Ok(Self::default()),
         }
     }
 }
 
-impl TryFrom<Option<SubtypeElement>> for PerVisibleRangeConstraints {
+impl TryFrom<Option<&SubtypeElement>> for PerVisibleRangeConstraints {
     type Error = DecodingError<AsBytesDummy>;
     fn try_from(
-        value: Option<SubtypeElement>,
+        value: Option<&SubtypeElement>,
     ) -> Result<PerVisibleRangeConstraints, DecodingError<AsBytesDummy>> {
         match value {
-            None => Ok(Self::default()),
+            Some(SubtypeElement::PermittedAlphabet(_)) | None => Ok(Self::default()),
             Some(SubtypeElement::SingleValue { value, extensible }) => {
                 let val = value.unwrap_as_integer().ok();
                 Ok(Self {
                     min: val,
                     max: val,
-                    extensible,
+                    extensible: *extensible,
                 })
             }
             Some(SubtypeElement::ValueRange {
@@ -300,13 +364,15 @@ impl TryFrom<Option<SubtypeElement>> for PerVisibleRangeConstraints {
                 max,
                 extensible,
             }) => Ok(Self {
-                min: min.map(|i| i.unwrap_as_integer().ok()).flatten(),
-                max: max.map(|i| i.unwrap_as_integer().ok()).flatten(),
-                extensible,
+                min: min.as_ref().map(|i| i.unwrap_as_integer().ok()).flatten(),
+                max: max.as_ref().map(|i| i.unwrap_as_integer().ok()).flatten(),
+                extensible: *extensible,
             }),
-            Some(SubtypeElement::SizeConstraint(s)) => match *s {
+            Some(SubtypeElement::SizeConstraint(s)) => match &**s {
                 ElementOrSetOperation::Element(e) => Some(e).try_into(),
-                ElementOrSetOperation::SetOperation(s) => fold_constraint_set(&s, None)?.try_into(),
+                ElementOrSetOperation::SetOperation(s) => {
+                    fold_constraint_set(&s, None)?.as_ref().try_into()
+                }
             },
             _ => unreachable!(),
         }
@@ -371,8 +437,32 @@ fn fold_constraint_set<I: AsBytes>(
         ElementOrSetOperation::Element(e) => e.per_visible().then(|| e.clone()),
         ElementOrSetOperation::SetOperation(s) => fold_constraint_set(s, char_set)?,
     };
+    match (&set.base, &folded_operant) {
+        (base, Some(SubtypeElement::PermittedAlphabet(elem_or_set)))
+        | (SubtypeElement::PermittedAlphabet(elem_or_set), Some(base))
+        | (base, Some(SubtypeElement::SizeConstraint(elem_or_set)))
+        | (SubtypeElement::SizeConstraint(elem_or_set), Some(base)) => {
+            return fold_constraint_set(
+                &SetOperation {
+                    base: base.clone(),
+                    operator: set.operator.clone(),
+                    operant: elem_or_set.clone(),
+                },
+                char_set,
+            )
+        }
+        (SubtypeElement::PermittedAlphabet(elem_or_set), None)
+        | (SubtypeElement::SizeConstraint(elem_or_set), None) => {
+            return match &**elem_or_set {
+                ElementOrSetOperation::Element(e) => Ok(Some(e.clone())),
+                ElementOrSetOperation::SetOperation(s) => fold_constraint_set(s, char_set),
+            }
+        }
+        _ => (),
+    }
+
     match set.operator {
-        SetOperator::Intersection => match (&set.base, folded_operant) {
+        SetOperator::Intersection => match (&set.base, &folded_operant) {
             (b, _) if !b.per_visible() => Ok(None),
             (b, None) => Ok(Some(b.clone())),
             (b, Some(f)) if !f.per_visible() => Ok(Some(b.clone())),
@@ -386,30 +476,30 @@ fn fold_constraint_set<I: AsBytes>(
                     extensible: x2,
                 }),
             ) => match (v1, v2, char_set.is_some()) {
-                (ASN1Value::Integer(i), ASN1Value::String(s), false) => Ok(Some(set.base)),
-                (ASN1Value::String(s), ASN1Value::Integer(i), false) => Ok(folded_operant),
-                (ASN1Value::Integer(i), ASN1Value::String(s), true) => Ok(folded_operant),
-                (ASN1Value::String(s), ASN1Value::Integer(i), true) => Ok(Some(set.base)),
+                (ASN1Value::Integer(_), ASN1Value::String(_), false)
+                | (ASN1Value::String(_), ASN1Value::Integer(_), true) => Ok(Some(set.base.clone())),
+                (ASN1Value::String(_), ASN1Value::Integer(_), false)
+                | (ASN1Value::Integer(_), ASN1Value::String(_), true) => Ok(folded_operant),
                 (ASN1Value::Integer(i1), ASN1Value::Integer(i2), _) => {
-                    if *i1 != i2 {
+                    if *i1 != *i2 {
                         return Err(GrammarError {
                             details: format!(
                                 "Empty intersection result for {:?} and {:?}",
                                 v1,
-                                ASN1Value::Integer(i2)
+                                ASN1Value::Integer(*i2)
                             ),
                             kind: GrammarErrorType::UnpackingError,
                         }
                         .into());
                     } else {
                         Ok(Some(SubtypeElement::SingleValue {
-                            value: ASN1Value::Integer(i2),
-                            extensible: *x1 || x2,
+                            value: ASN1Value::Integer(*i2),
+                            extensible: *x1 || *x2,
                         }))
                     }
                 }
                 (ASN1Value::String(s1), ASN1Value::String(s2), _) => {
-                    if *x1 || x2 {
+                    if *x1 || *x2 {
                         Ok(None)
                     } else {
                         let permitted: String = s2.chars().filter(|c| s1.contains(*c)).collect();
@@ -418,7 +508,7 @@ fn fold_constraint_set<I: AsBytes>(
                                 details: format!(
                                     "Empty intersection result for {:?} and {:?}",
                                     v1,
-                                    ASN1Value::String(s2)
+                                    ASN1Value::String(s2.clone())
                                 ),
                                 kind: GrammarErrorType::UnpackingError,
                             }
@@ -446,7 +536,7 @@ fn fold_constraint_set<I: AsBytes>(
                     max,
                     extensible: x2,
                 }),
-            ) => intersect_single_and_range(value, min.as_ref(), max.as_ref(), *x1, x2, char_set),
+            ) => intersect_single_and_range(value, min.as_ref(), max.as_ref(), *x1, *x2, char_set),
             (
                 SubtypeElement::ValueRange {
                     min,
@@ -457,7 +547,7 @@ fn fold_constraint_set<I: AsBytes>(
                     value,
                     extensible: x1,
                 }),
-            ) => intersect_single_and_range(&value, min.as_ref(), max.as_ref(), x1, *x2, char_set),
+            ) => intersect_single_and_range(&value, min.as_ref(), max.as_ref(), *x1, *x2, char_set),
             (
                 _,
                 Some(SubtypeElement::SingleValue {
@@ -465,8 +555,8 @@ fn fold_constraint_set<I: AsBytes>(
                     extensible: x,
                 }),
             ) => Ok(Some(SubtypeElement::SingleValue {
-                value: v,
-                extensible: x,
+                value: v.clone(),
+                extensible: *x,
             })),
             (
                 SubtypeElement::ValueRange {
@@ -480,30 +570,30 @@ fn fold_constraint_set<I: AsBytes>(
                     extensible: x2,
                 }),
             ) => {
-                match (min1, max1, min2, max2) {
+                match (min1, max1, &min2, &max2) {
                     (Some(ASN1Value::Integer(_)), _, Some(ASN1Value::String(_)), _)
                     | (_, Some(ASN1Value::Integer(_)), Some(ASN1Value::String(_)), _)
                     | (Some(ASN1Value::Integer(_)), _, _, Some(ASN1Value::String(_)))
                     | (_, Some(ASN1Value::Integer(_)), _, Some(ASN1Value::String(_))) => {
-                      return if char_set.is_none() {
-                        Ok(Some(set.base))
-                      } else if !x2 {
-                        Ok(folded_operant)
-                      } else {
-                        Ok(None)
-                      }
-                    },
+                        return if char_set.is_none() {
+                            Ok(Some(set.base.clone()))
+                        } else if !x2 {
+                            Ok(folded_operant.clone())
+                        } else {
+                            Ok(None)
+                        }
+                    }
                     (Some(ASN1Value::String(_)), _, Some(ASN1Value::Integer(_)), _)
                     | (_, Some(ASN1Value::String(_)), Some(ASN1Value::Integer(_)), _)
                     | (Some(ASN1Value::String(_)), _, _, Some(ASN1Value::Integer(_)))
                     | (_, Some(ASN1Value::String(_)), _, Some(ASN1Value::Integer(_))) => {
-                      return if char_set.is_none() {
-                        Ok(folded_operant)
-                      } else if !x1 {
-                        Ok(Some(set.base))
-                      } else {
-                        Ok(None)
-                      }
+                        return if char_set.is_none() {
+                            Ok(folded_operant)
+                        } else if !x1 {
+                            Ok(Some(set.base.clone()))
+                        } else {
+                            Ok(None)
+                        }
                     }
                     _ => (),
                 };
@@ -516,7 +606,7 @@ fn fold_constraint_set<I: AsBytes>(
                 Ok(Some(SubtypeElement::ValueRange {
                     min,
                     max,
-                    extensible: *x1 || x2,
+                    extensible: *x1 || *x2,
                 }))
             }
             _ => unreachable!(),
@@ -592,7 +682,7 @@ fn fold_constraint_set<I: AsBytes>(
                     extensible: x2,
                 }),
             ) => {
-                match (min1, max1, min2, max2) {
+                match (min1, max1, &min2, &max2) {
                     (Some(ASN1Value::Integer(_)), _, Some(ASN1Value::String(_)), _)
                     | (Some(ASN1Value::String(_)), _, Some(ASN1Value::Integer(_)), _)
                     | (_, Some(ASN1Value::Integer(_)), Some(ASN1Value::String(_)), _)
@@ -621,7 +711,7 @@ fn fold_constraint_set<I: AsBytes>(
         },
         SetOperator::Except => {
             if set.base.per_visible() {
-                Ok(Some(set.base))
+                Ok(Some(set.base.clone()))
             } else {
                 Ok(None)
             }
@@ -724,13 +814,11 @@ fn union_single_and_range<I: AsBytes>(
         | (ASN1Value::Integer(_), Some(ASN1Value::String(_)), _, _, _)
         | (ASN1Value::String(_), Some(ASN1Value::Integer(_)), _, _, _)
         | (ASN1Value::String(_), _, Some(ASN1Value::Integer(_)), _, _) => Ok(None),
-        (ASN1Value::Integer(i), int_min, int_max, extensible, _) => {
-            Ok(Some(SubtypeElement::ValueRange {
-                min: compare_optional_asn1values(Some(v), min, |a, b| a.min(b, char_set))?,
-                max: compare_optional_asn1values(Some(v), max, |a, b| a.max(b, char_set))?,
-                extensible,
-            }))
-        }
+        (ASN1Value::Integer(_), _, _, extensible, _) => Ok(Some(SubtypeElement::ValueRange {
+            min: compare_optional_asn1values(Some(v), min, |a, b| a.min(b, char_set))?,
+            max: compare_optional_asn1values(Some(v), max, |a, b| a.max(b, char_set))?,
+            extensible,
+        })),
         (_, _, _, true, _) => Ok(None),
         (ASN1Value::String(s1), _, _, _, Some(chars)) => {
             let indices = s1
@@ -787,7 +875,7 @@ mod tests {
     #[test]
     fn initializes_per_visible_alphabet_from_single_value() {
         assert_eq!(
-            PerVisibleAlphabetConstraints::try_new(
+            PerVisibleAlphabetConstraints::try_new::<AsBytesDummy>(
                 &Constraint::SubtypeConstraint(ElementSet {
                     extensible: false,
                     set: ElementOrSetOperation::Element(SubtypeElement::SingleValue {
@@ -801,14 +889,14 @@ mod tests {
             .unwrap(),
             PerVisibleAlphabetConstraints {
                 string_type: CharacterStringType::UTF8String,
-                character_set: ['A', 'B', 'C', 'D', 'E', 'F']
+                character_by_index: [(0, 'A'), (1, 'B'), (2, 'C'), (3, 'D'), (4, 'E'), (5, 'F')]
                     .into_iter()
-                    .enumerate()
-                    .collect()
+                    .collect(),
+                index_by_character: None
             }
         );
         assert_eq!(
-            PerVisibleAlphabetConstraints::try_new(
+            PerVisibleAlphabetConstraints::try_new::<AsBytesDummy>(
                 &Constraint::SubtypeConstraint(ElementSet {
                     extensible: false,
                     set: ElementOrSetOperation::Element(SubtypeElement::SingleValue {
@@ -822,7 +910,8 @@ mod tests {
             .unwrap(),
             PerVisibleAlphabetConstraints {
                 string_type: CharacterStringType::NumericString,
-                character_set: ['1', '3', '2'].into_iter().enumerate().collect()
+                character_by_index: [(0, '1'), (2, '3'), (1, '2')].into_iter().collect(),
+                index_by_character: None,
             }
         )
     }
@@ -830,7 +919,7 @@ mod tests {
     #[test]
     fn initializes_per_visible_alphabet_from_range_value() {
         assert_eq!(
-            PerVisibleAlphabetConstraints::try_new(
+            PerVisibleAlphabetConstraints::try_new::<AsBytesDummy>(
                 &Constraint::SubtypeConstraint(ElementSet {
                     extensible: false,
                     set: ElementOrSetOperation::Element(SubtypeElement::ValueRange {
@@ -845,14 +934,14 @@ mod tests {
             .unwrap(),
             PerVisibleAlphabetConstraints {
                 string_type: CharacterStringType::UTF8String,
-                character_set: ['A', 'B', 'C', 'D', 'E', 'F']
+                character_by_index: [(0, 'A'), (1, 'B'), (2, 'C'), (3, 'D'), (4, 'E'), (5, 'F')]
                     .into_iter()
-                    .enumerate()
-                    .collect()
+                    .collect(),
+                index_by_character: None
             }
         );
         assert_eq!(
-            PerVisibleAlphabetConstraints::try_new(
+            PerVisibleAlphabetConstraints::try_new::<AsBytesDummy>(
                 &Constraint::SubtypeConstraint(ElementSet {
                     extensible: false,
                     set: ElementOrSetOperation::Element(SubtypeElement::ValueRange {
@@ -867,7 +956,10 @@ mod tests {
             .unwrap(),
             PerVisibleAlphabetConstraints {
                 string_type: CharacterStringType::NumericString,
-                character_set: [' ', '0', '1', '2', '3'].into_iter().enumerate().collect()
+                character_by_index: [(0, ' '), (1, '0'), (2, '1'), (3, '2'), (4, '3')]
+                    .into_iter()
+                    .collect(),
+                index_by_character: None
             }
         )
     }
@@ -1169,5 +1261,159 @@ mod tests {
                 extensible: false
             }
         )
+    }
+
+    #[test]
+    fn folds_single_value_mixed_constraints() {
+        let set_op = |op: SetOperator| SetOperation {
+            base: SubtypeElement::SingleValue {
+                value: ASN1Value::Integer(4),
+                extensible: false,
+            },
+            operator: op,
+            operant: Box::new(ElementOrSetOperation::Element(
+                SubtypeElement::SingleValue {
+                    value: ASN1Value::String("abc".into()),
+                    extensible: false,
+                },
+            )),
+        };
+        assert_eq!(
+            fold_constraint_set::<AsBytesDummy>(&set_op(SetOperator::Intersection), None)
+                .unwrap()
+                .unwrap(),
+            SubtypeElement::SingleValue {
+                value: ASN1Value::Integer(4),
+                extensible: false
+            }
+        );
+        assert_eq!(
+            fold_constraint_set::<AsBytesDummy>(
+                &set_op(SetOperator::Intersection),
+                Some(&CharacterStringType::IA5String.character_set())
+            )
+            .unwrap()
+            .unwrap(),
+            SubtypeElement::SingleValue {
+                value: ASN1Value::String("abc".into()),
+                extensible: false
+            }
+        );
+        assert_eq!(
+            fold_constraint_set::<AsBytesDummy>(&set_op(SetOperator::Union), None).unwrap(),
+            None
+        );
+        assert_eq!(
+            fold_constraint_set::<AsBytesDummy>(
+                &set_op(SetOperator::Union),
+                Some(&CharacterStringType::IA5String.character_set())
+            )
+            .unwrap(),
+            None
+        );
+    }
+
+    #[test]
+    fn folds_range_value_mixed_constraints() {
+        let set_op = |op| SetOperation {
+            base: SubtypeElement::ValueRange {
+                min: Some(ASN1Value::Integer(-1)),
+                max: Some(ASN1Value::Integer(3)),
+                extensible: false,
+            },
+            operator: op,
+            operant: Box::new(ElementOrSetOperation::Element(
+                SubtypeElement::SingleValue {
+                    value: ASN1Value::String("ABC".into()),
+                    extensible: false,
+                },
+            )),
+        };
+        assert_eq!(
+            fold_constraint_set::<AsBytesDummy>(
+                &set_op(SetOperator::Intersection),
+                Some(&CharacterStringType::PrintableString.character_set())
+            )
+            .unwrap()
+            .unwrap(),
+            SubtypeElement::SingleValue {
+                value: ASN1Value::String("ABC".into()),
+                extensible: false,
+            }
+        );
+        assert_eq!(
+            fold_constraint_set::<AsBytesDummy>(
+                &set_op(SetOperator::Union),
+                Some(&CharacterStringType::PrintableString.character_set())
+            )
+            .unwrap(),
+            None
+        );
+        assert_eq!(
+            fold_constraint_set::<AsBytesDummy>(&set_op(SetOperator::Intersection), None)
+                .unwrap()
+                .unwrap(),
+            SubtypeElement::ValueRange {
+                min: Some(ASN1Value::Integer(-1)),
+                max: Some(ASN1Value::Integer(3)),
+                extensible: false,
+            }
+        );
+        assert_eq!(
+            fold_constraint_set::<AsBytesDummy>(&set_op(SetOperator::Union), None).unwrap(),
+            None
+        );
+    }
+
+    #[test]
+    fn folds_range_values_mixed_constraints() {
+        let set_op = |op| SetOperation {
+            base: SubtypeElement::ValueRange {
+                min: Some(ASN1Value::Integer(-2)),
+                max: Some(ASN1Value::Integer(3)),
+                extensible: false,
+            },
+            operator: op,
+            operant: Box::new(ElementOrSetOperation::Element(SubtypeElement::ValueRange {
+                min: Some(ASN1Value::String("A".into())),
+                max: Some(ASN1Value::String("C".into())),
+                extensible: false,
+            })),
+        };
+        assert_eq!(
+            fold_constraint_set::<AsBytesDummy>(
+                &set_op(SetOperator::Intersection),
+                Some(&CharacterStringType::PrintableString.character_set())
+            )
+            .unwrap()
+            .unwrap(),
+            SubtypeElement::ValueRange {
+                min: Some(ASN1Value::String("A".into())),
+                max: Some(ASN1Value::String("C".into())),
+                extensible: false,
+            }
+        );
+        assert_eq!(
+            fold_constraint_set::<AsBytesDummy>(&set_op(SetOperator::Intersection), None)
+                .unwrap()
+                .unwrap(),
+            SubtypeElement::ValueRange {
+                min: Some(ASN1Value::Integer(-2)),
+                max: Some(ASN1Value::Integer(3)),
+                extensible: false,
+            }
+        );
+        assert_eq!(
+            fold_constraint_set::<AsBytesDummy>(
+                &set_op(SetOperator::Union),
+                Some(&CharacterStringType::PrintableString.character_set())
+            )
+            .unwrap(),
+            None
+        );
+        assert_eq!(
+            fold_constraint_set::<AsBytesDummy>(&set_op(SetOperator::Union), None).unwrap(),
+            None
+        );
     }
 }
