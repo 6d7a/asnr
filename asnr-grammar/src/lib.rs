@@ -680,9 +680,9 @@ impl ToString for ASN1Type {
 
 pub const NUMERIC_STRING_CHARSET: [char; 11] =
     [' ', '0', '1', '2', '3', '4', '5', '6', '7', '8', '9'];
-pub const PRINTABLE_STRING_CHARSET: [char; 76] = [
-    'A', 'B', 'C', 'E', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R',
-    'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z', 'a', 'b', 'c', 'e', 'd', 'e', 'f', 'g', 'h', 'i', 'j',
+pub const PRINTABLE_STRING_CHARSET: [char; 74] = [
+    'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R',
+    'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z', 'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j',
     'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z', '0', '1', '2',
     '3', '4', '5', '6', '7', '8', '9', ' ', '\'', '(', ')', '+', ',', '-', '.', '/', ':', '=', '?',
 ];
@@ -705,12 +705,11 @@ pub enum CharacterStringType {
 }
 
 impl CharacterStringType {
-    pub fn char_bit_size(&self) -> usize {
-        match self {
-            Self::NumericString => 4,
-            Self::IA5String | Self::PrintableString | Self::VisibleString => 7,
-            _ => 8,
-        }
+    pub fn is_known_multiplier_string(&self) -> bool {
+      match self {
+        Self::NumericString | Self::VisibleString | Self::PrintableString | Self::IA5String | Self::UniversalString | Self::BMPString => true,
+        _ => false
+      }
     }
 
     pub fn character_set(&self) -> BTreeMap<usize, char> {
@@ -726,18 +725,11 @@ impl CharacterStringType {
                 .map(|i| char::from_u32(i).unwrap())
                 .enumerate()
                 .collect(),
-            CharacterStringType::TeletexString => todo!(),
-            CharacterStringType::VideotexString => todo!(),
-            CharacterStringType::GraphicString => todo!(),
-            CharacterStringType::GeneralString => todo!(),
-            CharacterStringType::UniversalString => todo!(),
-            CharacterStringType::UTF8String => (0..u16::MAX as u32)
-                .into_iter()
-                .filter_map(|i| char::from_u32(i))
-                .enumerate()
-                .collect(),
-            CharacterStringType::BMPString => todo!(),
-            _ => todo!(),
+            _ => (0..u16::MAX as u32)
+            .into_iter()
+            .filter_map(|i| char::from_u32(i))
+            .enumerate()
+            .collect()
         }
     }
 }

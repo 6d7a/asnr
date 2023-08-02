@@ -357,6 +357,21 @@ pub fn format_decode_member_body(members: &Vec<StringifiedNameType>) -> String {
         .join("\n      ")
 }
 
+pub fn format_encoder_member_body(members: &Vec<StringifiedNameType>) -> String {
+  members
+      .iter()
+      .enumerate()
+      .map(|(i, m)| {
+          format!(
+              "{i} => Ok(|parent, output| {t}::encode::<E>(parent.{name}.clone(), output)),",
+              name = m.name,
+              t = m.r#type,
+          )
+      })
+      .collect::<Vec<String>>()
+      .join("\n      ")
+}
+
 fn declare_inner_sequence_member(
     member: &SequenceMember,
     parent_name: &String,

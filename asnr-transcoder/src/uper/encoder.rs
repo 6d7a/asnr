@@ -1,5 +1,5 @@
 use alloc::{boxed::Box, format, vec::Vec};
-use asnr_grammar::types::Integer;
+use asnr_grammar::types::*;
 use bitvec::{bitvec, prelude::Msb0, vec::BitVec, view::BitView};
 
 use crate::{
@@ -7,14 +7,18 @@ use crate::{
     Encoder,
 };
 
-use super::{bit_length, per_visible::PerVisibleRangeConstraints, Uper, AsBytesDummy};
+use super::{
+    bit_length,
+    per_visible::{PerVisibleAlphabetConstraints, PerVisibleRangeConstraints},
+    AsBytesDummy, Uper,
+};
 
 type BitOut = BitVec<u8, Msb0>;
 
 impl Encoder<u8, BitOut> for Uper {
     fn encode_integer<I>(
         integer: Integer,
-    ) -> Result<Box<dyn FnMut(I, BitOut) -> Result<BitOut, EncodingError>>, EncodingError>
+    ) -> Result<Box<dyn Fn(I, BitOut) -> Result<BitOut, EncodingError>>, EncodingError>
     where
         I: num::Integer + num::ToPrimitive + num::FromPrimitive + Copy,
     {
@@ -112,8 +116,8 @@ impl Encoder<u8, BitOut> for Uper {
     }
 
     fn encode_bit_string(
-        bit_string: asnr_grammar::types::BitString,
-    ) -> Result<Box<dyn FnMut(Vec<bool>, BitOut) -> Result<BitOut, EncodingError>>, EncodingError>
+        bit_string: BitString,
+    ) -> Result<Box<dyn Fn(Vec<bool>, BitOut) -> Result<BitOut, EncodingError>>, EncodingError>
     {
         let mut constraints = PerVisibleRangeConstraints::default_unsigned();
         for c in &bit_string.constraints {
@@ -145,6 +149,76 @@ impl Encoder<u8, BitOut> for Uper {
                 },
             ))
         }
+    }
+
+    fn encode_character_string(
+        character_string: CharacterString,
+    ) -> Result<Box<dyn Fn(&str, BitOut) -> Result<BitOut, EncodingError>>, EncodingError> {
+        let mut constraints = PerVisibleRangeConstraints::default_unsigned();
+        let mut permitted_alphabet =
+            PerVisibleAlphabetConstraints::default_for(character_string.r#type);
+        for c in &character_string.constraints {
+            constraints +=
+                c.try_into()
+                    .map_err(|_: DecodingError<AsBytesDummy>| EncodingError {
+                        details: format!("Failed to parse bit string constraints"),
+                    })?;
+            PerVisibleAlphabetConstraints::try_new::<AsBytesDummy>(c, character_string.r#type)?
+                .map(|mut p| permitted_alphabet += &mut p);
+        }
+        permitted_alphabet.finalize();
+        if constraints.is_extensible() && permitted_alphabet.is_known_multiplier_string() {
+            Ok(Box::new(
+                move |encodable: &str, mut output: BitOut| -> Result<BitOut, EncodingError> {
+                    let actual_length = encodable.len();
+                    let _ = write_extended_bit(&constraints, actual_length, &mut output)?;
+                    let to_wrap = encode_sized_string(& permitted_alphabet, encodable)?;
+                    with_size_length_determinant(actual_length, &constraints, to_wrap, output)
+                },
+            ))
+        } else {
+            Ok(Box::new(
+                move |encodable: &str, output: BitOut| -> Result<BitOut, EncodingError> {
+                    let to_wrap = encode_sized_string(& permitted_alphabet, encodable)?;
+                    with_size_length_determinant(encodable.len(), &constraints, to_wrap, output)
+                },
+            ))
+        }
+    }
+
+    fn encode_sequence<S>(
+        sequence: Sequence,
+    ) -> Result<Box<dyn Fn(S, BitOut) -> Result<BitOut, EncodingError>>, EncodingError> {
+      todo!()
+    }
+}
+
+fn encode_sized_string(
+    permitted_alphabet: &PerVisibleAlphabetConstraints,
+    string: &str,
+) -> Result<BitOut, EncodingError> {
+    let bit_length = permitted_alphabet.bit_length();
+    if bit_length == 0 {
+        return encode_sized_string(
+            &permitted_alphabet.fall_back_to_standard_charset(),
+            string,
+        );
+    }
+    if permitted_alphabet.is_known_multiplier_string() {
+        let mut output = BitVec::new();
+        for c in string.chars() {
+            let index =
+                permitted_alphabet
+                    .index_by_character_map()?
+                    .get(&c)
+                    .ok_or(EncodingError {
+                        details: format!("Character {c} is not part of permitted character set"),
+                    })?;
+            output = encode_constrained_integer(*index, bit_length, output)?;
+        }
+        Ok(output)
+    } else {
+        Ok(string.as_bytes().view_bits::<Msb0>().to_bitvec())
     }
 }
 
@@ -311,8 +385,6 @@ fn align(output: BitOut) -> BitOut {
 
 #[cfg(test)]
 mod tests {
-    use std::println;
-
     use crate::uper::{
         encoder::{align, encode_constrained_integer, pad},
         Uper,
@@ -548,5 +620,56 @@ mod tests {
                 .unwrap(),
             bitvec![u8, Msb0; 1, 0,0,0,0,0,0,1,0, 0,0]
         )
+    }
+
+    #[test]
+    fn encodes_constrained_character_string_with_permitted_alphabet() {
+        asn1_internal_tests!(
+            r#"TestString ::= BMPString (SIZE(1..4) INTERSECTION FROM("te" | "s"))"#
+        );
+        assert_eq!(
+            TestString::encode::<Uper>(TestString("test".into()), bitvec![u8, Msb0;]).unwrap(),
+            bitvec![u8, Msb0; 1,1, 1,0, 0,0, 0,1, 1,0]
+        );
+    }
+
+    #[test]
+    fn encodes_unconstrained_variable_size_character_string() {
+        asn1_internal_tests!(r#"TestString ::= GraphicString"#);
+        assert_eq!(
+            TestString::encode::<Uper>(TestString("🦀".into()), bitvec![u8, Msb0;]).unwrap(),
+            bitvec![u8, Msb0;
+            0,0,0,0,0,1,0,0,
+            1,1,1,1,0,0,0,0,1,0,0,1,1,1,1,1,1,0,1,0,0,1,1,0,1,0,0,0,0,0,0,0
+            ]
+        );
+    }
+
+    #[test]
+    fn encodes_constrained_extensible_character_string_with_permitted_alphabet() {
+        asn1_internal_tests!(r#"TestString ::= NumericString (SIZE(1..4,...))"#);
+        assert_eq!(
+            TestString::encode::<Uper>(TestString("040234".into()), bitvec![u8, Msb0;]).unwrap(),
+            bitvec![u8, Msb0;
+              1,
+              0,0,0,0,0,1,1,0,
+              0,0,0,1,
+              0,1,0,1,
+              0,0,0,1,
+              0,0,1,1,
+              0,1,0,0,
+              0,1,0,1
+            ]
+        );
+        assert_eq!(
+            TestString::encode::<Uper>(TestString("040".into()), bitvec![u8, Msb0;]).unwrap(),
+            bitvec![u8, Msb0;
+              0,
+              1,0,
+              0,0,0,1,
+              0,1,0,1,
+              0,0,0,1
+            ]
+        );
     }
 }
