@@ -281,16 +281,16 @@ mod tests {
             "{:#?}",
             Asnr::compiler()
                 .no_std(true)
-                // .add_asn_source(PathBuf::from("test_asn1/AddGrpC.asn"))
-                // .add_asn_source(PathBuf::from("test_asn1/ETSI-ITS-CDD.asn"))
-                //.add_asn_by_path(PathBuf::from("test_asn1/REGION.asn"))
-                .add_asn_by_path(PathBuf::from("test_asn1/v2x.asn"))
-                //     .add_asn_source(PathBuf::from(
+                // .add_asn_by_path(PathBuf::from("test_asn1/AddGrpC.asn"))
+                // .add_asn_by_path(PathBuf::from("test_asn1/ETSI-ITS-CDD.asn"))
+                .add_asn_by_path(PathBuf::from("test_asn1/REGION.asn"))
+                //.add_asn_by_path(PathBuf::from("test_asn1/v2x.asn"))
+                //     .add_asn_by_path(PathBuf::from(
                 //         "test_asn1/CPM-OriginatingStationContainers.asn"
                 //     ))
-                //     .add_asn_source(PathBuf::from("test_asn1/CPM-PerceivedObjectContainer.asn"))
-                //     .add_asn_source(PathBuf::from("test_asn1/CPM-PerceptionRegionContainer.asn"))
-                //     .add_asn_source(PathBuf::from(
+                //     .add_asn_by_path(PathBuf::from("test_asn1/CPM-PerceivedObjectContainer.asn"))
+                //     .add_asn_by_path(PathBuf::from("test_asn1/CPM-PerceptionRegionContainer.asn"))
+                //     .add_asn_by_path(PathBuf::from(
                 //         "test_asn1/CPM-SensorInformationContainer.asn"
                 //     ))
                 //    .add_asn_source(PathBuf::from("test_asn1/CPM-PDU-Descriptions.asn"))

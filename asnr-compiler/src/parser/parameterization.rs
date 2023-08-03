@@ -1,18 +1,13 @@
 use nom::{
     branch::alt,
     character::complete::char,
-    combinator::{into, map},
+    combinator::{into, map, opt},
     multi::separated_list1,
-    sequence::separated_pair,
+    sequence::{pair, preceded},
     IResult,
 };
 
-use asnr_grammar::{
-    constraints::Parameter,
-    information_object::{ASN1Information, ObjectSet},
-    parameterization::*,
-    *,
-};
+use asnr_grammar::{constraints::Parameter, parameterization::*, *};
 
 use super::{
     asn1_type, asn1_value,
@@ -23,10 +18,12 @@ use super::{
 pub fn parameterization<'a>(input: &'a str) -> IResult<&'a str, Parameterization> {
     into(in_braces(separated_list1(
         char(COMMA),
-        skip_ws_and_comments(separated_pair(
+        skip_ws_and_comments(pair(
             identifier,
-            skip_ws_and_comments(char(COLON)),
-            skip_ws_and_comments(identifier),
+            opt(preceded(
+                skip_ws_and_comments(char(COLON)),
+                skip_ws_and_comments(identifier),
+            )),
         )),
     )))(input)
 }
@@ -64,7 +61,7 @@ mod tests {
             Parameterization {
                 parameters: vec![ParameterizationArgument {
                     r#type: "REG-EXT-ID-AND-TYPE".into(),
-                    name: "Set".into()
+                    name: Some("Set".into())
                 }]
             }
         )

@@ -423,6 +423,8 @@ pub fn generate_sequence_of<'a>(
     }
 }
 
+
+#[allow(dead_code)]
 pub fn generate_information_object_set<'a>(
     tld: ToplevelInformationDeclaration,
 ) -> Result<String, GeneratorError> {

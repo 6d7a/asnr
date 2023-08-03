@@ -31,7 +31,7 @@ pub(crate) fn bit_length(min: i128, max: i128) -> usize {
 pub fn rustify_name(name: &String) -> String {
     let name = name.replace("-", "_");
     if RUST_KEYWORDS.contains(&name.as_str()) {
-        String::from("r#") + &name
+        String::from("r_") + &name
     } else {
         name
     }

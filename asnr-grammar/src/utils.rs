@@ -1,4 +1,4 @@
-use alloc::{vec::Vec, string::String};
+use alloc::{vec::Vec, string::String, collections::BTreeMap};
 
 use crate::{information_object::{InformationObjectClassField, ObjectFieldIdentifier}, ToplevelDeclaration, ASN1Value};
 
@@ -16,18 +16,18 @@ pub fn int_type_token<'a>(min: i128, max: i128) -> &'a str {
     }
 }
 
-pub(crate) fn find_tld_or_enum_value_by_name(type_name: &String, name: &String, tlds: &Vec<ToplevelDeclaration>) -> Option<ASN1Value> {
-  if let Some(ToplevelDeclaration::Value(v)) = tlds.iter().find(|t| t.name() == name) {
+pub(crate) fn find_tld_or_enum_value_by_name(type_name: &String, name: &String, tlds: &BTreeMap<String, ToplevelDeclaration>) -> Option<ASN1Value> {
+  if let Some(ToplevelDeclaration::Value(v)) = tlds.get(name) {
     return Some(v.value.clone())
   } else {
-    for tld in tlds.iter() {
+    for (_, tld) in tlds.iter() {
       if let Some(value) = tld.get_distinguished_or_enum_value(Some(type_name), name) {
         return Some(value)
       }
     }
     // Make second attempt without requiring a matching type name
     // This is the current best shot at linking inner subtypes
-    for tld in tlds.iter() {
+    for (_, tld) in tlds.iter() {
       if let Some(value) = tld.get_distinguished_or_enum_value(None, name) {
         return Some(value)
       }

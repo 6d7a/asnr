@@ -1,7 +1,3 @@
-use std::fmt::format;
-
-use asnr_grammar::*;
-
 use super::builder::StringifiedNameType;
 
 pub fn imports_and_generic_types(
@@ -392,18 +388,17 @@ pub fn enumerated_template(
     )
 }
 
-
 pub fn sequence_value_template(
-  comments: String,
-  name: String,
-  ty: &String,
-  stringified_declaration: String,
+    comments: String,
+    name: String,
+    ty: &String,
+    stringified_declaration: String,
 ) -> String {
-  format!(
-      r#"{comments}
+    format!(
+        r#"{comments}
 pub const {name}: &'static {ty} = &{stringified_declaration};
 "#
-  )
+    )
 }
 
 pub fn sequence_template(
@@ -463,6 +458,19 @@ pub fn sequence_template(
     {DECODER_SIGNATURE}
     {{
       D::decode_sequence({seq_descriptor})
+    }}
+  }}
+
+  impl<T, O: Extend<T> + Debug + 'static> Encode<T, O> for {name} {{
+    {ENCODE_SIGNATURE}
+    {{
+      {name}::encoder::<E>()?(encodable, output)
+    }}
+  
+    {ENCODER_SIGNATURE}
+    {{
+      let mut sequence_encoder = E::encode_sequence({seq_descriptor})?;
+      Ok(Box::new(move |encodable, output| (*sequence_encoder)(encodable, output)))
     }}
   }}
   "#

@@ -1,5 +1,5 @@
 use alloc::{boxed::Box, format, string::String, vec::Vec};
-use asnr_grammar::{types::*, AsnTag};
+use asnr_grammar::{constraints::Constraint, types::*};
 use bitvec::{bitvec, prelude::Msb0, vec::BitVec, view::BitView};
 use core::fmt::Debug;
 
@@ -23,12 +23,7 @@ impl Encoder<u8, BitOut> for Uper {
     where
         I: num::Integer + num::ToPrimitive + num::FromPrimitive + Copy,
     {
-        let mut constraints = PerVisibleRangeConstraints::default();
-        for c in &integer.constraints {
-            constraints += c.try_into().map_err(|e| EncodingError {
-                details: format!("Failed to parse integer constraints"),
-            })?
-        }
+        let constraints = per_visible_range_constraints(true, &integer.constraints)?;
         if constraints.is_extensible() {
             if let Some(bit_length) = constraints.bit_length() {
                 Ok(Box::new(
@@ -120,14 +115,7 @@ impl Encoder<u8, BitOut> for Uper {
         bit_string: BitString,
     ) -> Result<Box<dyn Fn(Vec<bool>, BitOut) -> Result<BitOut, EncodingError>>, EncodingError>
     {
-        let mut constraints = PerVisibleRangeConstraints::default_unsigned();
-        for c in &bit_string.constraints {
-            constraints += c
-                .try_into()
-                .map_err(|_: DecodingError<AsBytesDummy>| EncodingError {
-                    details: format!("Failed to parse bit string constraints"),
-                })?
-        }
+        let constraints = per_visible_range_constraints(false, &bit_string.constraints)?;
         if constraints.is_extensible() {
             Ok(Box::new(
                 move |encodable: Vec<bool>, mut output: BitOut| -> Result<BitOut, EncodingError> {
@@ -187,36 +175,134 @@ impl Encoder<u8, BitOut> for Uper {
         }
     }
 
-    fn encode_sequence<S>(
+    fn encode_sequence<S: EncoderForIndex<u8, BitOut> + Debug>(
         sequence: Sequence,
     ) -> Result<Box<dyn Fn(S, BitOut) -> Result<BitOut, EncodingError>>, EncodingError> {
-        todo!()
+        let member_list: Vec<(usize, String, bool)> = sequence
+            .members
+            .iter()
+            .enumerate()
+            .map(|(i, m)| (i, rustify_name(&m.name), m.is_optional))
+            .collect();
+        let encode_optional_map = |encodable: S,
+                                   mut output: BitOut,
+                                   member_list: &Vec<(usize, String, bool)>|
+         -> (S, BitOut, Vec<bool>) {
+            // This is performance-wise pretty ugly and should be handled differently
+            // in the future
+            let stringified_encodable = format!("{encodable:?}");
+            let mut skip_list: Vec<bool> = member_list
+                .iter()
+                .filter_map(|(_, name, opt)| {
+                    opt.then(|| stringified_encodable.contains(&format!("{name}: None")))
+                })
+                .map(|not_present| {
+                    output.push(!not_present);
+                    not_present
+                })
+                .collect();
+            // Reverting skip_list so that we can pop presence information from back
+            skip_list.reverse();
+            (encodable, output, skip_list)
+        };
+        if let Some(index_of_first_extension) = sequence.extensible {
+            Ok(Box::new(move |encodable, mut output| {
+                let root_bits = bitvec![u8, Msb0;];
+                let mut extension_bits = bitvec![u8, Msb0;];
+                let (encodable, mut root_bits, mut skip_list) =
+                    encode_optional_map(encodable, root_bits, &member_list);
+                let mut extension_presence = Vec::new();
+                'encoding_members: for (index, _, optional) in &member_list {
+                    if *optional
+                        && skip_list.pop().ok_or(EncodingError {
+                            details: format!(
+                                "Optionals list is too short for Encodable {:?}",
+                                encodable
+                            ),
+                        })?
+                    {
+                        if index >= &index_of_first_extension {
+                            extension_presence.push(false);
+                        }
+                        continue 'encoding_members;
+                    }
+                    if index < &index_of_first_extension {
+                        root_bits =
+                            S::encoder_for_index::<Uper>((*index).try_into().map_err(|_| {
+                                EncodingError {
+                                    details: format!("Index {index} exceeds usize range!"),
+                                }
+                            })?)?(&encodable, root_bits)?;
+                    } else {
+                        extension_presence.push(true);
+                        let mut extension =
+                            S::encoder_for_index::<Uper>((*index).try_into().map_err(|_| {
+                                EncodingError {
+                                    details: format!("Index {index} exceeds usize range!"),
+                                }
+                            })?)?(&encodable, bitvec![u8, Msb0;])?;
+                        extension = align_back(extension);
+                        extension_bits = wrap_in_length_determinant(
+                            extension_bits.len() / 8,
+                            extension,
+                            Some(0),
+                            extension_bits,
+                        )?;
+                    }
+                }
+                output.push(!extension_bits.is_empty());
+                output.append(&mut root_bits);
+                if !extension_bits.is_empty() {
+                    output = encode_normally_small_number(extension_presence.len(), output)?;
+                    for bit in extension_presence {
+                        output.push(bit);
+                    }
+                    output.append(&mut extension_bits);
+                }
+                Ok(output)
+            }))
+        } else {
+            Ok(Box::new(move |encodable, output| {
+                let (encodable, mut output, mut skip_list) =
+                    encode_optional_map(encodable, output, &member_list);
+                'encoding_members: for (index, _, optional) in &member_list {
+                    if *optional
+                        && skip_list.pop().ok_or(EncodingError {
+                            details: format!(
+                                "Optionals list is too short for Encodable {:?}",
+                                encodable
+                            ),
+                        })?
+                    {
+                        continue 'encoding_members;
+                    }
+                    output = S::encoder_for_index::<Uper>((*index).try_into().map_err(|_| {
+                        EncodingError {
+                            details: format!("Index {index} exceeds usize range!"),
+                        }
+                    })?)?(&encodable, output)?;
+                }
+                Ok(output)
+            }))
+        }
     }
 
     fn encode_enumerated<E: Encode<u8, BitOut> + Debug>(
         enumerated: Enumerated,
     ) -> Result<Box<dyn Fn(E, BitOut) -> Result<BitOut, EncodingError>>, EncodingError> {
-        let mut constraints = PerVisibleRangeConstraints::from(&enumerated);
-        for c in &enumerated.constraints {
-            constraints += c
-                .try_into()
-                .map_err(|_: DecodingError<AsBytesDummy>| EncodingError {
-                    details: format!("Failed to parse enumerated constraints"),
-                })?
-        }
         let mut member_ids = enumerated
             .members
             .iter()
             .map(|m| (rustify_name(&m.name), m.index))
-            .collect::<Vec<(String, u64)>>();
+            .collect::<Vec<(String, i128)>>();
         member_ids.sort_by(|(_, a), (_, b)| a.cmp(b));
         let indices_for_member = member_ids
             .into_iter()
             .enumerate()
             .map(|(i, (n, _))| (n, i))
             .collect::<Vec<(String, usize)>>();
-        if constraints.is_extensible() {
-            Ok(Box::new(move |encodable, output| {
+        if let Some(index_of_first_extension) = enumerated.extensible {
+            Ok(Box::new(move |encodable, mut output| {
                 let index = indices_for_member
                     .iter()
                     .find_map(|(name, index)| (&format!("{encodable:?}") == name).then(|| *index))
@@ -226,12 +312,14 @@ impl Encoder<u8, BitOut> for Uper {
                             &indices_for_member
                         ),
                     })?;
-                if index >= enumerated.extensible.unwrap() {
-                    encode_normally_small_number(index - enumerated.extensible.unwrap(), output)
+                if index >= index_of_first_extension {
+                    output.push(true);
+                    encode_normally_small_number(index - index_of_first_extension, output)
                 } else {
+                    output.push(false);
                     encode_constrained_integer(
                         index,
-                        bit_length(0, (indices_for_member.len() - 1) as i128),
+                        bit_length(0, (index_of_first_extension - 1) as i128),
                         output,
                     )
                 }
@@ -259,14 +347,6 @@ impl Encoder<u8, BitOut> for Uper {
     fn encode_choice<C: EncoderForIndex<u8, BitOut> + Debug>(
         choice: Choice,
     ) -> Result<Box<dyn Fn(C, BitOut) -> Result<BitOut, EncodingError>>, EncodingError> {
-        let mut constraints = PerVisibleRangeConstraints::from(&choice);
-        for c in &choice.constraints {
-            constraints += c
-                .try_into()
-                .map_err(|_: DecodingError<AsBytesDummy>| EncodingError {
-                    details: format!("Failed to parse choice constraints"),
-                })?
-        }
         let mut indices_for_member = choice
             .options
             .iter()
@@ -279,20 +359,22 @@ impl Encoder<u8, BitOut> for Uper {
             })
             .collect::<Vec<(String, usize)>>();
         indices_for_member.sort_by(|(_, a), (_, b)| a.cmp(b));
-        if constraints.is_extensible() {
+        if let Some(index_of_first_extension) = choice.extensible {
             Ok(Box::new(move |encodable, output| {
                 let index = indices_for_member
                     .iter()
-                    .find_map(|(name, index)| (&format!("{encodable:?}") == name).then(|| *index))
+                    .find_map(|(name, index)| {
+                        (format!("{encodable:?}").contains(name)).then(|| *index)
+                    })
                     .ok_or(EncodingError {
                         details: format!(
                             "Could not find choice option {encodable:?} among {:?}",
                             &indices_for_member
                         ),
                     })?;
-                if index >= choice.extensible.unwrap() {
+                if index >= index_of_first_extension {
                     let output =
-                        encode_normally_small_number(index - choice.extensible.unwrap(), output)?;
+                        encode_normally_small_number(index - index_of_first_extension, output)?;
                     let to_wrap =
                         align_back(C::encoder_for_index::<Uper>(index.try_into().map_err(
                             |_| EncodingError {
@@ -315,7 +397,9 @@ impl Encoder<u8, BitOut> for Uper {
             Ok(Box::new(move |encodable, output| {
                 let index = indices_for_member
                     .iter()
-                    .find_map(|(name, index)| (&format!("{encodable:?}") == name).then(|| *index))
+                    .find_map(|(name, index)| {
+                        (format!("{encodable:?}").contains(name)).then(|| *index)
+                    })
                     .ok_or(EncodingError {
                         details: format!(
                             "Could not find enumerated option {encodable:?} among {:?}",
@@ -333,6 +417,25 @@ impl Encoder<u8, BitOut> for Uper {
             }))
         }
     }
+}
+
+fn per_visible_range_constraints(
+    signed: bool,
+    constraint_list: &Vec<Constraint>,
+) -> Result<PerVisibleRangeConstraints, EncodingError> {
+    let mut constraints = if signed {
+        PerVisibleRangeConstraints::default()
+    } else {
+        PerVisibleRangeConstraints::default_unsigned()
+    };
+    for c in constraint_list {
+        constraints += c
+            .try_into()
+            .map_err(|_: DecodingError<AsBytesDummy>| EncodingError {
+                details: format!("Failed to parse bit string constraints"),
+            })?
+    }
+    Ok(constraints)
 }
 
 fn encode_sized_string(
@@ -493,7 +596,7 @@ where
     }
 }
 
-fn encode_normally_small_number<I>(number: I, output: BitOut) -> Result<BitOut, EncodingError>
+fn encode_normally_small_number<I>(number: I, mut output: BitOut) -> Result<BitOut, EncodingError>
 where
     I: num::Integer + num::ToPrimitive + Copy,
 {
@@ -502,6 +605,7 @@ where
             details: "Encoding normally-small numbers larger than 63 is not supported yet!".into(),
         })
     } else {
+        output.push(false);
         encode_constrained_integer(number, 6, output)
     }
 }
@@ -569,6 +673,10 @@ mod tests {
 
     #[test]
     fn encodes_constrained_int() {
+        assert_eq!(
+            encode_constrained_integer(0, 6, bitvec![u8, Msb0;]).unwrap(),
+            bitvec![u8, Msb0; 0,0,0,0,0,0]
+        );
         assert_eq!(
             encode_constrained_integer(0, 2, bitvec![u8, Msb0;]).unwrap(),
             bitvec![u8, Msb0; 0,0]
@@ -833,6 +941,126 @@ mod tests {
               0,1,0,1,
               0,0,0,1
             ]
+        );
+    }
+
+    #[test]
+    fn encodes_simple_enumerated() {
+        asn1_internal_tests!(r#"TestEnum ::= ENUMERATED {m1, m2, m3}"#);
+        assert_eq!(
+            TestEnum::encode::<Uper>(TestEnum::m1, bitvec![u8, Msb0;]).unwrap(),
+            bitvec![u8, Msb0; 0,0]
+        );
+        assert_eq!(
+            TestEnum::encode::<Uper>(TestEnum::m2, bitvec![u8, Msb0;]).unwrap(),
+            bitvec![u8, Msb0; 0,1]
+        );
+        assert_eq!(
+            TestEnum::encode::<Uper>(TestEnum::m3, bitvec![u8, Msb0;]).unwrap(),
+            bitvec![u8, Msb0; 1,0]
+        );
+    }
+
+    #[test]
+    fn encodes_indexed_enumerated() {
+        asn1_internal_tests!(r#"TestEnum ::= ENUMERATED {m1( -8), m2(0), m3(-20)}"#);
+        assert_eq!(
+            TestEnum::encode::<Uper>(TestEnum::m1, bitvec![u8, Msb0;]).unwrap(),
+            bitvec![u8, Msb0; 0,1]
+        );
+        assert_eq!(
+            TestEnum::encode::<Uper>(TestEnum::m2, bitvec![u8, Msb0;]).unwrap(),
+            bitvec![u8, Msb0; 1,0]
+        );
+        assert_eq!(
+            TestEnum::encode::<Uper>(TestEnum::m3, bitvec![u8, Msb0;]).unwrap(),
+            bitvec![u8, Msb0; 0,0]
+        );
+    }
+
+    #[test]
+    fn encodes_extended_enumerated() {
+        asn1_internal_tests!(
+            r#"HashAlgorithm ::= ENUMERATED { 
+                sha256,
+                ...,
+                sha384
+              }"#
+        );
+        assert_eq!(
+            HashAlgorithm::encode::<Uper>(HashAlgorithm::sha256, bitvec![u8, Msb0;]).unwrap(),
+            bitvec![u8, Msb0; 0]
+        );
+        assert_eq!(
+            HashAlgorithm::encode::<Uper>(HashAlgorithm::sha384, bitvec![u8, Msb0;]).unwrap(),
+            bitvec![u8, Msb0; 1,0,0,0,0,0,0,0]
+        );
+    }
+
+    #[test]
+    fn encodes_empty_extended_enumerated() {
+        asn1_internal_tests!(
+            r#"InitiallyEmpty ::= ENUMERATED { 
+                ...,
+                now
+              }"#
+        );
+        assert_eq!(
+            InitiallyEmpty::encode::<Uper>(InitiallyEmpty::now, bitvec![u8, Msb0;]).unwrap(),
+            bitvec![u8, Msb0; 1,0,0,0,0,0,0,0]
+        );
+    }
+
+    #[test]
+    fn encodes_simple_choice() {
+        asn1_internal_tests!(
+            r#"VarLengthNumber ::= CHOICE {
+              content INTEGER(0..127),
+              extension BOOLEAN
+              }"#
+        );
+        assert_eq!(
+            VarLengthNumber::encode::<Uper>(
+                VarLengthNumber::content(VarLengthNumber_content(42)),
+                bitvec![u8, Msb0;]
+            )
+            .unwrap(),
+            bitvec![u8, Msb0; 0, 0,1,0,1,0,1,0]
+        );
+        assert_eq!(
+            VarLengthNumber::encode::<Uper>(
+                VarLengthNumber::extension(VarLengthNumber_extension(true)),
+                bitvec![u8, Msb0;]
+            )
+            .unwrap(),
+            bitvec![u8, Msb0; 1, 1]
+        );
+    }
+
+    #[test]
+    fn encodes_extended_choice() {
+        asn1_internal_tests!(
+            r#"SymmetricEncryptionKey ::= CHOICE {
+              aes128Ccm OCTET STRING(SIZE(1)),
+              ...
+              none NULL
+             }"#
+        );
+        assert_eq!(
+            SymmetricEncryptionKey::encode::<Uper>(
+                SymmetricEncryptionKey::aes128Ccm(SymmetricEncryptionKey_aes128Ccm("A2".into())),
+                bitvec![u8, Msb0;]
+            )
+            .unwrap(),
+            bitvec![u8, Msb0; 0]
+        );
+        assert_eq!(
+            SymmetricEncryptionKey::encode::<Uper>(
+                SymmetricEncryptionKey::none(SymmetricEncryptionKey_none),
+                bitvec![u8, Msb0;]
+            )
+            .unwrap(),
+            bitvec![u8, Msb0; 1,0,0,0,0,0,0,0]
         );
     }
 }

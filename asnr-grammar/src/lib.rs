@@ -33,7 +33,7 @@ use alloc::{
 use constraints::Constraint;
 use error::{GrammarError, GrammarErrorType};
 use information_object::{
-    InformationObjectClass, InformationObjectFieldReference, ObjectFieldIdentifier, ObjectSet,
+    InformationObjectClass, InformationObjectFieldReference, ObjectFieldIdentifier,
     ToplevelInformationDeclaration,
 };
 use parameterization::Parameterization;
@@ -387,7 +387,10 @@ impl ToplevelDeclaration {
     /// ### Params
     ///  * `tlds` - vector of other top-level declarations that will be searched as the method resolves a reference
     /// returns `true` if the reference was resolved successfully.
-    pub fn link_constraint_reference(&mut self, tlds: &Vec<ToplevelDeclaration>) -> bool {
+    pub fn link_constraint_reference(
+        &mut self,
+        tlds: &BTreeMap<String, ToplevelDeclaration>,
+    ) -> bool {
         match self {
             ToplevelDeclaration::Type(t) => t.r#type.link_constraint_reference(&t.name, tlds),
             // TODO: Cover constraint references in other types of top-level declarations
@@ -459,7 +462,7 @@ impl ASN1Type {
     pub fn link_constraint_reference(
         &mut self,
         name: &String,
-        tlds: &Vec<ToplevelDeclaration>,
+        tlds: &BTreeMap<String, ToplevelDeclaration>,
     ) -> bool {
         match self {
             ASN1Type::Null => false,
@@ -593,7 +596,10 @@ impl ASN1Type {
         }
     }
 
-    pub fn resolve_class_field_reference(self, tlds: &Vec<ToplevelDeclaration>) -> Self {
+    pub fn resolve_class_field_reference(
+        self,
+        tlds: &BTreeMap<String, ToplevelDeclaration>,
+    ) -> Self {
         match self {
             ASN1Type::Choice(c) => ASN1Type::Choice(Choice {
                 extensible: c.extensible,
@@ -627,11 +633,11 @@ impl ASN1Type {
         }
     }
 
-    fn reassign_type_for_ref(mut self, tlds: &Vec<ToplevelDeclaration>) -> Self {
+    fn reassign_type_for_ref(mut self, tlds: &BTreeMap<String, ToplevelDeclaration>) -> Self {
         if let Self::InformationObjectFieldReference(ref ior) = self {
             if let Some(t) = tlds
                 .iter()
-                .find_map(|c| {
+                .find_map(|(_, c)| {
                     c.is_class_with_name(&ior.class)
                         .map(|clazz| clazz.get_field(&ior.field_path))
                 })
@@ -645,12 +651,13 @@ impl ASN1Type {
         self
     }
 
-    pub fn link_subtype_constraint(&mut self, tlds: &Vec<ToplevelDeclaration>) -> bool {
+    pub fn link_subtype_constraint(
+        &mut self,
+        tlds: &BTreeMap<String, ToplevelDeclaration>,
+    ) -> bool {
         match self {
             Self::ElsewhereDeclaredType(e) => {
-                if let Some(ToplevelDeclaration::Type(t)) =
-                    tlds.iter().find(|t| t.name() == &e.identifier)
-                {
+                if let Some(ToplevelDeclaration::Type(t)) = tlds.get(&e.identifier) {
                     *self = t.r#type.clone();
                     return true;
                 }
@@ -681,6 +688,9 @@ impl ToString for ASN1Type {
 
 pub const NUMERIC_STRING_CHARSET: [char; 11] =
     [' ', '0', '1', '2', '3', '4', '5', '6', '7', '8', '9'];
+pub const OCTET_STRING_CHARSET: [char; 16] = [
+    '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'A', 'B', 'C', 'D', 'E', 'F',
+];
 pub const PRINTABLE_STRING_CHARSET: [char; 74] = [
     'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S',
     'T', 'U', 'V', 'W', 'X', 'Y', 'Z', 'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l',
@@ -709,6 +719,7 @@ impl CharacterStringType {
     pub fn is_known_multiplier_string(&self) -> bool {
         match self {
             Self::NumericString
+            | Self::OctetString
             | Self::VisibleString
             | Self::PrintableString
             | Self::IA5String
@@ -725,6 +736,9 @@ impl CharacterStringType {
             }
             CharacterStringType::VisibleString | CharacterStringType::PrintableString => {
                 PRINTABLE_STRING_CHARSET.into_iter().enumerate().collect()
+            }
+            CharacterStringType::OctetString => {
+                OCTET_STRING_CHARSET.into_iter().enumerate().collect()
             }
             CharacterStringType::IA5String => (0..128u32)
                 .into_iter()
@@ -907,7 +921,7 @@ impl ASN1Value {
     pub fn link_elsewhere_declared(
         &mut self,
         identifier: &String,
-        tlds: &Vec<ToplevelDeclaration>,
+        tlds: &BTreeMap<String, ToplevelDeclaration>,
     ) -> bool {
         match self {
             Self::EnumeratedValue(e) | Self::ElsewhereDeclaredValue(e) => {
@@ -940,12 +954,11 @@ impl ASN1Value {
             }
             ASN1Value::Sequence(fields) => {
                 if let Some(ty_n) = type_name {
-                  let stringified_fields = fields
-                  .iter()
-                  .map(|(id, val)| val
-                      .value_as_string(None)
-                      .map(|s| format!("{id}: {s}")))
-                  .collect::<Result<Vec<String>, _>>()?.join(", ");
+                    let stringified_fields = fields
+                        .iter()
+                        .map(|(id, val)| val.value_as_string(None).map(|s| format!("{id}: {s}")))
+                        .collect::<Result<Vec<String>, _>>()?
+                        .join(", ");
                     Ok(format!("{ty_n} {{ {stringified_fields} }}"))
                 } else {
                     Err(GrammarError {
@@ -963,7 +976,6 @@ impl ASN1Value {
             ASN1Value::BitString(_) => todo!(),
             ASN1Value::EnumeratedValue(e) => Ok(e.clone()),
             ASN1Value::ElsewhereDeclaredValue(e) => Ok(e.clone()),
-            _ => todo!(),
         }
     }
 }

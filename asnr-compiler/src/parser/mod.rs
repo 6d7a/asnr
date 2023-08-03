@@ -619,7 +619,7 @@ mod tests {
                 parameterization: Some(Parameterization {
                     parameters: vec![ParameterizationArgument {
                         r#type: "REG-EXT-ID-AND-TYPE".into(),
-                        name: "Set".into()
+                        name: Some("Set".into())
                     }]
                 })
             }
