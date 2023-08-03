@@ -1,3 +1,5 @@
+use std::fmt::format;
+
 use asnr_grammar::*;
 
 use super::builder::StringifiedNameType;
@@ -79,14 +81,13 @@ pub fn type_reference_value_template(
     comments: String,
     name: String,
     type_name: String,
-    value: ASN1Value,
+    stringified_value: String,
 ) -> String {
     format!(
         r#"
     {comments}
-    pub const {name}: {type_name} = {};
-    "#,
-        value.to_string()
+    pub const {name}: {type_name} = {stringified_value};
+    "#
     )
 }
 
@@ -383,11 +384,26 @@ pub fn enumerated_template(
   
     {ENCODER_SIGNATURE}
     {{
-      Ok(Box::new(move |encodable, output| Ok(output)))
+      let mut enumerated_encoder = E::encode_enumerated({enum_descriptor})?;
+      Ok(Box::new(move |encodable, output| (*enumerated_encoder)(encodable, output)))
     }}
   }}
   "#,
     )
+}
+
+
+pub fn sequence_value_template(
+  comments: String,
+  name: String,
+  ty: &String,
+  stringified_declaration: String,
+) -> String {
+  format!(
+      r#"{comments}
+pub const {name}: &'static {ty} = &{stringified_declaration};
+"#
+  )
 }
 
 pub fn sequence_template(
@@ -491,6 +507,20 @@ pub fn default_choice(option: &StringifiedNameType) -> String {
     )
 }
 
+pub fn choice_value_template(
+    comments: String,
+    name: String,
+    ty: &String,
+    option_name: String,
+    inner: String,
+) -> String {
+    format!(
+        r#"{comments}
+  pub const {name}: &'static {ty} = &{ty}::{option_name}({inner});
+  "#
+    )
+}
+
 pub fn choice_template(
     comments: String,
     derive: &str,
@@ -498,6 +528,7 @@ pub fn choice_template(
     anonymous_option: String,
     default_option: String,
     options: String,
+    encoder_option_body: String,
     options_from_int: String,
     unknown_index_case: String,
     choice_descriptor: String,
@@ -519,6 +550,18 @@ impl<'a, I: AsBytes + Debug + 'a> DecoderForIndex<'a, I> for {name} {{
   }}
 }}
 
+impl<T, O: Extend<T> + Debug + 'static> EncoderForIndex<T, O> for {name} {{
+  fn encoder_for_index<E>(index: i128) -> Result<fn(&Self, O) -> Result<O, EncodingError>, EncodingError>
+  where
+      E: Encoder<T, O>,
+      Self: Sized {{
+        match index {{
+          {encoder_option_body}
+          _ => Err(EncodingError {{ details: format!("No sequence member at field index {{index}}!") }})
+        }}
+      }}
+}}
+
 impl Default for {name} {{
   fn default() -> Self {{
     {default_option}
@@ -534,6 +577,19 @@ impl<'a, I: AsBytes + Debug + 'a> Decode<'a, I> for {name} {{
   {DECODER_SIGNATURE}
   {{
     D::decode_choice({choice_descriptor})
+  }}
+}}
+
+impl<T, O: Extend<T> + Debug + 'static> Encode<T, O> for {name} {{
+  {ENCODE_SIGNATURE}
+  {{
+    {name}::encoder::<E>()?(encodable, output)
+  }}
+
+  {ENCODER_SIGNATURE}
+  {{
+    let mut choice_encoder = E::encode_choice({choice_descriptor})?;
+    Ok(Box::new(move |encodable, output| (*choice_encoder)(encodable, output)))
   }}
 }}
 "#,

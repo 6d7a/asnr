@@ -33,7 +33,7 @@ use self::{
     module_reference::module_reference,
     null::*,
     parameterization::parameterization,
-    sequence::sequence,
+    sequence::{sequence, sequence_value},
     sequence_of::*,
 };
 
@@ -118,6 +118,8 @@ pub fn asn1_value<'a>(input: &'a str) -> IResult<&'a str, ASN1Value> {
     alt((
         all_value,
         null_value,
+        choice_value,
+        sequence_value,
         bit_string_value,
         boolean_value,
         integer_value,

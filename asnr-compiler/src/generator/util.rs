@@ -174,6 +174,21 @@ pub fn format_option_from_int(args: (usize, &StringifiedNameType)) -> String {
     )
 }
 
+pub fn format_option_encoder_from_int(args: (usize, &StringifiedNameType)) -> String {
+  format!(
+      r#"x if x == {index} => Ok(|encodable, output| {{
+        if let Self::{name}(inner) = encodable {{
+          {t}::encode::<E>(inner.clone(), output)
+        }} else {{
+          Err(EncodingError {{ details: format!("Index {index} does not correspond to Choice option {name}!") }})
+        }}
+      }}),"#,
+      index = args.0,
+      name = args.1.name,
+      t = args.1.r#type
+  )
+}
+
 pub fn format_enumeral_from_int(enumeral: &Enumeral) -> String {
     let name = &rustify_name(&enumeral.name);
     format!("x if x == Self::{name} as i128 => Ok(Self::{name}),")

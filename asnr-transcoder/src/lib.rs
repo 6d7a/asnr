@@ -63,12 +63,13 @@ pub trait DecoderForIndex<'a, I: AsBytes + Debug + 'a> {
 }
 
 pub trait EncoderForIndex<T, O: Extend<T> + Debug + 'static> {
-  fn encoder_for_index<E>(index: i128) -> Result<fn(&Self, O) -> Result<O, EncodingError>, EncodingError>
-  where
-      E: Encoder<T, O>,
-      Self: Sized;
+    fn encoder_for_index<E>(
+        index: i128,
+    ) -> Result<fn(&Self, O) -> Result<O, EncodingError>, EncodingError>
+    where
+        E: Encoder<T, O>,
+        Self: Sized;
 }
-
 
 pub trait DecoderForKey<'a, I: AsBytes + Debug + 'a, T> {
     fn decoder_for_key<D>(key: T) -> Result<fn(I) -> IResult<I, Self>, DecodingError<I>>
@@ -126,4 +127,10 @@ pub trait Encoder<T, O: Extend<T> + Debug + 'static> {
     fn encode_sequence<S: EncoderForIndex<T, O>>(
         sequence: Sequence,
     ) -> Result<Box<dyn Fn(S, O) -> Result<O, EncodingError>>, EncodingError>;
+    fn encode_enumerated<E: Encode<T, O> + Debug>(
+        enumerated: Enumerated,
+    ) -> Result<Box<dyn Fn(E, O) -> Result<O, EncodingError>>, EncodingError>;
+    fn encode_choice<C: EncoderForIndex<T, O> + Debug>(
+        choice: Choice,
+    ) -> Result<Box<dyn Fn(C, O) -> Result<O, EncodingError>>, EncodingError>;
 }

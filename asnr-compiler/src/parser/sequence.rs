@@ -2,7 +2,7 @@ use nom::{
     bytes::complete::tag,
     character::complete::char,
     combinator::{into, opt},
-    multi::many0,
+    multi::{many0, separated_list0},
     sequence::{terminated, tuple},
     IResult,
 };
@@ -10,6 +10,23 @@ use nom::{
 use asnr_grammar::{types::*, *};
 
 use super::{common::optional_comma, constraint::constraint, *};
+
+pub fn sequence_value<'a>(input: &'a str) -> IResult<&'a str, ASN1Value> {
+    map(
+        in_braces(separated_list0(
+            skip_ws_and_comments(char(',')),
+            skip_ws_and_comments(pair(value_identifier, skip_ws_and_comments(asn1_value))),
+        )),
+        |fields| {
+            ASN1Value::Sequence(
+                fields
+                    .into_iter()
+                    .map(|(id, val)| (id.to_owned(), Box::new(val)))
+                    .collect(),
+            )
+        },
+    )(input)
+}
 
 /// Tries to parse an ASN1 SEQUENCE
 ///
@@ -477,6 +494,28 @@ mod tests {
                     constraints: vec![],
                 }]
             })
+        )
+    }
+
+    #[test]
+    fn parses_sequence_value() {
+        assert_eq!(
+            sequence_value("{itsaid content:0, ctx c-ctxRefNull}")
+                .unwrap()
+                .1,
+            ASN1Value::Sequence(vec![
+                (
+                    "itsaid".into(),
+                    Box::new(ASN1Value::Choice(
+                        "content".into(),
+                        Box::new(ASN1Value::Integer(0))
+                    ))
+                ),
+                (
+                    "ctx".into(),
+                    Box::new(ASN1Value::ElsewhereDeclaredValue("c-ctxRefNull".into()))
+                )
+            ])
         )
     }
 }

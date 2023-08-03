@@ -1,6 +1,8 @@
 use bitvec::prelude::Msb0;
 use bitvec_nom::BSlice;
 
+use alloc::string::String;
+
 mod decoder;
 mod encoder;
 mod per_visible;
@@ -10,6 +12,13 @@ pub struct Uper;
 pub(crate) type BitIn<'a> = BSlice<'a, u8, Msb0>;
 pub(crate) type AsBytesDummy = [u8; 0];
 
+const RUST_KEYWORDS: [&'static str; 38] = [
+    "as", "async", "await", "break", "const", "continue", "crate", "dyn", "else", "enum", "extern",
+    "false", "fn", "for", "if", "impl", "in", "let", "loop", "match", "mod", "move", "mut", "pub",
+    "ref", "return", "self", "Self", "static", "struct", "super", "trait", "true", "type",
+    "unsafe", "use", "where", "while",
+];
+
 pub(crate) fn bit_length(min: i128, max: i128) -> usize {
     let number_of_values = max - min + 1;
     let mut power = 0;
@@ -17,6 +26,15 @@ pub(crate) fn bit_length(min: i128, max: i128) -> usize {
         power += 1;
     }
     power as usize
+}
+
+pub fn rustify_name(name: &String) -> String {
+    let name = name.replace("-", "_");
+    if RUST_KEYWORDS.contains(&name.as_str()) {
+        String::from("r#") + &name
+    } else {
+        name
+    }
 }
 
 #[cfg(test)]

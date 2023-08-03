@@ -23,6 +23,7 @@ pub mod utils;
 
 use alloc::{
     borrow::ToOwned,
+    boxed::Box,
     collections::BTreeMap,
     format,
     string::{String, ToString},
@@ -681,10 +682,10 @@ impl ToString for ASN1Type {
 pub const NUMERIC_STRING_CHARSET: [char; 11] =
     [' ', '0', '1', '2', '3', '4', '5', '6', '7', '8', '9'];
 pub const PRINTABLE_STRING_CHARSET: [char; 74] = [
-    'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R',
-    'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z', 'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j',
-    'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z', '0', '1', '2',
-    '3', '4', '5', '6', '7', '8', '9', ' ', '\'', '(', ')', '+', ',', '-', '.', '/', ':', '=', '?',
+    'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S',
+    'T', 'U', 'V', 'W', 'X', 'Y', 'Z', 'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l',
+    'm', 'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z', '0', '1', '2', '3', '4',
+    '5', '6', '7', '8', '9', ' ', '\'', '(', ')', '+', ',', '-', '.', '/', ':', '=', '?',
 ];
 
 /// The types of an ASN1 character strings.
@@ -706,10 +707,15 @@ pub enum CharacterStringType {
 
 impl CharacterStringType {
     pub fn is_known_multiplier_string(&self) -> bool {
-      match self {
-        Self::NumericString | Self::VisibleString | Self::PrintableString | Self::IA5String | Self::UniversalString | Self::BMPString => true,
-        _ => false
-      }
+        match self {
+            Self::NumericString
+            | Self::VisibleString
+            | Self::PrintableString
+            | Self::IA5String
+            | Self::UniversalString
+            | Self::BMPString => true,
+            _ => false,
+        }
     }
 
     pub fn character_set(&self) -> BTreeMap<usize, char> {
@@ -726,10 +732,10 @@ impl CharacterStringType {
                 .enumerate()
                 .collect(),
             _ => (0..u16::MAX as u32)
-            .into_iter()
-            .filter_map(|i| char::from_u32(i))
-            .enumerate()
-            .collect()
+                .into_iter()
+                .filter_map(|i| char::from_u32(i))
+                .enumerate()
+                .collect(),
         }
     }
 }
@@ -782,6 +788,8 @@ pub enum ASN1Value {
     All,
     Null,
     Boolean(bool),
+    Choice(String, Box<ASN1Value>),
+    Sequence(Vec<(String, Box<ASN1Value>)>),
     Integer(i128),
     String(String),
     BitString(Vec<bool>),
@@ -836,7 +844,7 @@ impl ASN1Value {
                     set.iter().find(|(_, c)| s_as_char == **c),
                     set.iter().find(|(_, c)| o_as_char == **c),
                 ) {
-                    (Some((self_i,_)), Some((other_i,_))) => {
+                    (Some((self_i, _)), Some((other_i, _))) => {
                         let return_self = if getting_mininum {
                             self_i <= other_i
                         } else {
@@ -912,19 +920,50 @@ impl ASN1Value {
             _ => false,
         }
     }
-}
 
-impl ToString for ASN1Value {
-    fn to_string(&self) -> String {
+    pub fn value_as_string(&self, type_name: Option<&str>) -> Result<String, GrammarError> {
         match self {
-            ASN1Value::All => "ASN1_ALL".to_owned(),
-            ASN1Value::Null => "ASN1_NULL".to_owned(),
-            ASN1Value::Boolean(b) => format!("{}", b),
-            ASN1Value::Integer(i) => format!("{}", i),
-            ASN1Value::String(s) => s.clone(),
+            ASN1Value::All => Ok("ASN1_ALL".to_owned()),
+            ASN1Value::Null => Ok("ASN1_NULL".to_owned()),
+            ASN1Value::Choice(i, v) => {
+                if let Some(ty_n) = type_name {
+                    Ok(format!("{ty_n}::{i}({})", v.value_as_string(None)?))
+                } else {
+                    Err(GrammarError {
+                        details: format!(
+                            "A type name is needed to stringify choice value {:?}",
+                            self
+                        ),
+                        kind: GrammarErrorType::UnpackingError,
+                    })
+                }
+            }
+            ASN1Value::Sequence(fields) => {
+                if let Some(ty_n) = type_name {
+                  let stringified_fields = fields
+                  .iter()
+                  .map(|(id, val)| val
+                      .value_as_string(None)
+                      .map(|s| format!("{id}: {s}")))
+                  .collect::<Result<Vec<String>, _>>()?.join(", ");
+                    Ok(format!("{ty_n} {{ {stringified_fields} }}"))
+                } else {
+                    Err(GrammarError {
+                        details: format!(
+                            "A type name is needed to stringify choice value {:?}",
+                            self
+                        ),
+                        kind: GrammarErrorType::UnpackingError,
+                    })
+                }
+            }
+            ASN1Value::Boolean(b) => Ok(format!("{}", b)),
+            ASN1Value::Integer(i) => Ok(format!("{}", i)),
+            ASN1Value::String(s) => Ok(s.clone()),
             ASN1Value::BitString(_) => todo!(),
-            ASN1Value::EnumeratedValue(e) => e.clone(),
-            ASN1Value::ElsewhereDeclaredValue(e) => e.clone(),
+            ASN1Value::EnumeratedValue(e) => Ok(e.clone()),
+            ASN1Value::ElsewhereDeclaredValue(e) => Ok(e.clone()),
+            _ => todo!(),
         }
     }
 }
@@ -937,6 +976,15 @@ impl asnr_traits::Declare for ASN1Value {
             ASN1Value::Boolean(b) => format!("ASN1Value::Boolean({})", b),
             ASN1Value::Integer(i) => format!("ASN1Value::Integer({})", i),
             ASN1Value::String(s) => format!("ASN1Value::String(\"{}\".into())", s),
+            ASN1Value::Choice(i, v) => format!("ASN1Value::Choice({i}, Box::new({}))", v.declare()),
+            ASN1Value::Sequence(fields) => format!(
+                "ASN1Value::Sequence(vec![{}])",
+                fields
+                    .iter()
+                    .map(|(id, val)| format!("({id}, Box::new({}))", val.declare()))
+                    .collect::<Vec<String>>()
+                    .join(", ")
+            ),
             ASN1Value::BitString(s) => format!(
                 "ASN1Value::BitString(vec![{}])",
                 s.iter()

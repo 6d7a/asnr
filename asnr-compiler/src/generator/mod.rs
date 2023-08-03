@@ -10,7 +10,7 @@ use self::{
         character_string_template, generate_bit_string, generate_boolean, generate_choice,
         generate_enumerated, generate_information_object_class, generate_integer,
         generate_integer_value, generate_null, generate_null_value, generate_sequence,
-        generate_sequence_of, generate_typealias,
+        generate_sequence_of, generate_typealias, generate_choice_value, generate_sequence_value,
     },
     error::GeneratorError,
 };
@@ -57,8 +57,13 @@ pub fn generate<'a>(
             ASN1Value::String(_) => todo!(),
             ASN1Value::BitString(_) => todo!(),
             ASN1Value::EnumeratedValue(_) => todo!(),
-            ASN1Value::ElsewhereDeclaredValue(_) => todo!(),
+            ASN1Value::ElsewhereDeclaredValue(_) => {
+              println!("{:?}", v);
+              todo!()
+            },
             ASN1Value::All => todo!(),
+            ASN1Value::Choice(_,_) => generate_choice_value(v),
+            ASN1Value::Sequence(_) => generate_sequence_value(v),
         },
         ToplevelDeclaration::Information(i) => match i.value {
             ASN1Information::ObjectClass(_) => {

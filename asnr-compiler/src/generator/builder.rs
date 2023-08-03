@@ -189,20 +189,22 @@ pub fn generate_enumerated<'a>(
             .map(format_enumeral)
             .collect::<Vec<String>>()
             .join("\n\t");
-          if enumerated.extensible.is_some() {
+        if enumerated.extensible.is_some() {
             enumerals.push_str("\n\tUnknownExtension")
-          }
-          let unknown_index_case = if enumerated.extensible.is_some() {
+        }
+        let unknown_index_case = if enumerated.extensible.is_some() {
             format!("Ok(Self::UnknownExtension)")
-          } else {
-            format!(r#"Err(
+        } else {
+            format!(
+                r#"Err(
               DecodingError {{
                 details: format!("Invalid enumerated index decoding {name}. Received index {{}}",v), 
                 kind: DecodingErrorType::InvalidEnumeratedIndex,
                 input: None
               }}
-            )"#)
-          };
+            )"#
+            )
+        };
         let enumerals_from_int = enumerated
             .members
             .iter()
@@ -222,6 +224,25 @@ pub fn generate_enumerated<'a>(
         Err(GeneratorError::new(
             Some(ToplevelDeclaration::Type(tld)),
             "Expected ENUMERATED top-level declaration",
+            GeneratorErrorType::Asn1TypeMismatch,
+        ))
+    }
+}
+
+pub fn generate_choice_value(tld: ToplevelValueDeclaration) -> Result<String, GeneratorError> {
+    if let ASN1Value::Choice(id, val) = tld.value {
+        let type_name = rustify_name(&tld.type_name);
+        Ok(choice_value_template(
+            format_comments(&tld.comments),
+            rustify_name(&tld.name),
+            &type_name,
+            id,
+            val.value_as_string(Some(&type_name))?,
+        ))
+    } else {
+        Err(GeneratorError::new(
+            Some(ToplevelDeclaration::Value(tld)),
+            "Expected CHOICE value top-level declaration",
             GeneratorErrorType::Asn1TypeMismatch,
         ))
     }
@@ -267,6 +288,12 @@ pub fn generate_choice<'a>(
             .map(format_option_from_int)
             .collect::<Vec<String>>()
             .join("\n\t\t  ");
+        let encoder_options_body: String = options
+            .iter()
+            .enumerate()
+            .map(format_option_encoder_from_int)
+            .collect::<Vec<String>>()
+            .join("\n\t\t  ");
         Ok(choice_template(
             format_comments(&tld.comments),
             custom_derive.unwrap_or("#[derive(Debug, Clone, PartialEq)]"),
@@ -274,6 +301,7 @@ pub fn generate_choice<'a>(
             inner_options,
             default_option,
             options_declaration,
+            encoder_options_body,
             options_from_int,
             unknown_index_case,
             choice.declare(),
@@ -304,6 +332,24 @@ pub fn generate_information_object_class<'a>(
             GeneratorErrorType::Asn1TypeMismatch,
         ))
     }
+}
+
+pub fn generate_sequence_value(tld: ToplevelValueDeclaration) -> Result<String, GeneratorError> {
+  if let ASN1Value::Sequence(_) = tld.value {
+      let type_name = rustify_name(&tld.type_name);
+      Ok(sequence_value_template(
+          format_comments(&tld.comments),
+          rustify_name(&tld.name),
+          &type_name,
+          tld.value.value_as_string(Some(&type_name))?
+      ))
+  } else {
+      Err(GeneratorError::new(
+          Some(ToplevelDeclaration::Value(tld)),
+          "Expected CHOICE value top-level declaration",
+          GeneratorErrorType::Asn1TypeMismatch,
+      ))
+  }
 }
 
 pub fn generate_sequence<'a>(
@@ -410,17 +456,16 @@ pub fn generate_information_object_set<'a>(
         let mut options = keys_to_types
             .iter()
             .map(|(k, types)| {
-                format!(
-                    "_{}({})",
-                    k.to_string(),
+              k.value_as_string(None).map(|k_string| format!(
+                    "_{k_string}({})",
                     types
                         .iter()
                         .map(|t| format!("pub {}", t.to_string()))
                         .collect::<Vec<String>>()
                         .join(", ")
-                )
+                ))
             })
-            .collect::<Vec<String>>()
+            .collect::<Result<Vec<String>,_>>()?
             .join(",\n\t");
         if o.extensible.is_some() {
             options.push_str(",\n\tUnknownClassImplementation(pub Vec<u8>)");
@@ -445,8 +490,8 @@ pub fn generate_information_object_set<'a>(
         };
         let mut branches = keys_to_types
             .iter()
-            .map(|(k, _)| format!("{} => todo!()", k.to_string(),))
-            .collect::<Vec<String>>()
+            .map(|(k, _)| k.value_as_string(None).map(|k_string| format!("{k_string} => todo!()")))
+            .collect::<Result<Vec<String>,_>>()?
             .join(",\n\t");
         if o.extensible.is_some() {
             branches.push_str(",\n\t_ => todo!()");

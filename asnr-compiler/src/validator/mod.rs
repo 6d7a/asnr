@@ -30,24 +30,12 @@ impl Validator {
         let mut i = 0;
         let mut warnings: Vec<Box<dyn Error>> = vec![];
         while i < self.tlds.len() {
-            if self
-                .tlds
-                .get(i)
-                .map(|t| match t {
-                    ToplevelDeclaration::Type(t) => t.r#type.contains_class_field_reference(),
-                    _ => false,
-                })
-                .unwrap_or(false)
-            {
+            if self.has_class_field_reference(i) {
                 if let ToplevelDeclaration::Type(mut tld) = self.tlds.remove(i) {
                     tld.r#type = tld.r#type.resolve_class_field_reference(&self.tlds);
                     self.tlds.push(ToplevelDeclaration::Type(tld))
                 }
-            } else if self
-                .tlds
-                .get(i)
-                .map(|t| t.has_constraint_reference())
-                .unwrap_or(false)
+            } else if self.has_constraint_reference(i)
             {
                 let mut tld = self.tlds.remove(i);
                 if !tld.link_constraint_reference(&self.tlds) {
@@ -64,12 +52,64 @@ impl Validator {
                     )
                 }
                 self.tlds.push(tld);
+            } else if let Some(ToplevelDeclaration::Value(mut tld)) = self.tlds.get(i).cloned() {
+              if let ASN1Value::ElsewhereDeclaredValue(id) = &tld.value {
+                  match self.tlds.iter().find(|t| t.name() == &tld.type_name) {
+                    Some(ToplevelDeclaration::Type(ty)) => {
+                      match ty.r#type {
+                        ASN1Type::Integer(ref int) if int.distinguished_values.is_some() => {
+                          if let Some(val) = int.distinguished_values.as_ref().unwrap().iter().find_map(|dv| (&dv.name == id).then(|| dv.value)) {
+                            tld.value = ASN1Value::Integer(val);
+                            self.tlds.remove(i);
+                            self.tlds.push(ToplevelDeclaration::Value(tld))
+                          } else { i += 1 }
+                        },
+                        ASN1Type::Enumerated(_) => {
+                            tld.value = ASN1Value::EnumeratedValue(id.to_owned());
+                            self.tlds.remove(i);
+                            self.tlds.push(ToplevelDeclaration::Value(tld))
+                        }
+                        _ => i += 1
+                      }
+                    },
+                    _ => i += 1
+                  }
+              } else {
+                i += 1;
+              }
             } else {
                 i += 1;
             }
         }
 
         Ok((self, warnings))
+    }
+
+    fn has_elsewhere_defined_value(&mut self, i: usize) -> bool {
+        self
+        .tlds
+        .get(i)
+        .map(|t: &ToplevelDeclaration| matches!(t, ToplevelDeclaration::Value(v) if matches!(v.value, ASN1Value::ElsewhereDeclaredValue(_))))
+        .unwrap_or(false)
+    }
+
+    fn has_constraint_reference(&mut self, i: usize) -> bool {
+        self
+            .tlds
+            .get(i)
+            .map(|t| t.has_constraint_reference())
+            .unwrap_or(false)
+    }
+
+    fn has_class_field_reference(&mut self, i: usize) -> bool {
+        self
+            .tlds
+            .get(i)
+            .map(|t| match t {
+                ToplevelDeclaration::Type(t) => t.r#type.contains_class_field_reference(),
+                _ => false,
+            })
+            .unwrap_or(false)
     }
 
     pub fn validate(

@@ -39,7 +39,6 @@ version = "0.1.0"
 dependencies = [
  "asnr-compiler",
  "asnr-grammar",
- "asnr-transcoder",
  "proc-macro2",
 ]
 
