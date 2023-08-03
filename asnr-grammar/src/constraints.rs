@@ -1,4 +1,4 @@
-use alloc::{borrow::ToOwned, boxed::Box, format, string::String, vec, vec::Vec};
+use alloc::{borrow::ToOwned, boxed::Box, format, string::String, vec, vec::Vec, collections::BTreeMap};
 
 use crate::{
     error::{GrammarError, GrammarErrorType},
@@ -32,7 +32,7 @@ impl Constraint {
     pub(super) fn link_cross_reference(
         &mut self,
         identifier: &String,
-        tlds: &Vec<ToplevelDeclaration>,
+        tlds: &BTreeMap<String, ToplevelDeclaration>,
     ) -> bool {
         match self {
             Constraint::SubtypeConstraint(t) => t.set.link_cross_reference(identifier, tlds),
@@ -375,7 +375,7 @@ impl SubtypeElement {
     pub(super) fn link_cross_reference(
         &mut self,
         identifier: &String,
-        tlds: &Vec<ToplevelDeclaration>,
+        tlds: &BTreeMap<String, ToplevelDeclaration>,
     ) -> bool {
         match self {
             SubtypeElement::SingleValue {
@@ -575,7 +575,7 @@ impl ElementOrSetOperation {
     pub(super) fn link_cross_reference(
         &mut self,
         identifier: &String,
-        tlds: &Vec<ToplevelDeclaration>,
+        tlds: &BTreeMap<String, ToplevelDeclaration>,
     ) -> bool {
         match self {
             ElementOrSetOperation::Element(e) => e.link_cross_reference(identifier, tlds),

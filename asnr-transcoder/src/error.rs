@@ -25,6 +25,16 @@ pub enum DecodingErrorType {
     WrappedNomError(ErrorKind),
 }
 
+impl<I: AsBytes> DecodingError<I> {
+  pub fn new(details: &str, kind: DecodingErrorType) -> Self {
+    Self {
+      details: details.into(),
+      kind,
+      input: None
+    }
+  }
+}
+
 impl<I: AsBytes> From<GrammarError> for DecodingError<I> {
     fn from(value: GrammarError) -> Self {
         Self {

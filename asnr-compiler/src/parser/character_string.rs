@@ -1,9 +1,7 @@
 use nom::{
     branch::alt,
     bytes::complete::{tag, take_until},
-    character::streaming::char,
     combinator::{map, opt},
-    multi::many1,
     sequence::{delimited, pair},
     IResult,
 };

@@ -7,7 +7,7 @@
 //! constraints and value definitions.
 pub(crate) mod error;
 
-use std::{error::Error};
+use std::{error::Error, collections::BTreeMap};
 
 use asnr_grammar::{
     constraints::*,
@@ -18,26 +18,26 @@ use asnr_grammar::{
 use self::error::{ValidatorError, ValidatorErrorType};
 
 pub struct Validator {
-    tlds: Vec<ToplevelDeclaration>,
+    tlds: BTreeMap<String, ToplevelDeclaration>,
 }
 
 impl Validator {
     pub fn new(tlds: Vec<ToplevelDeclaration>) -> Validator {
-        Self { tlds }
+        Self { tlds: tlds.into_iter().map(|tld| (tld.name().to_owned(), tld)).collect() }
     }
 
     fn link(mut self) -> Result<(Self, Vec<Box<dyn Error>>), ValidatorError> {
-        let mut i = 0;
         let mut warnings: Vec<Box<dyn Error>> = vec![];
-        while i < self.tlds.len() {
-            if self.has_class_field_reference(i) {
-                if let ToplevelDeclaration::Type(mut tld) = self.tlds.remove(i) {
+        let mut keys = self.tlds.keys().cloned().collect::<Vec<String>>();
+        while let Some(key) = keys.pop() {
+            if self.has_class_field_reference(&key) {
+                if let Some(ToplevelDeclaration::Type(mut tld)) = self.tlds.remove(&key) {
                     tld.r#type = tld.r#type.resolve_class_field_reference(&self.tlds);
-                    self.tlds.push(ToplevelDeclaration::Type(tld))
+                    self.tlds.insert(tld.name.clone(), ToplevelDeclaration::Type(tld));
                 }
-            } else if self.has_constraint_reference(i)
+            } else if self.has_constraint_reference(&key)
             {
-                let mut tld = self.tlds.remove(i);
+                let mut tld = self.tlds.remove(&key).ok_or(ValidatorError { data_element: Some(key), details: "Could not find toplevel declaration to remove!".into(), kind: ValidatorErrorType::MissingDependency } )?;
                 if !tld.link_constraint_reference(&self.tlds) {
                     warnings.push(
                         Box::new(
@@ -51,60 +51,48 @@ impl Validator {
                         )
                     )
                 }
-                self.tlds.push(tld);
-            } else if let Some(ToplevelDeclaration::Value(mut tld)) = self.tlds.get(i).cloned() {
+                self.tlds.insert(tld.name().clone(), tld);
+            } else if let Some(ToplevelDeclaration::Value(mut tld)) = self.tlds.get(&key).cloned() {
               if let ASN1Value::ElsewhereDeclaredValue(id) = &tld.value {
-                  match self.tlds.iter().find(|t| t.name() == &tld.type_name) {
+                  match self.tlds.get(&tld.type_name) {
                     Some(ToplevelDeclaration::Type(ty)) => {
                       match ty.r#type {
                         ASN1Type::Integer(ref int) if int.distinguished_values.is_some() => {
                           if let Some(val) = int.distinguished_values.as_ref().unwrap().iter().find_map(|dv| (&dv.name == id).then(|| dv.value)) {
                             tld.value = ASN1Value::Integer(val);
-                            self.tlds.remove(i);
-                            self.tlds.push(ToplevelDeclaration::Value(tld))
-                          } else { i += 1 }
+                            self.tlds.remove(&key);
+                            self.tlds.insert(tld.name.clone(),ToplevelDeclaration::Value(tld));
+                          }
                         },
                         ASN1Type::Enumerated(_) => {
                             tld.value = ASN1Value::EnumeratedValue(id.to_owned());
-                            self.tlds.remove(i);
-                            self.tlds.push(ToplevelDeclaration::Value(tld))
+                            self.tlds.remove(&key);
+                            self.tlds.insert(tld.name.clone(), ToplevelDeclaration::Value(tld));
                         }
-                        _ => i += 1
+                        _ => ()
                       }
                     },
-                    _ => i += 1
+                    _ => ()
                   }
-              } else {
-                i += 1;
               }
-            } else {
-                i += 1;
             }
         }
 
         Ok((self, warnings))
     }
 
-    fn has_elsewhere_defined_value(&mut self, i: usize) -> bool {
-        self
-        .tlds
-        .get(i)
-        .map(|t: &ToplevelDeclaration| matches!(t, ToplevelDeclaration::Value(v) if matches!(v.value, ASN1Value::ElsewhereDeclaredValue(_))))
-        .unwrap_or(false)
-    }
-
-    fn has_constraint_reference(&mut self, i: usize) -> bool {
+    fn has_constraint_reference(&mut self, key: &String) -> bool {
         self
             .tlds
-            .get(i)
+            .get(key)
             .map(|t| t.has_constraint_reference())
             .unwrap_or(false)
     }
 
-    fn has_class_field_reference(&mut self, i: usize) -> bool {
+    fn has_class_field_reference(&mut self, key: &String) -> bool {
         self
             .tlds
-            .get(i)
+            .get(key)
             .map(|t| match t {
                 ToplevelDeclaration::Type(t) => t.r#type.contains_class_field_reference(),
                 _ => false,
@@ -119,7 +107,7 @@ impl Validator {
         (self, warnings) = self.link()?;
         Ok(self.tlds.into_iter().fold(
             (Vec::<ToplevelDeclaration>::new(), warnings),
-            |(mut tlds, mut errors), tld| {
+            |(mut tlds, mut errors), (_, tld)| {
                 match tld.validate() {
                     Ok(_) => tlds.push(tld),
                     Err(e) => errors.push(Box::new(e)),

@@ -22,6 +22,8 @@ const RUST_KEYWORDS: [&'static str; 38] = [
     "unsafe", "use", "where", "while",
 ];
 
+/// Resolves the custom syntax declared in an information object class' WITH SYNTAX clause
+#[allow(dead_code)]
 pub fn resolve_syntax(
     class: &InformationObjectClass,
     application: &Vec<SyntaxApplication>,
@@ -177,18 +179,18 @@ pub fn format_option_from_int(args: (usize, &StringifiedNameType)) -> String {
 }
 
 pub fn format_option_encoder_from_int(args: (usize, &StringifiedNameType)) -> String {
-  format!(
-      r#"x if x == {index} => Ok(|encodable, output| {{
+    format!(
+        r#"x if x == {index} => Ok(|encodable, output| {{
         if let Self::{name}(inner) = encodable {{
           {t}::encode::<E>(inner.clone(), output)
         }} else {{
           Err(EncodingError {{ details: format!("Index {index} does not correspond to Choice option {name}!") }})
         }}
       }}),"#,
-      index = args.0,
-      name = args.1.name,
-      t = args.1.r#type
-  )
+        index = args.0,
+        name = args.1.name,
+        t = args.1.r#type
+    )
 }
 
 pub fn format_enumeral_from_int(enumeral: &Enumeral) -> String {
@@ -373,20 +375,19 @@ pub fn format_decode_member_body(members: &Vec<StringifiedNameType>) -> String {
 }
 
 pub fn format_encoder_member_body(members: &Vec<StringifiedNameType>) -> String {
-  members
-      .iter()
-      .enumerate()
-      .map(|(i, m)| {
-          format!(
-              "{i} => Ok(|parent, output| {t}::encode::<E>(parent.{name}.clone(), output)),",
-              name = m.name,
-              t = m.r#type,
-          )
-      })
-      .collect::<Vec<String>>()
-      .join("\n      ")
+    members
+        .iter()
+        .enumerate()
+        .map(|(i, m)| {
+            format!(
+                "{i} => Ok(|parent, output| {t}::encode::<E>(parent.{name}.clone(), output)),",
+                name = m.name,
+                t = m.r#type,
+            )
+        })
+        .collect::<Vec<String>>()
+        .join("\n      ")
 }
-
 fn declare_inner_sequence_member(
     member: &SequenceMember,
     parent_name: &String,
@@ -420,13 +421,13 @@ fn declare_inner_choice_option(
 }
 
 fn inner_name(name: &String, parent_name: &String) -> String {
-    format!("{}_inner_{}", parent_name, rustify_name(&name))
+    format!("{}_{}", parent_name, rustify_name(&name))
 }
 
 pub fn rustify_name(name: &String) -> String {
     let name = name.replace("-", "_");
     if RUST_KEYWORDS.contains(&name.as_str()) {
-        String::from("r#") + &name
+        String::from("r_") + &name
     } else {
         name
     }

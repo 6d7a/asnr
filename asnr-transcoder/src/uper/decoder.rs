@@ -19,15 +19,15 @@ enum LengthDeterminant {
 }
 
 impl LengthDeterminant {
-    pub fn collect_value<'a>(
+    pub fn _collect_value<'a>(
         &self,
         input: BitIn<'a>,
         factor: usize,
     ) -> IResult<BitIn<'a>, BitVec<u8, Msb0>> {
-        Self::recursive_collect(self, input, factor, bitvec![u8, Msb0;])
+        Self::_recursive_collect(self, input, factor, bitvec![u8, Msb0;])
     }
 
-    fn recursive_collect<'a>(
+    fn _recursive_collect<'a>(
         &self,
         input: BitIn<'a>,
         factor: usize,
@@ -47,7 +47,7 @@ impl LengthDeterminant {
                 })(input)?
                 .0;
                 let (input, length_det) = decode_length_determinant(input)?;
-                length_det.recursive_collect(input, factor, temp)
+                length_det._recursive_collect(input, factor, temp)
             }
         }
     }
@@ -849,7 +849,7 @@ mod tests {
     fn decodes_enum() {
         asn1_internal_tests!("TestEnum ::= ENUMERATED { One, Two, Three }");
 
-        let mut decoder = TestEnum::decoder::<Uper>().unwrap();
+        let decoder = TestEnum::decoder::<Uper>().unwrap();
         assert_eq!(
             decoder(BSlice::from(bits![static u8, Msb0; 0,0]))
                 .unwrap()
@@ -873,7 +873,7 @@ mod tests {
     #[test]
     fn decodes_extended_enum() {
         asn1_internal_tests!("TestEnumExt ::= ENUMERATED { One, ..., Three }");
-        let mut decoder = TestEnumExt::decoder::<Uper>().unwrap();
+        let decoder = TestEnumExt::decoder::<Uper>().unwrap();
         assert_eq!(
             decoder(BSlice::from(bits![static u8, Msb0; 0,0,0]))
                 .unwrap()
@@ -918,9 +918,9 @@ mod tests {
             .unwrap()
             .1,
             TestSequence {
-                item_code: TestSequence_inner_item_code(27),
-                item_name: TestSequence_inner_item_name("SHERRY".into()),
-                urgency: TestSequence_inner_urgency::normal
+                item_code: TestSequence_item_code(27),
+                item_name: TestSequence_item_name("SHERRY".into()),
+                urgency: TestSequence_urgency::normal
             }
         );
     }
@@ -954,9 +954,9 @@ mod tests {
             .unwrap()
             .1,
             TestSequence {
-                item_code: TestSequence_inner_item_code(27),
-                item_name: TestSequence_inner_item_name("SHERRY".into()),
-                urgency: TestSequence_inner_urgency::high,
+                item_code: TestSequence_item_code(27),
+                item_name: TestSequence_item_name("SHERRY".into()),
+                urgency: TestSequence_urgency::high,
                 unknown_extension: vec![]
             }
         );
@@ -971,7 +971,7 @@ mod tests {
             Choice_example::decode::<Uper>(BSlice::from(bits![static u8, Msb0; 0,0]))
                 .unwrap()
                 .1,
-            Choice_example::normal(Choice_example_inner_normal)
+            Choice_example::normal(Choice_example_normal)
         );
         assert_eq!(
             Choice_example::decode::<Uper>(BSlice::from(
@@ -979,7 +979,7 @@ mod tests {
             ))
             .unwrap()
             .1,
-            Choice_example::medium(Choice_example_inner_medium)
+            Choice_example::medium(Choice_example_medium)
         )
     }
 

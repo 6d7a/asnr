@@ -498,7 +498,7 @@ impl
 pub struct Enumeral {
     pub name: String,
     pub description: Option<String>,
-    pub index: u64,
+    pub index: i128,
 }
 
 impl asnr_traits::Declare for Enumeral {

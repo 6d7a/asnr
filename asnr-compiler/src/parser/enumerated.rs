@@ -1,8 +1,8 @@
 use nom::{
     bytes::complete::tag,
-    character::complete::{char, u64},
+    character::complete::{char, i128},
     combinator::{map, opt},
-    multi::fold_many1,
+    multi::fold_many0,
     sequence::{preceded, terminated, tuple},
     IResult,
 };
@@ -28,24 +28,24 @@ pub fn enumerated<'a>(input: &'a str) -> IResult<&'a str, ASN1Type> {
 
 fn enumeral<'a>(
     input: &'a str,
-) -> IResult<&'a str, (&str, Option<u64>, Option<char>, Option<&str>)> {
+) -> IResult<&'a str, (&str, Option<i128>, Option<char>, Option<&str>)> {
     skip_ws_and_comments(tuple((
         skip_ws_and_comments(identifier),
-        skip_ws_and_comments(opt(in_parentheses(u64))),
+        skip_ws_and_comments(opt(in_parentheses(skip_ws_and_comments(i128)))),
         skip_ws(opt(char(COMMA))),
         skip_ws(opt(comment)),
     )))(input)
 }
 
 fn enumerals<'a>(start_index: usize) -> impl FnMut(&'a str) -> IResult<&'a str, Vec<Enumeral>> {
-    fold_many1(
+    fold_many0(
         enumeral,
         Vec::<Enumeral>::new,
         move |mut acc, (name, index, _, comments)| {
             acc.push(Enumeral {
                 name: name.into(),
                 description: comments.map(|c| c.into()),
-                index: index.unwrap_or((acc.len() + start_index) as u64),
+                index: index.unwrap_or((acc.len() + start_index) as i128),
             });
             acc
         },

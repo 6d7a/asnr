@@ -33,6 +33,12 @@ pub trait Decode<'a, I: AsBytes + Debug + 'a> {
 }
 
 pub trait Encode<T, O: Extend<T> + Debug + 'static> {
+    fn encode_self<E>(self, output: O) -> Result<O, EncodingError> where
+    E: Encoder<T, O>,
+    Self: Sized {
+      Self::encode::<E>(self, output)
+    }
+
     fn encode<E>(encodable: Self, output: O) -> Result<O, EncodingError>
     where
         E: Encoder<T, O>,
@@ -124,7 +130,7 @@ pub trait Encoder<T, O: Extend<T> + Debug + 'static> {
     fn encode_character_string(
         character_string: CharacterString,
     ) -> Result<Box<dyn Fn(&str, O) -> Result<O, EncodingError>>, EncodingError>;
-    fn encode_sequence<S: EncoderForIndex<T, O>>(
+    fn encode_sequence<S: EncoderForIndex<T, O> + Debug>(
         sequence: Sequence,
     ) -> Result<Box<dyn Fn(S, O) -> Result<O, EncodingError>>, EncodingError>;
     fn encode_enumerated<E: Encode<T, O> + Debug>(
