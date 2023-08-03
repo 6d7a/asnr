@@ -12,4 +12,3 @@ proc-macro2 = "1"
 
 [dev-dependencies]
 asnr-grammar = { path = "../asnr-grammar" }
-asnr-transcoder = { path = "../asnr-transcoder" }

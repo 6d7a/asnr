@@ -1,7 +1,7 @@
 use core::fmt::{Display, Formatter, Result};
 use std::error::Error;
 
-use asnr_grammar::ToplevelDeclaration;
+use asnr_grammar::{ToplevelDeclaration, error::GrammarError};
 
 #[derive(Debug, Clone)]
 pub struct GeneratorError {
@@ -36,6 +36,16 @@ impl Error for GeneratorError {}
 impl Default for GeneratorError {
     fn default() -> Self {
         Self { top_level_declaration: Default::default(), details: Default::default(), kind: GeneratorErrorType::Unidentified }
+    }
+}
+
+impl From<GrammarError> for GeneratorError {
+    fn from(value: GrammarError) -> Self {
+        Self {
+          details: value.details,
+          top_level_declaration: None,
+          kind: GeneratorErrorType::Unidentified
+        }
     }
 }
 

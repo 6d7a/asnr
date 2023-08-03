@@ -1,16 +1,17 @@
-use alloc::{boxed::Box, format, vec::Vec};
-use asnr_grammar::types::*;
+use alloc::{boxed::Box, format, string::String, vec::Vec};
+use asnr_grammar::{types::*, AsnTag};
 use bitvec::{bitvec, prelude::Msb0, vec::BitVec, view::BitView};
+use core::fmt::Debug;
 
 use crate::{
     error::{DecodingError, EncodingError},
-    Encoder,
+    Encode, Encoder, EncoderForIndex,
 };
 
 use super::{
     bit_length,
     per_visible::{PerVisibleAlphabetConstraints, PerVisibleRangeConstraints},
-    AsBytesDummy, Uper,
+    rustify_name, AsBytesDummy, Uper,
 };
 
 type BitOut = BitVec<u8, Msb0>;
@@ -161,7 +162,7 @@ impl Encoder<u8, BitOut> for Uper {
             constraints +=
                 c.try_into()
                     .map_err(|_: DecodingError<AsBytesDummy>| EncodingError {
-                        details: format!("Failed to parse bit string constraints"),
+                        details: format!("Failed to parse character string constraints"),
                     })?;
             PerVisibleAlphabetConstraints::try_new::<AsBytesDummy>(c, character_string.r#type)?
                 .map(|mut p| permitted_alphabet += &mut p);
@@ -172,14 +173,14 @@ impl Encoder<u8, BitOut> for Uper {
                 move |encodable: &str, mut output: BitOut| -> Result<BitOut, EncodingError> {
                     let actual_length = encodable.len();
                     let _ = write_extended_bit(&constraints, actual_length, &mut output)?;
-                    let to_wrap = encode_sized_string(& permitted_alphabet, encodable)?;
+                    let to_wrap = encode_sized_string(&permitted_alphabet, encodable)?;
                     with_size_length_determinant(actual_length, &constraints, to_wrap, output)
                 },
             ))
         } else {
             Ok(Box::new(
                 move |encodable: &str, output: BitOut| -> Result<BitOut, EncodingError> {
-                    let to_wrap = encode_sized_string(& permitted_alphabet, encodable)?;
+                    let to_wrap = encode_sized_string(&permitted_alphabet, encodable)?;
                     with_size_length_determinant(encodable.len(), &constraints, to_wrap, output)
                 },
             ))
@@ -189,7 +190,148 @@ impl Encoder<u8, BitOut> for Uper {
     fn encode_sequence<S>(
         sequence: Sequence,
     ) -> Result<Box<dyn Fn(S, BitOut) -> Result<BitOut, EncodingError>>, EncodingError> {
-      todo!()
+        todo!()
+    }
+
+    fn encode_enumerated<E: Encode<u8, BitOut> + Debug>(
+        enumerated: Enumerated,
+    ) -> Result<Box<dyn Fn(E, BitOut) -> Result<BitOut, EncodingError>>, EncodingError> {
+        let mut constraints = PerVisibleRangeConstraints::from(&enumerated);
+        for c in &enumerated.constraints {
+            constraints += c
+                .try_into()
+                .map_err(|_: DecodingError<AsBytesDummy>| EncodingError {
+                    details: format!("Failed to parse enumerated constraints"),
+                })?
+        }
+        let mut member_ids = enumerated
+            .members
+            .iter()
+            .map(|m| (rustify_name(&m.name), m.index))
+            .collect::<Vec<(String, u64)>>();
+        member_ids.sort_by(|(_, a), (_, b)| a.cmp(b));
+        let indices_for_member = member_ids
+            .into_iter()
+            .enumerate()
+            .map(|(i, (n, _))| (n, i))
+            .collect::<Vec<(String, usize)>>();
+        if constraints.is_extensible() {
+            Ok(Box::new(move |encodable, output| {
+                let index = indices_for_member
+                    .iter()
+                    .find_map(|(name, index)| (&format!("{encodable:?}") == name).then(|| *index))
+                    .ok_or(EncodingError {
+                        details: format!(
+                            "Could not find enumerated option {encodable:?} among {:?}",
+                            &indices_for_member
+                        ),
+                    })?;
+                if index >= enumerated.extensible.unwrap() {
+                    encode_normally_small_number(index - enumerated.extensible.unwrap(), output)
+                } else {
+                    encode_constrained_integer(
+                        index,
+                        bit_length(0, (indices_for_member.len() - 1) as i128),
+                        output,
+                    )
+                }
+            }))
+        } else {
+            Ok(Box::new(move |encodable, output| {
+                let index = indices_for_member
+                    .iter()
+                    .find_map(|(name, index)| (&format!("{encodable:?}") == name).then(|| *index))
+                    .ok_or(EncodingError {
+                        details: format!(
+                            "Could not find enumerated option {encodable:?} among {:?}",
+                            &indices_for_member
+                        ),
+                    })?;
+                encode_constrained_integer(
+                    index,
+                    bit_length(0, (indices_for_member.len() - 1) as i128),
+                    output,
+                )
+            }))
+        }
+    }
+
+    fn encode_choice<C: EncoderForIndex<u8, BitOut> + Debug>(
+        choice: Choice,
+    ) -> Result<Box<dyn Fn(C, BitOut) -> Result<BitOut, EncodingError>>, EncodingError> {
+        let mut constraints = PerVisibleRangeConstraints::from(&choice);
+        for c in &choice.constraints {
+            constraints += c
+                .try_into()
+                .map_err(|_: DecodingError<AsBytesDummy>| EncodingError {
+                    details: format!("Failed to parse choice constraints"),
+                })?
+        }
+        let mut indices_for_member = choice
+            .options
+            .iter()
+            .enumerate()
+            .map(|(i, m)| {
+                (
+                    rustify_name(&m.name),
+                    m.tag.as_ref().map_or(i, |t| t.id as usize),
+                )
+            })
+            .collect::<Vec<(String, usize)>>();
+        indices_for_member.sort_by(|(_, a), (_, b)| a.cmp(b));
+        if constraints.is_extensible() {
+            Ok(Box::new(move |encodable, output| {
+                let index = indices_for_member
+                    .iter()
+                    .find_map(|(name, index)| (&format!("{encodable:?}") == name).then(|| *index))
+                    .ok_or(EncodingError {
+                        details: format!(
+                            "Could not find choice option {encodable:?} among {:?}",
+                            &indices_for_member
+                        ),
+                    })?;
+                if index >= choice.extensible.unwrap() {
+                    let output =
+                        encode_normally_small_number(index - choice.extensible.unwrap(), output)?;
+                    let to_wrap =
+                        align_back(C::encoder_for_index::<Uper>(index.try_into().map_err(
+                            |_| EncodingError {
+                                details: format!("Index {index} exceeds usize range!"),
+                            },
+                        )?)?(&encodable, bitvec![u8, Msb0;])?);
+                    wrap_in_length_determinant(to_wrap.len() / 8, to_wrap, Some(0), output)
+                } else {
+                    let output = encode_constrained_integer(
+                        index,
+                        bit_length(0, (indices_for_member.len() - 1) as i128),
+                        output,
+                    )?;
+                    C::encoder_for_index::<Uper>(index.try_into().map_err(|_| EncodingError {
+                        details: format!("Index {index} exceeds usize range!"),
+                    })?)?(&encodable, output)
+                }
+            }))
+        } else {
+            Ok(Box::new(move |encodable, output| {
+                let index = indices_for_member
+                    .iter()
+                    .find_map(|(name, index)| (&format!("{encodable:?}") == name).then(|| *index))
+                    .ok_or(EncodingError {
+                        details: format!(
+                            "Could not find enumerated option {encodable:?} among {:?}",
+                            &indices_for_member
+                        ),
+                    })?;
+                let output = encode_constrained_integer(
+                    index,
+                    bit_length(0, (indices_for_member.len() - 1) as i128),
+                    output,
+                )?;
+                C::encoder_for_index::<Uper>(index.try_into().map_err(|_| EncodingError {
+                    details: format!("Index {index} exceeds usize range!"),
+                })?)?(&encodable, output)
+            }))
+        }
     }
 }
 
@@ -199,10 +341,7 @@ fn encode_sized_string(
 ) -> Result<BitOut, EncodingError> {
     let bit_length = permitted_alphabet.bit_length();
     if bit_length == 0 {
-        return encode_sized_string(
-            &permitted_alphabet.fall_back_to_standard_charset(),
-            string,
-        );
+        return encode_sized_string(&permitted_alphabet.fall_back_to_standard_charset(), string);
     }
     if permitted_alphabet.is_known_multiplier_string() {
         let mut output = BitVec::new();
@@ -354,6 +493,19 @@ where
     }
 }
 
+fn encode_normally_small_number<I>(number: I, output: BitOut) -> Result<BitOut, EncodingError>
+where
+    I: num::Integer + num::ToPrimitive + Copy,
+{
+    if number.to_u32().unwrap_or(64) > 63 {
+        Err(EncodingError {
+            details: "Encoding normally-small numbers larger than 63 is not supported yet!".into(),
+        })
+    } else {
+        encode_constrained_integer(number, 6, output)
+    }
+}
+
 fn encode_constrained_integer<I>(
     integer: I,
     bit_length: usize,
@@ -381,6 +533,17 @@ fn align(output: BitOut) -> BitOut {
         return output;
     }
     pad(missing_bits, output)
+}
+
+fn align_back(mut output: BitOut) -> BitOut {
+    let missing_bits = 8 - output.len() % 8;
+    if missing_bits == 8 {
+        return output;
+    }
+    for _ in 0..missing_bits {
+        output.push(false);
+    }
+    return output;
 }
 
 #[cfg(test)]

@@ -3,13 +3,20 @@ use nom::{
     character::complete::char,
     combinator::{into, opt},
     multi::many0,
-    sequence::{terminated, tuple},
+    sequence::{separated_pair, terminated, tuple},
     IResult,
 };
 
 use asnr_grammar::{types::*, *};
 
 use super::{constraint::constraint, *};
+
+pub fn choice_value<'a>(input: &'a str) -> IResult<&'a str, ASN1Value> {
+    map(
+        skip_ws_and_comments(separated_pair(identifier, char(':'), asn1_value)),
+        |(id, val)| ASN1Value::Choice(id.to_owned(), Box::new(val)),
+    )(input)
+}
 
 /// Tries to parse an ASN1 CHOICE
 ///
@@ -30,7 +37,10 @@ pub fn choice<'a>(input: &'a str) -> IResult<&'a str, ASN1Type> {
                     skip_ws_and_comments(choice_option),
                     optional_comma,
                 )),
-                opt(terminated(extension_marker, opt(char(COMMA)))),
+                opt(terminated(
+                    extension_marker,
+                    opt(skip_ws_and_comments(char(COMMA))),
+                )),
                 opt(many0(terminated(
                     skip_ws_and_comments(choice_option),
                     optional_comma,
