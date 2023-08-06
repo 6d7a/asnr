@@ -55,6 +55,7 @@ pub fn generate<'a>(
             ASN1Value::Boolean(_) => todo!(),
             ASN1Value::Integer(_) => generate_integer_value(v),
             ASN1Value::String(_) => todo!(),
+            ASN1Value::Real(_) => todo!(),
             ASN1Value::BitString(_) => todo!(),
             ASN1Value::EnumeratedValue(_) => todo!(),
             ASN1Value::ElsewhereDeclaredValue(_) => {
