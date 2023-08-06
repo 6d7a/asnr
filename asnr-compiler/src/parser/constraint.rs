@@ -890,6 +890,67 @@ mod tests {
                     extensible: false
                 })
             ]
+    fn parses_real_constraint() {
+        assert_eq!(
+            constraint(
+                r#"(WITH COMPONENTS {
+                mantissa (-16777215..16777215),
+                base (2),
+                exponent (-125..128) } )"#
+            )
+            .unwrap()
+            .1,
+            vec![Constraint::SubtypeConstraint(ElementSet {
+                set: ElementOrSetOperation::Element(SubtypeElement::SingleTypeConstraint(
+                    InnerTypeConstraint {
+                        is_partial: false,
+                        constraints: vec![
+                            ConstrainedComponent {
+                                identifier: "mantissa".into(),
+                                constraints: vec![Constraint::SubtypeConstraint(ElementSet {
+                                    set: ElementOrSetOperation::Element(
+                                        SubtypeElement::ValueRange {
+                                            min: Some(ASN1Value::Integer(-16777215)),
+                                            max: Some(ASN1Value::Integer(16777215)),
+                                            extensible: false
+                                        }
+                                    ),
+                                    extensible: false
+                                })],
+                                presence: ComponentPresence::Unspecified
+                            },
+                            ConstrainedComponent {
+                                identifier: "base".into(),
+                                constraints: vec![Constraint::SubtypeConstraint(ElementSet {
+                                    set: ElementOrSetOperation::Element(
+                                        SubtypeElement::SingleValue {
+                                            value: ASN1Value::Integer(2),
+                                            extensible: false
+                                        }
+                                    ),
+                                    extensible: false
+                                })],
+                                presence: ComponentPresence::Unspecified
+                            },
+                            ConstrainedComponent {
+                                identifier: "exponent".into(),
+                                constraints: vec![Constraint::SubtypeConstraint(ElementSet {
+                                    set: ElementOrSetOperation::Element(
+                                        SubtypeElement::ValueRange {
+                                            min: Some(ASN1Value::Integer(-125)),
+                                            max: Some(ASN1Value::Integer(128)),
+                                            extensible: false
+                                        }
+                                    ),
+                                    extensible: false
+                                })],
+                                presence: ComponentPresence::Unspecified
+                            }
+                        ]
+                    }
+                )),
+                extensible: false
+            })]
         )
     }
 }

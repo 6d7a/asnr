@@ -25,7 +25,6 @@ use self::{
     character_string::{character_string, character_string_value},
     choice::*,
     common::*,
-    set::*,
     constraint::constraint,
     enumerated::*,
     error::ParserError,
@@ -35,7 +34,9 @@ use self::{
     null::*,
     parameterization::parameterization,
     sequence::{sequence, sequence_value},
+    real::*,
     sequence_of::*,
+    set::*,
 };
 
 mod bit_string;
@@ -52,6 +53,7 @@ mod module_reference;
 mod null;
 mod object_identifier;
 mod parameterization;
+mod real;
 mod sequence;
 mod sequence_of;
 mod set;
@@ -104,6 +106,7 @@ pub fn asn1_type<'a>(input: &'a str) -> IResult<&'a str, ASN1Type> {
         sequence_of,
         sequence,
         set,
+        real,
         choice,
         integer,
         enumerated,
