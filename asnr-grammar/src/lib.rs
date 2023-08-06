@@ -809,6 +809,7 @@ pub enum ASN1Value {
     Choice(String, Box<ASN1Value>),
     Sequence(Vec<(String, Box<ASN1Value>)>),
     Integer(i128),
+    Real(f64),
     String(String),
     BitString(Vec<bool>),
     EnumeratedValue(String),
@@ -977,6 +978,7 @@ impl ASN1Value {
             ASN1Value::Boolean(b) => Ok(format!("{}", b)),
             ASN1Value::Integer(i) => Ok(format!("{}", i)),
             ASN1Value::String(s) => Ok(s.clone()),
+            ASN1Value::Real(r) => Ok(format!("{}", r)),
             ASN1Value::BitString(_) => todo!(),
             ASN1Value::EnumeratedValue(e) => Ok(e.clone()),
             ASN1Value::ElsewhereDeclaredValue(e) => Ok(e.clone()),
@@ -989,6 +991,7 @@ impl asnr_traits::Declare for ASN1Value {
         match self {
             ASN1Value::All => String::from("ASN1Value::All"),
             ASN1Value::Null => String::from("ASN1Value::Null"),
+            ASN1Value::Real(r) => format!("ASN1Value::Real({})", r),
             ASN1Value::Boolean(b) => format!("ASN1Value::Boolean({})", b),
             ASN1Value::Integer(i) => format!("ASN1Value::Integer({})", i),
             ASN1Value::String(s) => format!("ASN1Value::String(\"{}\".into())", s),
