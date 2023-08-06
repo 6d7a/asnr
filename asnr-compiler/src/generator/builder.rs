@@ -630,17 +630,17 @@ mod tests {
             parameterization: None,
             name: "Sequence".into(),
             comments: "".into(),
-            r#type: ASN1Type::Sequence(Sequence {
+            r#type: ASN1Type::Sequence(SequenceOrSet {
                 constraints: vec![],
                 extensible: Some(1),
-                members: vec![SequenceMember {
+                members: vec![SequenceOrSetMember {
                     name: "nested".into(),
                     tag: None,
-                    r#type: ASN1Type::Sequence(Sequence {
+                    r#type: ASN1Type::Sequence(SequenceOrSet {
                         extensible: Some(3),
                         constraints: vec![],
                         members: vec![
-                            SequenceMember {
+                            SequenceOrSetMember {
                                 name: "wow".into(),
                                 tag: None,
                                 r#type: ASN1Type::ElsewhereDeclaredType(DeclarationElsewhere {
@@ -651,7 +651,7 @@ mod tests {
                                 is_optional: false,
                                 constraints: vec![],
                             },
-                            SequenceMember {
+                            SequenceOrSetMember {
                                 name: "this-is-annoying".into(),
                                 tag: None,
                                 r#type: ASN1Type::Boolean,
@@ -659,13 +659,13 @@ mod tests {
                                 is_optional: true,
                                 constraints: vec![],
                             },
-                            SequenceMember {
+                            SequenceOrSetMember {
                                 name: "another".into(),
                                 tag: None,
-                                r#type: ASN1Type::Sequence(Sequence {
+                                r#type: ASN1Type::Sequence(SequenceOrSet {
                                     extensible: None,
                                     constraints: vec![],
-                                    members: vec![SequenceMember {
+                                    members: vec![SequenceOrSetMember {
                                         name: "inner".into(),
 
                                         tag: None,

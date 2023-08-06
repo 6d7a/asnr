@@ -176,7 +176,7 @@ impl Encoder<u8, BitOut> for Uper {
     }
 
     fn encode_sequence<S: EncoderForIndex<u8, BitOut> + Debug>(
-        sequence: Sequence,
+        sequence: SequenceOrSet,
     ) -> Result<Box<dyn Fn(S, BitOut) -> Result<BitOut, EncodingError>>, EncodingError> {
         let member_list: Vec<(usize, String, bool)> = sequence
             .members

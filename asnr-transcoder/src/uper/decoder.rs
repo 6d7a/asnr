@@ -1,6 +1,9 @@
 use alloc::{boxed::Box, string::String, vec, vec::Vec};
-use asnr_grammar::types::Sequence;
-use bitvec::{bits, bitvec, prelude::Msb0, vec::BitVec};
+use asnr_grammar::{
+    types::{CharacterString, SequenceOrSet},
+    CharacterStringType,
+};
+use bitvec::{bits, field::BitField, prelude::Msb0, vec::BitVec, bitvec};
 use bitvec_nom::BSlice;
 use nom::{bytes::complete::take, combinator::map, error::Error, AsBytes};
 use num::{FromPrimitive, Integer};
@@ -273,7 +276,7 @@ impl<'a> Decoder<'a, BitIn<'a>> for Uper {
     }
 
     fn decode_sequence<T: DecodeMember<'a, BitIn<'a>> + Default>(
-        sequence: asnr_grammar::types::Sequence,
+        sequence: asnr_grammar::types::SequenceOrSet,
     ) -> Result<Box<dyn Fn(BitIn<'a>) -> IResult<BitIn, T>>, DecodingError<BitIn<'a>>> {
         if let Some(extension_index) = sequence.extensible {
             Ok(Box::new(move |input| {
@@ -387,7 +390,7 @@ fn size_length_det<'a>(
 }
 
 fn decode_unextended_sequence<'a, T: DecodeMember<'a, BitIn<'a>> + Default>(
-    sequence: &Sequence,
+    sequence: &SequenceOrSet,
     mut input: BitIn<'a>,
 ) -> IResult<BitIn<'a>, T> {
     let mut member_presence = vec![];

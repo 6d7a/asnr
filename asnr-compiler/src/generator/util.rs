@@ -250,7 +250,7 @@ pub fn format_distinguished_int_value(value: &DistinguishedValue) -> String {
 }
 
 pub fn flatten_nested_sequence_members(
-    members: &Vec<SequenceMember>,
+    members: &Vec<SequenceOrSetMember>,
     parent_name: &String,
 ) -> Result<Vec<String>, GeneratorError> {
     members
@@ -306,7 +306,7 @@ pub fn format_option_declaration(members: &Vec<StringifiedNameType>) -> String {
 }
 
 pub fn extract_sequence_members(
-    members: &Vec<SequenceMember>,
+    members: &Vec<SequenceOrSetMember>,
     parent_name: &String,
 ) -> Vec<StringifiedNameType> {
     members
@@ -387,7 +387,7 @@ pub fn format_encoder_member_body(members: &Vec<StringifiedNameType>) -> String 
         .join("\n      ")
 }
 fn declare_inner_sequence_member(
-    member: &SequenceMember,
+    member: &SequenceOrSetMember,
     parent_name: &String,
 ) -> Result<String, GeneratorError> {
     generate(

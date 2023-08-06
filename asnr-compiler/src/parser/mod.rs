@@ -25,6 +25,7 @@ use self::{
     character_string::{character_string, character_string_value},
     choice::*,
     common::*,
+    set::*,
     constraint::constraint,
     enumerated::*,
     error::ParserError,
@@ -53,6 +54,7 @@ mod object_identifier;
 mod parameterization;
 mod sequence;
 mod sequence_of;
+mod set;
 mod util;
 
 pub fn asn_spec<'a>(
@@ -101,6 +103,7 @@ pub fn asn1_type<'a>(input: &'a str) -> IResult<&'a str, ASN1Type> {
         null,
         sequence_of,
         sequence,
+        set,
         choice,
         integer,
         enumerated,
@@ -555,11 +558,11 @@ mod tests {
             ToplevelTypeDeclaration {
                 comments: "".into(),
                 name: "RegionalExtension".into(),
-                r#type: ASN1Type::Sequence(Sequence {
+                r#type: ASN1Type::Sequence(SequenceOrSet {
                     extensible: None,
                     constraints: vec![],
                     members: vec![
-                        SequenceMember {
+                        SequenceOrSetMember {
                             name: "regionId".into(),
                             tag: None,
                             r#type: ASN1Type::InformationObjectFieldReference(
@@ -585,7 +588,7 @@ mod tests {
                             is_optional: false,
                             constraints: vec![]
                         },
-                        SequenceMember {
+                        SequenceOrSetMember {
                             name: "regExtValue".into(),
                             tag: None,
                             r#type: ASN1Type::InformationObjectFieldReference(
