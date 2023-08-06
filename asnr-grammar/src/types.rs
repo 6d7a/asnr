@@ -119,6 +119,34 @@ impl
     }
 }
 
+/// Representation of an ASN1 REAL data element
+/// with corresponding constraints
+#[derive(Debug, Clone, PartialEq)]
+pub struct Real {
+    pub constraints: Vec<Constraint>,
+}
+
+impl asnr_traits::Declare for Real {
+    fn declare(&self) -> String {
+        format!(
+            "Real {{ constraints: vec![{}] }}",
+            self.constraints
+                .iter()
+                .map(|c| c.declare())
+                .collect::<Vec<String>>()
+                .join(", "),
+        )
+    }
+}
+
+impl From<Option<Vec<Constraint>>> for Real {
+    fn from(value: Option<Vec<Constraint>>) -> Self {
+        Self {
+            constraints: value.unwrap_or(vec![])
+        }
+    }
+}
+
 /// Representation of an ASN1 BIT STRING data element
 /// with corresponding constraints and distinguished values
 /// defining the individual bits
