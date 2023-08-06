@@ -315,7 +315,7 @@ impl Generator for AsnrGenerator {
         tld: ToplevelTypeDeclaration,
         custom_derive: Option<&'a str>,
     ) -> Result<String, GeneratorError> {
-        if let ASN1Type::Sequence(ref seq) = tld.r#type {
+        if let ASN1Type::SequenceOrSet(ref seq) = tld.r#type {
             let name = rustify_name(&tld.name);
             let members = extract_sequence_members(&seq.members, &name);
             let (extension_decl, extension_decoder) =
@@ -345,7 +345,7 @@ impl Generator for AsnrGenerator {
         tld: ToplevelTypeDeclaration,
         custom_derive: Option<&'a str>,
     ) -> Result<String, GeneratorError> {
-        if let ASN1Type::SequenceOf(ref seq_of) = tld.r#type {
+        if let ASN1Type::SequenceOrSetOf(ref seq_of) = tld.r#type {
             let name = rustify_name(&tld.name);
             let anonymous_item = match seq_of.r#type.as_ref() {
                 ASN1Type::ElsewhereDeclaredType(_) => None,
@@ -588,19 +588,19 @@ mod tests {
     fn generates_sequence_from_template() {
         let seq_tld = ToplevelTypeDeclaration {
             parameterization: None,
-            name: "Sequence".into(),
+            name: "SequenceOrSet".into(),
             comments: "".into(),
-            r#type: ASN1Type::Sequence(Sequence {
+            r#type: ASN1Type::SequenceOrSet(SequenceOrSet {
                 constraints: vec![],
                 extensible: Some(1),
-                members: vec![SequenceMember {
+                members: vec![SequenceOrSetOrSetMember {
                     name: "nested".into(),
                     tag: None,
-                    r#type: ASN1Type::Sequence(Sequence {
+                    r#type: ASN1Type::SequenceOrSet(SequenceOrSet {
                         extensible: Some(3),
                         constraints: vec![],
                         members: vec![
-                            SequenceMember {
+                            SequenceOrSetOrSetMember {
                                 name: "wow".into(),
                                 tag: None,
                                 r#type: ASN1Type::ElsewhereDeclaredType(DeclarationElsewhere {
@@ -611,7 +611,7 @@ mod tests {
                                 is_optional: false,
                                 constraints: vec![],
                             },
-                            SequenceMember {
+                            SequenceOrSetOrSetMember {
                                 name: "this-is-annoying".into(),
                                 tag: None,
                                 r#type: ASN1Type::Boolean,
@@ -619,13 +619,13 @@ mod tests {
                                 is_optional: true,
                                 constraints: vec![],
                             },
-                            SequenceMember {
+                            SequenceOrSetOrSetMember {
                                 name: "another".into(),
                                 tag: None,
-                                r#type: ASN1Type::Sequence(Sequence {
+                                r#type: ASN1Type::SequenceOrSet(SequenceOrSet {
                                     extensible: None,
                                     constraints: vec![],
-                                    members: vec![SequenceMember {
+                                    members: vec![SequenceOrSetOrSetMember {
                                         name: "inner".into(),
 
                                         tag: None,

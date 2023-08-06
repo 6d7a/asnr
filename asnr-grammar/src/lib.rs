@@ -450,9 +450,9 @@ pub enum ASN1Type {
     CharacterString(CharacterString),
     Enumerated(Enumerated),
     Choice(Choice),
-    Sequence(Sequence),
+    Sequence(SequenceOrSet),
     SequenceOf(SequenceOf),
-    // Set,
+    Set(SequenceOrSet),
     // SetOf,
     ElsewhereDeclaredType(DeclarationElsewhere),
     InformationObjectFieldReference(InformationObjectFieldReference),
@@ -615,7 +615,7 @@ impl ASN1Type {
                     .collect(),
                 constraints: c.constraints,
             }),
-            ASN1Type::Sequence(s) => ASN1Type::Sequence(Sequence {
+            ASN1Type::Sequence(s) => ASN1Type::Sequence(SequenceOrSet {
                 extensible: s.extensible,
                 constraints: s.constraints,
                 members: s
@@ -680,6 +680,7 @@ impl ToString for ASN1Type {
             ASN1Type::Choice(_) => todo!(),
             ASN1Type::Sequence(_) => todo!(),
             ASN1Type::SequenceOf(_) => todo!(),
+            ASN1Type::Set(_) => todo!(),
             ASN1Type::ElsewhereDeclaredType(e) => e.identifier.clone(),
             ASN1Type::InformationObjectFieldReference(_) => todo!(),
         }
@@ -784,6 +785,7 @@ impl asnr_traits::Declare for ASN1Type {
             ASN1Type::Enumerated(e) => format!("ASN1Type::Enumerated({})", e.declare()),
             ASN1Type::SequenceOf(s) => format!("ASN1Type::SequenceOf({})", s.declare()),
             ASN1Type::Sequence(s) => format!("ASN1Type::Sequence({})", s.declare()),
+            ASN1Type::Set(s) => format!("ASN1Type::Set({})", s.declare()),
             ASN1Type::Choice(c) => format!("ASN1Type::Choice({})", c.declare()),
             ASN1Type::ElsewhereDeclaredType(els) => {
                 format!("ASN1Type::ElsewhereDeclaredType({})", els.declare())

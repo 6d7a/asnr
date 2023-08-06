@@ -45,12 +45,12 @@ pub fn sequence<'a>(input: &'a str) -> IResult<&'a str, ASN1Type> {
             pair(
                 in_braces(tuple((
                     many0(terminated(
-                        skip_ws_and_comments(sequence_member),
+                        skip_ws_and_comments(sequence_or_set_member),
                         optional_comma,
                     )),
                     opt(terminated(extension_marker, opt(char(COMMA)))),
                     opt(many0(terminated(
-                        skip_ws_and_comments(sequence_member),
+                        skip_ws_and_comments(sequence_or_set_member),
                         optional_comma,
                     ))),
                 ))),
@@ -61,7 +61,7 @@ pub fn sequence<'a>(input: &'a str) -> IResult<&'a str, ASN1Type> {
     )(input)
 }
 
-fn sequence_member<'a>(input: &'a str) -> IResult<&'a str, SequenceMember> {
+pub fn sequence_or_set_member<'a>(input: &'a str) -> IResult<&'a str, SequenceOrSetMember> {
     into(tuple((
         skip_ws_and_comments(identifier),
         opt(asn_tag),
@@ -145,11 +145,11 @@ mod tests {
         )
         .unwrap()
         .1,
-        ASN1Type::Sequence(Sequence {
+        ASN1Type::Sequence(SequenceOrSet {
             extensible: Some(1),
             constraints: vec![],
             members: vec![
-                SequenceMember {
+                SequenceOrSetMember {
                     name: "clusterBoundingBoxShape".into(),
                     tag: None,
                     r#type: ASN1Type::ElsewhereDeclaredType(DeclarationElsewhere { identifier: "Shape".into(), constraints: vec![Constraint::SubtypeConstraint(ElementSet { set: ElementOrSetOperation::Element(SubtypeElement::SingleTypeConstraint(InnerTypeConstraint { is_partial: true, constraints: vec![ConstrainedComponent { identifier: "elliptical".into(), constraints: vec![], presence: ComponentPresence::Absent },ConstrainedComponent { identifier: "radial".into(), constraints: vec![], presence: ComponentPresence::Absent },ConstrainedComponent { identifier: "radialShapes".into(), constraints: vec![], presence: ComponentPresence::Absent }] })), extensible: false })
@@ -174,11 +174,11 @@ mod tests {
             )
             .unwrap()
             .1,
-            ASN1Type::Sequence(Sequence {
+            ASN1Type::Sequence(SequenceOrSet {
                 extensible: None,
                 constraints: vec![],
                 members: vec![
-                    SequenceMember {
+                    SequenceOrSetMember {
                         name: "value".into(),
 
                         tag: None,
@@ -190,7 +190,7 @@ mod tests {
                         is_optional: false,
                         constraints: vec![]
                     },
-                    SequenceMember {
+                    SequenceOrSetMember {
                         name: "confidence".into(),
 
                         tag: None,
@@ -220,11 +220,11 @@ mod tests {
             )
             .unwrap()
             .1,
-            ASN1Type::Sequence(Sequence {
+            ASN1Type::Sequence(SequenceOrSet {
                 extensible: None,
                 constraints: vec![],
                 members: vec![
-                    SequenceMember {
+                    SequenceOrSetMember {
                         name: "xCoordinate".into(),
 
                         tag: None,
@@ -236,7 +236,7 @@ mod tests {
                         is_optional: false,
                         constraints: vec![],
                     },
-                    SequenceMember {
+                    SequenceOrSetMember {
                         name: "yCoordinate".into(),
 
                         tag: None,
@@ -248,7 +248,7 @@ mod tests {
                         is_optional: false,
                         constraints: vec![],
                     },
-                    SequenceMember {
+                    SequenceOrSetMember {
                         name: "zCoordinate".into(),
 
                         tag: None,
@@ -279,11 +279,11 @@ mod tests {
             )
             .unwrap()
             .1,
-            ASN1Type::Sequence(Sequence {
+            ASN1Type::Sequence(SequenceOrSet {
                 extensible: Some(3),
                 constraints: vec![],
                 members: vec![
-                    SequenceMember {
+                    SequenceOrSetMember {
                         name: "horizontalPositionConfidence".into(),
                         tag: None,
                         r#type: ASN1Type::ElsewhereDeclaredType(DeclarationElsewhere {
@@ -294,7 +294,7 @@ mod tests {
                         is_optional: true,
                         constraints: vec![],
                     },
-                    SequenceMember {
+                    SequenceOrSetMember {
                         name: "deltaAltitude".into(),
                         tag: None,
                         r#type: ASN1Type::ElsewhereDeclaredType(DeclarationElsewhere {
@@ -307,7 +307,7 @@ mod tests {
                         is_optional: true,
                         constraints: vec![],
                     },
-                    SequenceMember {
+                    SequenceOrSetMember {
                         name: "altitudeConfidence".into(),
                         tag: None,
                         r#type: ASN1Type::ElsewhereDeclaredType(DeclarationElsewhere {
@@ -338,11 +338,11 @@ mod tests {
             )
             .unwrap()
             .1,
-            ASN1Type::Sequence(Sequence {
+            ASN1Type::Sequence(SequenceOrSet {
                 extensible: Some(3),
                 constraints: vec![],
                 members: vec![
-                    SequenceMember {
+                    SequenceOrSetMember {
                         name: "unNumber".into(),
                         tag: None,
                         r#type: ASN1Type::Integer(Integer {
@@ -360,7 +360,7 @@ mod tests {
                         is_optional: false,
                         constraints: vec![],
                     },
-                    SequenceMember {
+                    SequenceOrSetMember {
                         name: "limitedQuantity".into(),
                         tag: None,
                         r#type: ASN1Type::Boolean,
@@ -368,7 +368,7 @@ mod tests {
                         is_optional: true,
                         constraints: vec![],
                     },
-                    SequenceMember {
+                    SequenceOrSetMember {
                         name: "emergencyActionCode".into(),
                         tag: None,
                         r#type: ASN1Type::CharacterString(CharacterString {
@@ -417,18 +417,18 @@ mod tests {
             )
             .unwrap()
             .1,
-            ASN1Type::Sequence(Sequence {
+            ASN1Type::Sequence(SequenceOrSet {
                 extensible: Some(1),
                 constraints: vec![],
-                members: vec![SequenceMember {
+                members: vec![SequenceOrSetMember {
                     name: "nested".into(),
 
                     tag: None,
-                    r#type: ASN1Type::Sequence(Sequence {
+                    r#type: ASN1Type::Sequence(SequenceOrSet {
                         extensible: Some(3),
                         constraints: vec![],
                         members: vec![
-                            SequenceMember {
+                            SequenceOrSetMember {
                                 name: "wow".into(),
 
                                 tag: None,
@@ -440,7 +440,7 @@ mod tests {
                                 is_optional: false,
                                 constraints: vec![],
                             },
-                            SequenceMember {
+                            SequenceOrSetMember {
                                 name: "this-is-annoying".into(),
 
                                 tag: None,
@@ -449,14 +449,14 @@ mod tests {
                                 is_optional: true,
                                 constraints: vec![],
                             },
-                            SequenceMember {
+                            SequenceOrSetMember {
                                 name: "another".into(),
 
                                 tag: None,
-                                r#type: ASN1Type::Sequence(Sequence {
+                                r#type: ASN1Type::Sequence(SequenceOrSet {
                                     extensible: None,
                                     constraints: vec![],
-                                    members: vec![SequenceMember {
+                                    members: vec![SequenceOrSetMember {
                                         name: "inner".into(),
 
                                         tag: None,

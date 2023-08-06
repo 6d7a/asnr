@@ -107,7 +107,7 @@ pub trait Decoder<'a, I: AsBytes + Debug + 'a> {
         char_string: CharacterString,
     ) -> Result<Box<dyn Fn(I) -> IResult<I, String>>, DecodingError<I>>;
     fn decode_sequence<T: DecodeMember<'a, I> + Default>(
-        sequence: Sequence,
+        sequence: SequenceOrSet,
     ) -> Result<Box<dyn Fn(I) -> IResult<I, T>>, DecodingError<I>>;
     fn decode_sequence_of<T: Decode<'a, I> + 'a + Sized>(
         sequence_of: SequenceOf,
@@ -131,7 +131,7 @@ pub trait Encoder<T, O: Extend<T> + Debug + 'static> {
         character_string: CharacterString,
     ) -> Result<Box<dyn Fn(&str, O) -> Result<O, EncodingError>>, EncodingError>;
     fn encode_sequence<S: EncoderForIndex<T, O> + Debug>(
-        sequence: Sequence,
+        sequence: SequenceOrSet,
     ) -> Result<Box<dyn Fn(S, O) -> Result<O, EncodingError>>, EncodingError>;
     fn encode_enumerated<E: Encode<T, O> + Debug>(
         enumerated: Enumerated,

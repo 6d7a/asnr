@@ -225,35 +225,35 @@ impl From<(Option<Vec<Constraint>>, ASN1Type)> for SequenceOf {
 /// Representation of an ASN1 SEQUENCE data element
 /// with corresponding members and extension information
 #[derive(Debug, Clone, PartialEq)]
-pub struct Sequence {
+pub struct SequenceOrSet {
     pub extensible: Option<usize>,
     pub constraints: Vec<Constraint>,
-    pub members: Vec<SequenceMember>,
+    pub members: Vec<SequenceOrSetMember>,
 }
 
 impl
     From<(
         (
-            Vec<SequenceMember>,
+            Vec<SequenceOrSetMember>,
             Option<ExtensionMarker>,
-            Option<Vec<SequenceMember>>,
+            Option<Vec<SequenceOrSetMember>>,
         ),
         Option<Vec<Constraint>>,
-    )> for Sequence
+    )> for SequenceOrSet
 {
     fn from(
         mut value: (
             (
-                Vec<SequenceMember>,
+                Vec<SequenceOrSetMember>,
                 Option<ExtensionMarker>,
-                Option<Vec<SequenceMember>>,
+                Option<Vec<SequenceOrSetMember>>,
             ),
             Option<Vec<Constraint>>,
         ),
     ) -> Self {
         let index_of_first_extension = value.0 .0.len();
         value.0 .0.append(&mut value.0 .2.unwrap_or(vec![]));
-        Sequence {
+        SequenceOrSet {
             constraints: value.1.unwrap_or(vec![]),
             extensible: value.0 .1.map(|_| index_of_first_extension),
             members: value.0 .0,
@@ -261,10 +261,10 @@ impl
     }
 }
 
-impl asnr_traits::Declare for Sequence {
+impl asnr_traits::Declare for SequenceOrSet {
     fn declare(&self) -> String {
         format!(
-            "Sequence {{ constraints: vec![{}], extensible: {}, members: vec![{}] }}",
+            "SequenceOrSet {{ constraints: vec![{}], extensible: {}, members: vec![{}] }}",
             self.constraints
                 .iter()
                 .map(|c| c.declare())
@@ -284,7 +284,7 @@ impl asnr_traits::Declare for Sequence {
 
 /// Representation of an single ASN1 SEQUENCE member
 #[derive(Debug, Clone, PartialEq)]
-pub struct SequenceMember {
+pub struct SequenceOrSetMember {
     pub name: String,
     pub tag: Option<AsnTag>,
     pub r#type: ASN1Type,
@@ -301,7 +301,7 @@ impl
         Option<Vec<Constraint>>,
         Option<OptionalMarker>,
         Option<ASN1Value>,
-    )> for SequenceMember
+    )> for SequenceOrSetMember
 {
     fn from(
         value: (
@@ -313,7 +313,7 @@ impl
             Option<ASN1Value>,
         ),
     ) -> Self {
-        SequenceMember {
+        SequenceOrSetMember {
             name: value.0.into(),
             tag: value.1,
             r#type: value.2,
@@ -324,10 +324,10 @@ impl
     }
 }
 
-impl asnr_traits::Declare for SequenceMember {
+impl asnr_traits::Declare for SequenceOrSetMember {
     fn declare(&self) -> String {
         format!(
-          "SequenceMember {{ name: \"{}\".into(), tag: {}, is_optional: {}, r#type: {}, default_value: {}, constraints: vec![{}] }}",
+          "SequenceOrSetMember {{ name: \"{}\".into(), tag: {}, is_optional: {}, r#type: {}, default_value: {}, constraints: vec![{}] }}",
           self.name,
           self.tag.as_ref().map_or(String::from("None"), |t| {
             String::from("Some(") + &t.declare() + ")"
