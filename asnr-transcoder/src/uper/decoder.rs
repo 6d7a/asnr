@@ -1,9 +1,6 @@
 use alloc::{boxed::Box, string::String, vec, vec::Vec};
-use asnr_grammar::{
-    types::{CharacterString, SequenceOrSet},
-    CharacterStringType,
-};
-use bitvec::{bits, field::BitField, prelude::Msb0, vec::BitVec, bitvec};
+use asnr_grammar::types::SequenceOrSet;
+use bitvec::{bits, prelude::Msb0, vec::BitVec, bitvec};
 use bitvec_nom::BSlice;
 use nom::{bytes::complete::take, combinator::map, error::Error, AsBytes};
 use num::{FromPrimitive, Integer};

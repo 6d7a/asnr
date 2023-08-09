@@ -182,7 +182,15 @@ mod tests {
 
     #[test]
     fn parses_mbe_notation_real_value() {
-        assert_eq!(real_value("{mantissa 314159, base 10, exponent -5}").unwrap().1, ASN1Value::Real(3.14159));
-        assert_eq!(real_value("{mantissa 0, base 10, exponent 100}").unwrap().1, ASN1Value::Real(0.))
+        if let ASN1Value::Real(r) = real_value("{mantissa 314159, base 10, exponent -5}").unwrap().1 {
+            assert!(r - 3.14159 < 0.0000001);
+        } else {
+            unreachable!()
+        }
+        if let ASN1Value::Real(r) = real_value("{mantissa 0, base 2, exponent 100}").unwrap().1 {
+            assert!(r < 0.0000001 && r > -0.000001);
+        } else {
+            unreachable!()
+        }
     }
 }

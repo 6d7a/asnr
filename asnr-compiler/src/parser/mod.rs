@@ -125,6 +125,7 @@ pub fn asn1_value<'a>(input: &'a str) -> IResult<&'a str, ASN1Value> {
         all_value,
         null_value,
         choice_value,
+        real_value,
         sequence_value,
         bit_string_value,
         boolean_value,
