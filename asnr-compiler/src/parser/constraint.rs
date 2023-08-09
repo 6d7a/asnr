@@ -889,7 +889,10 @@ mod tests {
                     ),
                     extensible: false
                 })
-            ]
+            ])
+    }
+
+    #[test]
     fn parses_real_constraint() {
         assert_eq!(
             constraint(
