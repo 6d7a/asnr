@@ -1,7 +1,6 @@
 //! The `generator` module is responsible for generating rust code that handles
 //! decoding and encoding of the parsed and validated ASN1 data elements.
 //! The `generator` uses string templates for generating rust code. 
-use std::ffi::OsStr;
 
 use asnr_grammar::{*, information_object::*};
 
@@ -18,19 +17,6 @@ mod builder;
 pub(crate) mod error;
 pub(crate) mod template;
 mod util;
-
-pub fn spec_section(name: Option<&OsStr>) -> String {
-    format!(
-        r#"
-
-// ================================================
-// {}
-// ================================================
-
-"#,
-        name.map_or("", |os| os.to_str().unwrap_or(""))
-    )
-}
 
 pub fn generate<'a>(
     tld: ToplevelDeclaration,

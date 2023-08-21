@@ -177,7 +177,7 @@ fn syntax_literal<'a>(input: &'a str) -> IResult<&'a str, &'a str> {
 
 #[cfg(test)]
 mod tests {
-    use asnr_grammar::{information_object::*, *, types::*};
+    use asnr_grammar::{information_object::*, types::*, *};
 
     use crate::parser::information_object_class::{information_object_class, object_set};
 
@@ -277,6 +277,50 @@ mod tests {
                     ObjectSetValue::Reference("Other-ops".into())
                 ],
                 extensible: Some(2)
+            }
+        )
+    }
+
+    #[test]
+    fn parses_information_object_with_custom_syntax() {
+        assert_eq!(
+            information_object_class(
+                r#"CLASS{
+            &itsaidCtxRef ItsAidCtxRef UNIQUE,
+            &ContextInfo OPTIONAL
+            }
+            WITH SYNTAX {&ContextInfo IDENTIFIED BY &itsaidCtxRef}"#
+            )
+            .unwrap()
+            .1,
+            InformationObjectClass {
+                fields: vec![
+                    InformationObjectClassField {
+                        identifier: ObjectFieldIdentifier::SingleValue("&itsaidCtxRef".into()),
+                        r#type: Some(ASN1Type::ElsewhereDeclaredType(DeclarationElsewhere {
+                            identifier: "ItsAidCtxRef".into(),
+                            constraints: vec![]
+                        })),
+                        is_optional: false,
+                        default: None,
+                        is_unique: true
+                    },
+                    InformationObjectClassField {
+                        identifier: ObjectFieldIdentifier::MultipleValue("&ContextInfo".into()),
+                        r#type: None,
+                        is_optional: true,
+                        default: None,
+                        is_unique: false
+                    }
+                ],
+                syntax: Some(InformationObjectSyntax {
+                    expressions: vec![
+                        SyntaxExpression::Required(SyntaxToken::Field(ObjectFieldIdentifier::MultipleValue("&ContextInfo".into()))),
+                        SyntaxExpression::Required(SyntaxToken::Literal("IDENTIFIED".into())),
+                        SyntaxExpression::Required(SyntaxToken::Literal("BY".into())),
+                        SyntaxExpression::Required(SyntaxToken::Field(ObjectFieldIdentifier::SingleValue("&itsaidCtxRef".into())))
+                    ]
+                })
             }
         )
     }

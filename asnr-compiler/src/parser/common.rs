@@ -4,7 +4,7 @@ use nom::{
     character::complete::{
         alpha1, alphanumeric1, char, i128, multispace0, multispace1, one_of, u64,
     },
-    combinator::{into, opt, peek, recognize, value},
+    combinator::{into, map_res, opt, peek, recognize, value},
     error::Error,
     multi::{many0, many1},
     sequence::{delimited, pair, preceded, terminated},
@@ -68,10 +68,22 @@ pub fn identifier<'a>(input: &'a str) -> IResult<&'a str, &'a str> {
 }
 
 pub fn type_identifier<'a>(input: &'a str) -> IResult<&'a str, &'a str> {
-    recognize(pair(
-        one_of("ABCDEFGHIJKLMNOPQRSTUVWXYZ"),
-        many0(alt((preceded(char('-'), alphanumeric1), alphanumeric1))),
-    ))(input)
+    map_res(
+        recognize(pair(
+            one_of("ABCDEFGHIJKLMNOPQRSTUVWXYZ"),
+            many0(alt((preceded(char('-'), alphanumeric1), alphanumeric1))),
+        )),
+        |identifier| {
+            if ASN1_KEYWORDS.contains(&identifier) {
+                Err(nom::Err::Error(Error {
+                    input: input,
+                    code: nom::error::ErrorKind::Tag,
+                }))
+            } else {
+                Ok(identifier)
+            }
+        },
+    )(input)
 }
 
 pub fn value_identifier<'a>(input: &'a str) -> IResult<&'a str, &'a str> {
