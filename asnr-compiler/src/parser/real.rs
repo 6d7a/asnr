@@ -2,7 +2,7 @@ use asnr_grammar::*;
 use nom::{
     branch::alt,
     bytes::complete::tag,
-    character::complete::{char, i64, u64, u32, i32},
+    character::complete::{char, i64, u64, i32},
     combinator::{map, opt, value},
     sequence::{delimited, preceded, separated_pair, tuple},
     IResult,

@@ -215,9 +215,8 @@ mod tests {
                                 ChoiceOption {
                                     name: "global".into(),
                                     tag: None,
-                                    r#type: ASN1Type::CharacterString(CharacterString {
+                                    r#type: ASN1Type::OctetString(OctetString {
                                         constraints: vec![],
-                                        r#type: asnr_grammar::CharacterStringType::OctetString
                                     }),
                                     constraints: vec![]
                                 }

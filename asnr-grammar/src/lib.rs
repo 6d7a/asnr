@@ -447,6 +447,7 @@ pub enum ASN1Type {
     Integer(Integer),
     Real(Real),
     BitString(BitString),
+    OctetString(OctetString),
     CharacterString(CharacterString),
     Enumerated(Enumerated),
     Choice(Choice),
@@ -473,6 +474,11 @@ impl ASN1Type {
                 .map(|c| c.link_cross_reference(name, tlds))
                 .fold(false, |acc, b| acc || b),
             ASN1Type::BitString(b) => b
+                .constraints
+                .iter_mut()
+                .map(|c| c.link_cross_reference(name, tlds))
+                .fold(false, |acc, b| acc || b),
+            ASN1Type::OctetString(o) => o
                 .constraints
                 .iter_mut()
                 .map(|c| c.link_cross_reference(name, tlds))
@@ -547,6 +553,7 @@ impl ASN1Type {
             ASN1Type::Boolean => false,
             ASN1Type::Integer(i) => i.constraints.iter().any(|c| c.has_cross_reference()),
             ASN1Type::BitString(b) => b.constraints.iter().any(|c| c.has_cross_reference()),
+            ASN1Type::OctetString(o) => o.constraints.iter().any(|c| c.has_cross_reference()),
             ASN1Type::CharacterString(c) => c.constraints.iter().any(|c| c.has_cross_reference()),
             ASN1Type::Enumerated(e) => e.constraints.iter().any(|c| c.has_cross_reference()),
             ASN1Type::Choice(c) => {
@@ -676,6 +683,7 @@ impl ToString for ASN1Type {
             ASN1Type::Integer(i) => i.type_token(),
             ASN1Type::Real(_) => "f64".to_owned(),
             ASN1Type::BitString(_) => "Vec<bool>".to_owned(),
+            ASN1Type::OctetString(_) => "Vec<u8>".to_owned(),
             ASN1Type::CharacterString(_) => "String".to_owned(),
             ASN1Type::Enumerated(_) => todo!(),
             ASN1Type::Choice(_) => todo!(),
@@ -690,9 +698,6 @@ impl ToString for ASN1Type {
 
 pub const NUMERIC_STRING_CHARSET: [char; 11] =
     [' ', '0', '1', '2', '3', '4', '5', '6', '7', '8', '9'];
-pub const OCTET_STRING_CHARSET: [char; 16] = [
-    '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'A', 'B', 'C', 'D', 'E', 'F',
-];
 pub const PRINTABLE_STRING_CHARSET: [char; 74] = [
     'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S',
     'T', 'U', 'V', 'W', 'X', 'Y', 'Z', 'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l',
@@ -703,7 +708,6 @@ pub const PRINTABLE_STRING_CHARSET: [char; 74] = [
 /// The types of an ASN1 character strings.
 #[derive(Debug, Clone, PartialEq, Copy)]
 pub enum CharacterStringType {
-    OctetString,
     NumericString,
     VisibleString,
     IA5String,
@@ -721,7 +725,6 @@ impl CharacterStringType {
     pub fn is_known_multiplier_string(&self) -> bool {
         match self {
             Self::NumericString
-            | Self::OctetString
             | Self::VisibleString
             | Self::PrintableString
             | Self::IA5String
@@ -738,9 +741,6 @@ impl CharacterStringType {
             }
             CharacterStringType::VisibleString | CharacterStringType::PrintableString => {
                 PRINTABLE_STRING_CHARSET.into_iter().enumerate().collect()
-            }
-            CharacterStringType::OctetString => {
-                OCTET_STRING_CHARSET.into_iter().enumerate().collect()
             }
             CharacterStringType::IA5String => (0..128u32)
                 .into_iter()
@@ -760,7 +760,6 @@ impl From<&str> for CharacterStringType {
     fn from(value: &str) -> Self {
         match value {
             IA5_STRING => Self::IA5String,
-            OCTET_STRING => Self::OctetString,
             NUMERIC_STRING => Self::NumericString,
             VISIBLE_STRING => Self::VisibleString,
             TELETEX_STRING => Self::TeletexString,
@@ -783,6 +782,7 @@ impl asnr_traits::Declare for ASN1Type {
             ASN1Type::Integer(i) => format!("ASN1Type::Integer({})", i.declare()),
             ASN1Type::Real(r) => format!("ASN1Type::Real({})", r.declare()),
             ASN1Type::BitString(b) => format!("ASN1Type::BitString({})", b.declare()),
+            ASN1Type::OctetString(o) => format!("ASN1Type::OctetString({})", o.declare()),
             ASN1Type::CharacterString(o) => format!("ASN1Type::CharacterString({})", o.declare()),
             ASN1Type::Enumerated(e) => format!("ASN1Type::Enumerated({})", e.declare()),
             ASN1Type::SequenceOf(s) => format!("ASN1Type::SequenceOf({})", s.declare()),

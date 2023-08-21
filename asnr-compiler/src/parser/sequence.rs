@@ -371,7 +371,7 @@ mod tests {
                     SequenceOrSetMember {
                         name: "emergencyActionCode".into(),
                         tag: None,
-                        r#type: ASN1Type::CharacterString(CharacterString {
+                        r#type: ASN1Type::OctetString(OctetString {
                             constraints: vec![Constraint::SubtypeConstraint(ElementSet {
                                 set: ElementOrSetOperation::Element(
                                     SubtypeElement::SizeConstraint(Box::new(
@@ -386,7 +386,6 @@ mod tests {
                                 ),
                                 extensible: false
                             })],
-                            r#type: asnr_grammar::CharacterStringType::OctetString
                         }),
                         default_value: None,
                         is_optional: true,

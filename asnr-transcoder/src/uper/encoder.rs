@@ -168,7 +168,8 @@ impl Encoder<u8, BitOut> for Uper {
         } else {
             Ok(Box::new(
                 move |encodable: &str, output: BitOut| -> Result<BitOut, EncodingError> {
-                    let to_wrap = encode_sized_string(&permitted_alphabet, encodable)?;
+                    let to_wrap: BitVec<u8, Msb0> =
+                        encode_sized_string(&permitted_alphabet, encodable)?;
                     with_size_length_determinant(encodable.len(), &constraints, to_wrap, output)
                 },
             ))
@@ -360,7 +361,7 @@ impl Encoder<u8, BitOut> for Uper {
             .collect::<Vec<(String, usize)>>();
         indices_for_member.sort_by(|(_, a), (_, b)| a.cmp(b));
         if let Some(index_of_first_extension) = choice.extensible {
-            Ok(Box::new(move |encodable, output| {
+            Ok(Box::new(move |encodable, mut output| {
                 let index = indices_for_member
                     .iter()
                     .find_map(|(name, index)| {
@@ -372,7 +373,18 @@ impl Encoder<u8, BitOut> for Uper {
                             &indices_for_member
                         ),
                     })?;
-                if index >= index_of_first_extension {
+                if index < index_of_first_extension {
+                    output.push(false);
+                    let output = encode_constrained_integer(
+                        index,
+                        bit_length(0, (index_of_first_extension - 1) as i128),
+                        output,
+                    )?;
+                    C::encoder_for_index::<Uper>(index.try_into().map_err(|_| EncodingError {
+                        details: format!("Index {index} exceeds usize range!"),
+                    })?)?(&encodable, output)
+                } else {
+                    output.push(true);
                     let output =
                         encode_normally_small_number(index - index_of_first_extension, output)?;
                     let to_wrap =
@@ -382,15 +394,6 @@ impl Encoder<u8, BitOut> for Uper {
                             },
                         )?)?(&encodable, bitvec![u8, Msb0;])?);
                     wrap_in_length_determinant(to_wrap.len() / 8, to_wrap, Some(0), output)
-                } else {
-                    let output = encode_constrained_integer(
-                        index,
-                        bit_length(0, (indices_for_member.len() - 1) as i128),
-                        output,
-                    )?;
-                    C::encoder_for_index::<Uper>(index.try_into().map_err(|_| EncodingError {
-                        details: format!("Index {index} exceeds usize range!"),
-                    })?)?(&encodable, output)
                 }
             }))
         } else {
@@ -415,6 +418,36 @@ impl Encoder<u8, BitOut> for Uper {
                     details: format!("Index {index} exceeds usize range!"),
                 })?)?(&encodable, output)
             }))
+        }
+    }
+
+    fn encode_octet_string(
+        octet_string: OctetString,
+    ) -> Result<Box<dyn Fn(&[u8], BitOut) -> Result<BitOut, EncodingError>>, EncodingError> {
+        let mut constraints = PerVisibleRangeConstraints::default_unsigned();
+        for c in &octet_string.constraints {
+            constraints +=
+                c.try_into()
+                    .map_err(|_: DecodingError<AsBytesDummy>| EncodingError {
+                        details: format!("Failed to parse character string constraints"),
+                    })?;
+        }
+        if constraints.is_extensible() {
+            Ok(Box::new(
+                move |encodable: &[u8], mut output: BitOut| -> Result<BitOut, EncodingError> {
+                    let actual_length = encodable.len();
+                    let _ = write_extended_bit(&constraints, actual_length, &mut output)?;
+                    let to_wrap = encodable.view_bits::<Msb0>().to_bitvec();
+                    with_size_length_determinant(actual_length, &constraints, to_wrap, output)
+                },
+            ))
+        } else {
+            Ok(Box::new(
+                move |encodable: &[u8], output: BitOut| -> Result<BitOut, EncodingError> {
+                    let to_wrap: BitVec<u8, Msb0> = encodable.view_bits::<Msb0>().to_bitvec();
+                    with_size_length_determinant(encodable.len(), &constraints, to_wrap, output)
+                },
+            ))
         }
     }
 }
@@ -1048,11 +1081,13 @@ mod tests {
         );
         assert_eq!(
             SymmetricEncryptionKey::encode::<Uper>(
-                SymmetricEncryptionKey::aes128Ccm(SymmetricEncryptionKey_aes128Ccm("A2".into())),
+                SymmetricEncryptionKey::aes128Ccm(SymmetricEncryptionKey_aes128Ccm(
+                    [0xA2].to_vec()
+                )),
                 bitvec![u8, Msb0;]
             )
             .unwrap(),
-            bitvec![u8, Msb0; 0]
+            bitvec![u8, Msb0; 0, 1,0,1,0,0,0,1,0]
         );
         assert_eq!(
             SymmetricEncryptionKey::encode::<Uper>(
@@ -1060,7 +1095,7 @@ mod tests {
                 bitvec![u8, Msb0;]
             )
             .unwrap(),
-            bitvec![u8, Msb0; 1,0,0,0,0,0,0,0]
+            bitvec![u8, Msb0; 1, 0,0,0,0,0,0,0, 0,0,0,0,0,0,0,0]
         );
     }
 }

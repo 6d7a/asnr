@@ -32,6 +32,7 @@ use self::{
     integer::*,
     module_reference::module_reference,
     null::*,
+    octet_string::*,
     parameterization::parameterization,
     sequence::{sequence, sequence_value},
     real::*,
@@ -52,6 +53,7 @@ mod integer;
 mod module_reference;
 mod null;
 mod object_identifier;
+mod octet_string;
 mod parameterization;
 mod real;
 mod sequence;
@@ -112,6 +114,7 @@ pub fn asn1_type<'a>(input: &'a str) -> IResult<&'a str, ASN1Type> {
         enumerated,
         boolean,
         bit_string,
+        octet_string,
         character_string,
         map(information_object_field_reference, |i| {
             ASN1Type::InformationObjectFieldReference(i)

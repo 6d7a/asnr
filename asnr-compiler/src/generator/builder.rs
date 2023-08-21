@@ -82,6 +82,26 @@ pub fn generate_bit_string<'a>(
     }
 }
 
+pub fn generate_octet_string<'a>(
+  tld: ToplevelTypeDeclaration,
+  custom_derive: Option<&'a str>,
+) -> Result<String, GeneratorError> {
+  if let ASN1Type::OctetString(ref oct_str) = tld.r#type {
+      Ok(octet_string_template(
+          format_comments(&tld.comments),
+          custom_derive.unwrap_or(DERIVE_DEFAULT),
+          rustify_name(&tld.name),
+          oct_str.declare(),
+      ))
+  } else {
+      Err(GeneratorError::new(
+          Some(ToplevelDeclaration::Type(tld)),
+          "Expected OCTET STRING top-level declaration",
+          GeneratorErrorType::Asn1TypeMismatch,
+      ))
+  }
+}
+
 pub fn character_string_template<'a>(
     tld: ToplevelTypeDeclaration,
     custom_derive: Option<&'a str>,
