@@ -424,14 +424,7 @@ impl Encoder<u8, BitOut> for Uper {
     fn encode_octet_string(
         octet_string: OctetString,
     ) -> Result<Box<dyn Fn(&[u8], BitOut) -> Result<BitOut, EncodingError>>, EncodingError> {
-        let mut constraints = PerVisibleRangeConstraints::default_unsigned();
-        for c in &octet_string.constraints {
-            constraints +=
-                c.try_into()
-                    .map_err(|_: DecodingError<AsBytesDummy>| EncodingError {
-                        details: format!("Failed to parse character string constraints"),
-                    })?;
-        }
+        let constraints = per_visible_range_constraints(false, &octet_string.constraints)?;
         if constraints.is_extensible() {
             Ok(Box::new(
                 move |encodable: &[u8], mut output: BitOut| -> Result<BitOut, EncodingError> {
@@ -450,6 +443,66 @@ impl Encoder<u8, BitOut> for Uper {
             ))
         }
     }
+
+    fn encode_sequence_of<M: Encode<u8, BitOut>>(
+        sequence_of: SequenceOf,
+    ) -> Result<Box<dyn Fn(Vec<M>, BitOut) -> Result<BitOut, EncodingError>>, EncodingError> {
+        let constraints = per_visible_range_constraints(false, &sequence_of.constraints)?;
+        if constraints.is_extensible() {
+            Ok(Box::new(
+                move |encodable, mut output| -> Result<BitOut, EncodingError> {
+                    let encodable_length = encodable.len();
+                    let mut encoded_members = encodable
+                        .into_iter()
+                        .try_fold(bitvec![u8, Msb0;], |acc, curr| curr.encode_self::<Uper>(acc))?;
+                    if constraints.lies_within::<usize>(&encodable_length)? {
+                        output.push(false);
+                        let mut output = encode_constrained_integer(
+                            encodable_length - constraints.min::<usize>().ok_or(
+                                "Could not determine minimum value of Sequence size constraints!",
+                            )?,
+                            constraints.bit_length().ok_or(
+                                "Could not determine bit length of Sequence size constraints!",
+                            )?,
+                            output,
+                        )?;
+                        output.append(&mut encoded_members);
+                        Ok(output)
+                    } else {
+                        output.push(true);
+                        wrap_in_length_determinant(
+                            encodable_length,
+                            encoded_members,
+                            Some(0),
+                            output,
+                        )
+                    }
+                },
+            ))
+        } else {
+            Ok(Box::new(
+                move |encodable, mut output| -> Result<BitOut, EncodingError> {
+                    let output = encode_constrained_integer(
+                        encodable.len()
+                            - constraints.min::<usize>().ok_or(
+                                "Could not determine minimum value of Sequence size constraints!",
+                            )?,
+                        constraints.bit_length().ok_or(
+                            "Could not determine bit length of Sequence size constraints!",
+                        )?,
+                        output,
+                    )?;
+                    encodable
+                        .into_iter()
+                        .try_fold(output, |acc, curr| curr.encode_self::<Uper>(acc))
+                },
+            ))
+        }
+    }
+
+    fn encode_open_type(input: &[u8], output: BitOut) -> Result<BitOut, EncodingError> {
+        wrap_in_length_determinant(input.len(), input.view_bits::<Msb0>().to_bitvec(), Some(0), output)
+    }
 }
 
 fn per_visible_range_constraints(
@@ -465,7 +518,7 @@ fn per_visible_range_constraints(
         constraints += c
             .try_into()
             .map_err(|_: DecodingError<AsBytesDummy>| EncodingError {
-                details: format!("Failed to parse bit string constraints"),
+                details: format!("Failed to parse range constraints"),
             })?
     }
     Ok(constraints)
