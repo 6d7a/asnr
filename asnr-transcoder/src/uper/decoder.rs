@@ -1,6 +1,6 @@
 use alloc::{boxed::Box, string::String, vec, vec::Vec};
 use asnr_grammar::types::SequenceOrSet;
-use bitvec::{bits, prelude::Msb0, vec::BitVec, bitvec};
+use bitvec::{bits, bitvec, prelude::Msb0, vec::BitVec};
 use bitvec_nom::BSlice;
 use nom::{bytes::complete::take, combinator::map, error::Error, AsBytes};
 use num::{FromPrimitive, Integer};
@@ -255,9 +255,9 @@ impl<'a> Decoder<'a, BitIn<'a>> for Uper {
             Ok(Box::new(
                 move |input: BitIn<'a>| -> IResult<BitIn<'a>, String> {
                     let (input, is_extended) = if permitted_alphabet.is_known_multiplier_string() {
-                      read_bit(input)?
+                        read_bit(input)?
                     } else {
-                      (input, true)
+                        (input, true)
                     };
                     let (input, length_det) =
                         size_length_det(is_extended, &range_constraints, input)?;
@@ -272,8 +272,43 @@ impl<'a> Decoder<'a, BitIn<'a>> for Uper {
         }
     }
 
+    fn decode_octet_string(
+        octet_string: asnr_grammar::types::OctetString,
+    ) -> Result<Box<dyn Fn(BitIn<'a>) -> IResult<BitIn<'a>, Vec<u8>>>, DecodingError<BitIn<'a>>>
+    {
+        let mut range_constraints = PerVisibleRangeConstraints::default_unsigned();
+        for c in &octet_string.constraints {
+            range_constraints +=
+                c.try_into()
+                    .map_err(|e: DecodingError<AsBytesDummy>| DecodingError {
+                        input: None,
+                        details: e.details,
+                        kind: e.kind,
+                    })?;
+        }
+        if range_constraints.is_extensible() {
+            Ok(Box::new(
+                move |input: BitIn<'a>| -> IResult<BitIn<'a>, Vec<u8>> {
+                    let (input, is_extended) = read_bit(input)?;
+                    let (input, length_det) =
+                        size_length_det(is_extended, &range_constraints, input)?;
+                    Ok(map(take(length_det * 8), |slice: BitIn<'a>| {
+                        slice.as_bytes().to_vec()
+                    })(input)?)
+                },
+            ))
+        } else {
+            Ok(Box::new(move |input| {
+                let (input, length_det) = size_length_det(false, &range_constraints, input)?;
+                Ok(map(take(length_det * 8), |slice: BitIn<'a>| {
+                    slice.as_bytes().to_vec()
+                })(input)?)
+            }))
+        }
+    }
+
     fn decode_sequence<T: DecodeMember<'a, BitIn<'a>> + Default>(
-        sequence: asnr_grammar::types::SequenceOrSet,
+        sequence: SequenceOrSet,
     ) -> Result<Box<dyn Fn(BitIn<'a>) -> IResult<BitIn, T>>, DecodingError<BitIn<'a>>> {
         if let Some(extension_index) = sequence.extensible {
             Ok(Box::new(move |input| {
@@ -320,10 +355,8 @@ impl<'a> Decoder<'a, BitIn<'a>> for Uper {
     fn decode_sequence_of<T: Decode<'a, BitIn<'a>> + 'a>(
         sequence_of: asnr_grammar::types::SequenceOf,
         member_decoder: fn(BitIn<'a>) -> IResult<BitIn<'a>, T>,
-    ) -> Result<
-        Box<dyn Fn(BitIn<'a>) -> IResult<BitIn<'a>, Vec<T>> + 'a>,
-        DecodingError<BitIn<'a>>,
-    > {
+    ) -> Result<Box<dyn Fn(BitIn<'a>) -> IResult<BitIn<'a>, Vec<T>> + 'a>, DecodingError<BitIn<'a>>>
+    {
         let mut constraints = PerVisibleRangeConstraints::default();
         for c in &sequence_of.constraints {
             constraints += c
@@ -1165,15 +1198,13 @@ mod tests {
     fn decodes_unconstrained_variable_size_character_string() {
         asn1_internal_tests!(r#"Greeting ::= GraphicString"#);
         assert_eq!(
-            Greeting::decode::<Uper>(BSlice::from(
-                bits![static u8, Msb0; 
-                0,0,0,0,0,1,0,0, 
-                1,1,1,1,0,0,0,0,
-                1,0,0,1,1,1,1,1,
-                1,0,0,1,0,0,1,0,
-                1,0,0,1,0,1,1,0,
-                ]
-            ))
+            Greeting::decode::<Uper>(BSlice::from(bits![static u8, Msb0;
+            0,0,0,0,0,1,0,0,
+            1,1,1,1,0,0,0,0,
+            1,0,0,1,1,1,1,1,
+            1,0,0,1,0,0,1,0,
+            1,0,0,1,0,1,1,0,
+            ]))
             .unwrap()
             .1,
             Greeting("💖".into())
@@ -1184,15 +1215,13 @@ mod tests {
     fn decodes_extended_variable_size_character_string() {
         asn1_internal_tests!(r#"Greeting ::= GraphicString (SIZE(1..29876,...))"#);
         assert_eq!(
-            Greeting::decode::<Uper>(BSlice::from(
-                bits![static u8, Msb0; 
-                0,0,0,0,0,1,0,0, 
-                1,1,1,1,0,0,0,0,
-                1,0,0,1,1,1,1,1,
-                1,0,0,1,0,0,1,0,
-                1,0,0,1,0,1,1,0,
-                ]
-            ))
+            Greeting::decode::<Uper>(BSlice::from(bits![static u8, Msb0;
+            0,0,0,0,0,1,0,0,
+            1,1,1,1,0,0,0,0,
+            1,0,0,1,1,1,1,1,
+            1,0,0,1,0,0,1,0,
+            1,0,0,1,0,1,1,0,
+            ]))
             .unwrap()
             .1,
             Greeting("💖".into())

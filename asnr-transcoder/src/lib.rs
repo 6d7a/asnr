@@ -103,6 +103,9 @@ pub trait Decoder<'a, I: AsBytes + Debug + 'a> {
     fn decode_bit_string(
         bit_string: BitString,
     ) -> Result<Box<dyn Fn(I) -> IResult<I, Vec<bool>>>, DecodingError<I>>;
+    fn decode_octet_string(
+      octet_string: OctetString,
+  ) -> Result<Box<dyn Fn(I) -> IResult<I, Vec<u8>>>, DecodingError<I>>;
     fn decode_character_string(
         char_string: CharacterString,
     ) -> Result<Box<dyn Fn(I) -> IResult<I, String>>, DecodingError<I>>;
@@ -127,6 +130,9 @@ pub trait Encoder<T, O: Extend<T> + Debug + 'static> {
     fn encode_bit_string(
         bit_string: BitString,
     ) -> Result<Box<dyn Fn(Vec<bool>, O) -> Result<O, EncodingError>>, EncodingError>;
+    fn encode_octet_string(
+      octet_string: OctetString,
+  ) -> Result<Box<dyn Fn(&[u8], O) -> Result<O, EncodingError>>, EncodingError>;
     fn encode_character_string(
         character_string: CharacterString,
     ) -> Result<Box<dyn Fn(&str, O) -> Result<O, EncodingError>>, EncodingError>;

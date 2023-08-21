@@ -31,7 +31,6 @@ pub fn character_string<'a>(input: &'a str) -> IResult<&'a str, ASN1Type> {
     map(
         pair(
             skip_ws_and_comments(alt((
-                tag(OCTET_STRING),
                 tag(IA5_STRING),
                 tag(UTF8_STRING),
                 tag(NUMERIC_STRING),
@@ -60,19 +59,19 @@ mod tests {
 
     #[test]
     fn parses_unconfined_characterstring() {
-        let sample = "  OCTET STRING";
+        let sample = "   IA5String";
         assert_eq!(
             character_string(sample).unwrap().1,
             ASN1Type::CharacterString(CharacterString {
                 constraints: vec![],
-                r#type: CharacterStringType::OctetString
+                r#type: CharacterStringType::IA5String
             })
         )
     }
 
     #[test]
     fn parses_strictly_constrained_characterstring() {
-        let sample = "  OCTET STRING(SIZE (8))";
+        let sample = "   IA5String(SIZE (8))";
         assert_eq!(
             character_string(sample).unwrap().1,
             ASN1Type::CharacterString(CharacterString {
@@ -85,14 +84,14 @@ mod tests {
                     ))),
                     extensible: false
                 })],
-                r#type: CharacterStringType::OctetString
+                r#type: CharacterStringType::IA5String
             })
         )
     }
 
     #[test]
     fn parses_range_constrained_characterstring() {
-        let sample = "  OCTET STRING -- even here?!?!? -- (SIZE (8 ..18))";
+        let sample = "   IA5String -- even here?!?!? -- (SIZE (8 ..18))";
         assert_eq!(
             character_string(sample).unwrap().1,
             ASN1Type::CharacterString(CharacterString {
@@ -106,14 +105,14 @@ mod tests {
                     ))),
                     extensible: false
                 })],
-                r#type: CharacterStringType::OctetString
+                r#type: CharacterStringType::IA5String
             })
         )
     }
 
     #[test]
     fn parses_strictly_constrained_extended_characterstring() {
-        let sample = r#"  OCTET STRING 
+        let sample = r#"  IA5String
         (SIZE (2, ...))"#;
         assert_eq!(
             character_string(sample).unwrap().1,
@@ -127,14 +126,14 @@ mod tests {
                     ))),
                     extensible: false
                 })],
-                r#type: CharacterStringType::OctetString
+                r#type: CharacterStringType::IA5String
             })
         )
     }
 
     #[test]
     fn parses_range_constrained_extended_characterstring() {
-        let sample = "  OCTET STRING (SIZE (8 --  comment -- .. 18, ...))";
+        let sample = "   IA5String (SIZE (8 --  comment -- .. 18, ...))";
         assert_eq!(
             character_string(sample).unwrap().1,
             ASN1Type::CharacterString(CharacterString {
@@ -148,7 +147,7 @@ mod tests {
                     ))),
                     extensible: false
                 })],
-                r#type: CharacterStringType::OctetString
+                r#type: CharacterStringType::IA5String
             })
         )
     }

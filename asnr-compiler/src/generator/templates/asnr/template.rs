@@ -219,6 +219,49 @@ impl<T, O: Extend<T> + Debug + 'static> Encode<T, O> for {name} {{
     )
 }
 
+
+pub fn octet_string_template(
+  comments: String,
+  derive: &str,
+  name: String,
+  octetstr_descriptor: String,
+) -> String {
+  format!(
+      r#"
+{comments}{derive}
+pub struct {name}(pub Vec<u8>);
+
+impl<'a, I: AsBytes + Debug + 'a> Decode<'a, I> for {name} {{
+{DECODE_SIGNATURE}
+{{
+  {name}::decoder::<D>()?(input)
+}}
+
+{DECODER_SIGNATURE}
+{{
+  let mut octet_string_decoder = D::decode_octet_string({octetstr_descriptor})?;
+  Ok(Box::new(move |input| (*octet_string_decoder)(input).map(|(remaining, res)| (remaining, Self(res)))))
+}}
+}}
+
+
+impl<T, O: Extend<T> + Debug + 'static> Encode<T, O> for {name} {{
+{ENCODE_SIGNATURE}
+{{
+  {name}::encoder::<E>()?(encodable, output)
+}}
+
+{ENCODER_SIGNATURE}
+{{
+  let mut octet_string_encoder = E::encode_octet_string({octetstr_descriptor})?;
+  Ok(Box::new(move |encodable, output| (*octet_string_encoder)(&encodable.0, output)))
+}}
+}}
+"#,
+  )
+}
+
+
 pub fn char_string_template(
     comments: String,
     derive: &str,

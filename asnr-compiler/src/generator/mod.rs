@@ -14,7 +14,7 @@ use self::{
         character_string_template, generate_bit_string, generate_boolean, generate_choice,
         generate_enumerated, generate_information_object_class, generate_integer,
         generate_integer_value, generate_null, generate_null_value, generate_sequence,
-        generate_sequence_of, generate_typealias, generate_choice_value, generate_sequence_value,
+        generate_sequence_of, generate_typealias, generate_choice_value, generate_sequence_value, generate_octet_string,
     },
     error::GeneratorError,
 };
@@ -142,6 +142,7 @@ pub fn generate<'a>(
             ASN1Type::Integer(_) => generate_integer(t, custom_derive),
             ASN1Type::Enumerated(_) => generate_enumerated(t, custom_derive),
             ASN1Type::BitString(_) => generate_bit_string(t, custom_derive),
+            ASN1Type::OctetString(_) => generate_octet_string(t, custom_derive),
             ASN1Type::CharacterString(_) => character_string_template(t, custom_derive),
             ASN1Type::Sequence(_) => generate_sequence(t, custom_derive),
             ASN1Type::SequenceOf(_) => generate_sequence_of(t, custom_derive),

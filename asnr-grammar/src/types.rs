@@ -2,7 +2,7 @@ use core::fmt::Debug;
 
 use alloc::{borrow::ToOwned, boxed::Box, string::ToString, vec};
 
-use crate::{constraints::*, *};
+use crate::{constraints::*, *, information_object::ObjectSet};
 
 /// Representation of an ASN1 INTEGER data element
 /// with corresponding constraints and distinguished values
@@ -147,6 +147,35 @@ impl From<Option<Vec<Constraint>>> for Real {
     }
 }
 
+/// Representation of an ASN1 OCTET STRING data element
+/// with corresponding constraints
+#[derive(Debug, Clone, PartialEq)]
+pub struct OctetString {
+    pub constraints: Vec<Constraint>,
+}
+
+impl From<Option<Vec<Constraint>>> for OctetString {
+    fn from(value: Option<Vec<Constraint>>) -> Self {
+        OctetString {
+            constraints: value.unwrap_or(vec![]),
+        }
+    }
+}
+
+impl asnr_traits::Declare for OctetString {
+    fn declare(&self) -> String {
+        format!(
+            "OctetString {{ constraints: vec![{}] }}",
+            self.constraints
+                .iter()
+                .map(|c| c.declare())
+                .collect::<Vec<String>>()
+                .join(", "),
+        )
+    }
+}
+
+
 /// Representation of an ASN1 BIT STRING data element
 /// with corresponding constraints and distinguished values
 /// defining the individual bits
@@ -188,8 +217,7 @@ impl asnr_traits::Declare for BitString {
 
 /// Representation of an ASN1 Character String type data element
 /// with corresponding constraints. ASN1 Character String types
-/// include IA5String, UTF8String, VideotexString, but also
-/// OCTET STRING, which is treated like a String and not a buffer.
+/// include IA5String, UTF8String, VideotexString
 #[derive(Debug, Clone, PartialEq)]
 pub struct CharacterString {
     pub constraints: Vec<Constraint>,
