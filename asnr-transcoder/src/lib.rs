@@ -33,10 +33,12 @@ pub trait Decode<'a, I: AsBytes + Debug + 'a> {
 }
 
 pub trait Encode<T, O: Extend<T> + Debug + 'static> {
-    fn encode_self<E>(self, output: O) -> Result<O, EncodingError> where
-    E: Encoder<T, O>,
-    Self: Sized {
-      Self::encode::<E>(self, output)
+    fn encode_self<E>(self, output: O) -> Result<O, EncodingError>
+    where
+        E: Encoder<T, O>,
+        Self: Sized,
+    {
+        Self::encode::<E>(self, output)
     }
 
     fn encode<E>(encodable: Self, output: O) -> Result<O, EncodingError>
@@ -104,8 +106,8 @@ pub trait Decoder<'a, I: AsBytes + Debug + 'a> {
         bit_string: BitString,
     ) -> Result<Box<dyn Fn(I) -> IResult<I, Vec<bool>>>, DecodingError<I>>;
     fn decode_octet_string(
-      octet_string: OctetString,
-  ) -> Result<Box<dyn Fn(I) -> IResult<I, Vec<u8>>>, DecodingError<I>>;
+        octet_string: OctetString,
+    ) -> Result<Box<dyn Fn(I) -> IResult<I, Vec<u8>>>, DecodingError<I>>;
     fn decode_character_string(
         char_string: CharacterString,
     ) -> Result<Box<dyn Fn(I) -> IResult<I, String>>, DecodingError<I>>;
@@ -131,8 +133,8 @@ pub trait Encoder<T, O: Extend<T> + Debug + 'static> {
         bit_string: BitString,
     ) -> Result<Box<dyn Fn(Vec<bool>, O) -> Result<O, EncodingError>>, EncodingError>;
     fn encode_octet_string(
-      octet_string: OctetString,
-  ) -> Result<Box<dyn Fn(&[u8], O) -> Result<O, EncodingError>>, EncodingError>;
+        octet_string: OctetString,
+    ) -> Result<Box<dyn Fn(&[u8], O) -> Result<O, EncodingError>>, EncodingError>;
     fn encode_character_string(
         character_string: CharacterString,
     ) -> Result<Box<dyn Fn(&str, O) -> Result<O, EncodingError>>, EncodingError>;
@@ -145,4 +147,8 @@ pub trait Encoder<T, O: Extend<T> + Debug + 'static> {
     fn encode_choice<C: EncoderForIndex<T, O> + Debug>(
         choice: Choice,
     ) -> Result<Box<dyn Fn(C, O) -> Result<O, EncodingError>>, EncodingError>;
+    fn encode_sequence_of<M: Encode<T, O>>(
+        sequence_of: SequenceOf,
+    ) -> Result<Box<dyn Fn(Vec<M>, O) -> Result<O, EncodingError>>, EncodingError>;
+    fn encode_open_type(input: &[u8], output: O) -> Result<O, EncodingError>;
 }

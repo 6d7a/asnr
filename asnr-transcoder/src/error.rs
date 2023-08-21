@@ -129,3 +129,9 @@ impl<I: AsBytes> From<DecodingError<I>> for EncodingError {
         EncodingError { details: value.details }
     }
 }
+
+impl From<&str> for EncodingError {
+    fn from(value: &str) -> Self {
+        EncodingError { details: value.into() }
+    }
+}
