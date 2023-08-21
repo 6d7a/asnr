@@ -121,17 +121,17 @@ pub const OPTIONAL: &'static str = "OPTIONAL";
 pub const WITH_COMPONENTS: &'static str = "WITH COMPONENTS";
 pub const WITH_COMPONENT: &'static str = "WITH COMPONENT";
 pub const UNION: &'static str = "UNION";
-pub const PIPE: &'static str = "|";
-pub const LESS_THAN: char = '<';
-pub const GREATER_THAN: char = '>';
 pub const EXCEPT: &'static str = "EXCEPT";
 pub const INTERSECTION: &'static str = "INTERSECTION";
-pub const CARET: &'static str = "^";
 pub const ABSENT: &'static str = "ABSENT";
 pub const PRESENT: &'static str = "PRESENT";
 pub const INCLUDES: &'static str = "INCLUDES";
 pub const MIN: &'static str = "MIN";
 pub const MAX: &'static str = "MAX";
+pub const LESS_THAN: char = '<';
+pub const GREATER_THAN: char = '>';
+pub const PIPE: &'static str = "|";
+pub const CARET: &'static str = "^";
 
 pub const ASSIGN: &'static str = "::=";
 pub const RANGE: &'static str = "..";
@@ -162,6 +162,72 @@ pub const RELATIVE_OID_IRI: &'static str = "RELATIVE-OID-IRI";
 pub const TIME: &'static str = "TIME";
 pub const TIME_OF_DAY: &'static str = "TIME-OF-DAY";
 pub const TYPE_IDENTIFIER: &'static str = "TYPE-IDENTIFIER";
+
+pub const ASN1_KEYWORDS: [&str; 63] = [
+    ABSTRACT_SYNTAX,
+    BIT,
+    CHARACTER,
+    CONTAINING,
+    DATE,
+    DATE_TIME,
+    DURATION,
+    EMBEDDED,
+    EXTERNAL,
+    INSTANCE,
+    MINUS_INFINITY,
+    NOT_A_NUMBER,
+    OBJECT,
+    OCTET,
+    OID_IRI,
+    PLUS_INFINITY,
+    RELATIVE_OID,
+    RELATIVE_OID_IRI,
+    TIME,
+    TIME_OF_DAY,
+    TYPE_IDENTIFIER,
+    SIZE,
+    DEFAULT,
+    OPTIONAL,
+    WITH_COMPONENTS,
+    WITH_COMPONENT,
+    UNION,
+    EXCEPT,
+    INTERSECTION,
+    ABSENT,
+    PRESENT,
+    INCLUDES,
+    MIN,
+    MAX,
+    CLASS,
+    UNIQUE,
+    WITH_SYNTAX,
+    NULL,
+    BOOLEAN,
+    INTEGER,
+    REAL,
+    ENUMERATED,
+    CHOICE,
+    SEQUENCE,
+    OF,
+    ALL,
+    SET,
+    OBJECT_IDENTIFIER,
+    UNIVERSAL,
+    PRIVATE,
+    APPLICATION,
+    TRUE,
+    FALSE,
+    BEGIN,
+    END,
+    DEFINITIONS,
+    AUTOMATIC,
+    EXPLICIT,
+    IMPLICIT,
+    IMPORTS,
+    FROM,
+    INSTRUCTIONS,
+    TAGS,
+];
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct EncodingReferenceDefault(pub String);

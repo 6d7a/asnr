@@ -3,17 +3,23 @@ use alloc::{vec::Vec, string::String, collections::BTreeMap};
 use crate::{information_object::{InformationObjectClassField, ObjectFieldIdentifier}, ToplevelDeclaration, ASN1Value};
 
 pub fn int_type_token<'a>(min: i128, max: i128) -> &'a str {
-    match max - min {
-        r if r <= u8::MAX.into() && min >= 0 => "u8",
-        r if r <= u8::MAX.into() => "i8",
-        r if r <= u16::MAX.into() && min >= 0 => "u16",
-        r if r <= u16::MAX.into() => "i16",
-        r if r <= u32::MAX.into() && min >= 0 => "u32",
-        r if r <= u32::MAX.into() => "i32",
-        r if r <= u64::MAX.into() && min >= 0 => "u64",
-        r if r <= u64::MAX.into() => "i64",
-        _ => "i128",
+  if min >= 0 {
+    match max {
+      r if r <= u8::MAX.into() => "u8",
+      r if r <= u16::MAX.into() => "u16",
+      r if r <= u32::MAX.into() => "u32",
+      r if r <= u64::MAX.into() => "u64",
+      _ => "u128",
     }
+  } else {
+    match (min, max) {
+      (mi, ma) if mi >= i8::MIN.into() && ma <= i8::MAX.into() => "i8",
+      (mi, ma) if mi >= i16::MIN.into() && ma <= i16::MAX.into() => "i16",
+      (mi, ma) if mi >= i32::MIN.into() && ma <= i32::MAX.into() => "i32",
+      (mi, ma) if mi >= i64::MIN.into() && ma <= i64::MAX.into() => "i64",
+      _ => "i128",
+    }
+  }
 }
 
 pub(crate) fn find_tld_or_enum_value_by_name(type_name: &String, name: &String, tlds: &BTreeMap<String, ToplevelDeclaration>) -> Option<ASN1Value> {
@@ -55,4 +61,19 @@ pub(crate) fn walk_object_field_ref_path<'a>(
             })
             .flatten()
     }).flatten()
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::utils::int_type_token;
+
+  #[test]
+  fn determines_int_type() {
+    assert_eq!(int_type_token(600, 600), "u16");
+    assert_eq!(int_type_token(0, 0), "u8");
+    assert_eq!(int_type_token(-1, 1), "i8");
+    assert_eq!(int_type_token(0, 124213412341389457931857915125), "u128");
+    assert_eq!(int_type_token(-67463, 23123), "i32");
+    assert_eq!(int_type_token(255, 257), "u16");
+  }
 }
