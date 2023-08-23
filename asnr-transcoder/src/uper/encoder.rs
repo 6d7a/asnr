@@ -11,10 +11,8 @@ use crate::{
 use super::{
     bit_length,
     per_visible::{PerVisibleAlphabetConstraints, PerVisibleRangeConstraints},
-    rustify_name, AsBytesDummy, Uper,
+    rustify_name, AsBytesDummy, Uper, BitOut,
 };
-
-type BitOut = BitVec<u8, Msb0>;
 
 impl Encoder<u8, BitOut> for Uper {
     fn encode_integer<I>(

@@ -35,14 +35,14 @@ impl LengthDeterminant {
     ) -> IResult<BitIn<'a>, BitVec<u8, Msb0>> {
         match self {
             LengthDeterminant::Content(c) => {
-                let input = map(take(c * factor), |res: BitIn| {
+                let input = map(take((c * factor) as u64), |res: BitIn| {
                     temp.extend_from_bitslice(res.0)
                 })(input)?
                 .0;
                 Ok((input, temp))
             }
             LengthDeterminant::ContentFragment(f) => {
-                let input = map(take(f * factor), |res: BitIn| {
+                let input = map(take((f * factor) as u64), |res: BitIn| {
                     temp.extend_from_bitslice(res.0)
                 })(input)?
                 .0;
@@ -56,7 +56,7 @@ impl LengthDeterminant {
 impl<'a> Decoder<'a, BitIn<'a>> for Uper {
     fn decode_open_type(input: BitIn<'a>) -> IResult<BitIn<'a>, Vec<u8>> {
         let (input, ext_length) = decode_varlength_integer::<usize>(input, Some(0))?;
-        Ok(map(take(8 * ext_length), |buffer: BitIn| {
+        Ok(map(take((8 * ext_length) as u64), |buffer: BitIn| {
             buffer.as_bytes().to_vec()
         })(input)?)
     }
@@ -170,7 +170,7 @@ impl<'a> Decoder<'a, BitIn<'a>> for Uper {
                         index = index + choice.extensible.unwrap();
                         let (mut inner_input, ext_length) =
                             decode_varlength_integer::<usize>(input, Some(0))?;
-                        (input, inner_input) = take(8 * ext_length)(inner_input)?;
+                        (input, inner_input) = take((8 * ext_length) as u64)(inner_input)?;
                         O::decoder_for_index::<Uper>(index as i128).map_err(|_| {
                             nom::Err::Error(Error {
                                 input,
@@ -292,7 +292,7 @@ impl<'a> Decoder<'a, BitIn<'a>> for Uper {
                     let (input, is_extended) = read_bit(input)?;
                     let (input, length_det) =
                         size_length_det(is_extended, &range_constraints, input)?;
-                    Ok(map(take(length_det * 8), |slice: BitIn<'a>| {
+                    Ok(map(take((length_det * 8) as u64), |slice: BitIn<'a>| {
                         slice.as_bytes().to_vec()
                     })(input)?)
                 },
@@ -300,7 +300,7 @@ impl<'a> Decoder<'a, BitIn<'a>> for Uper {
         } else {
             Ok(Box::new(move |input| {
                 let (input, length_det) = size_length_det(false, &range_constraints, input)?;
-                Ok(map(take(length_det * 8), |slice: BitIn<'a>| {
+                Ok(map(take((length_det * 8) as u64), |slice: BitIn<'a>| {
                     slice.as_bytes().to_vec()
                 })(input)?)
             }))
@@ -327,7 +327,7 @@ impl<'a> Decoder<'a, BitIn<'a>> for Uper {
                             let (mut inner_input, length_det) = decode_length_determinant(input)?;
                             match length_det {
                                 LengthDeterminant::Content(ext_length) => {
-                                    (input, inner_input) = take(8 * ext_length)(inner_input)?;
+                                    (input, inner_input) = take((8 * ext_length) as u64)(inner_input)?;
                                     let _ = instance.decode_member_at_index::<Uper>(
                                         index + extension_index,
                                         inner_input,
@@ -480,11 +480,11 @@ fn decode_unextensible_int<'a, O>(
 where
     O: num::Integer + num::FromPrimitive + Copy,
 {
-    if let (Some(bit_length), Some(min)) = (constraints.bit_length(), constraints.min::<usize>()) {
-        let (input, i) = read_int::<usize>(bit_length)(input)?;
+    if let (Some(bit_length), Some(min)) = (constraints.bit_length(), constraints.min::<i128>()) {
+        let (input, i) = read_int::<i128>(bit_length)(input)?;
         Ok((
             input,
-            O::from_usize(i + min).ok_or(DecodingError {
+            O::from_i128(i + min).ok_or(DecodingError {
                 details: "Failed to wrap in original integer type.".into(),
                 input: None,
                 kind: DecodingErrorType::GenericParsingError,
@@ -508,7 +508,7 @@ fn decode_sized_string<'a>(
             input,
         );
     }
-    let (input, mut buffer) = take(bit_size * length_det)(input)?;
+    let (input, mut buffer) = take((bit_size * length_det) as u64)(input)?;
     if permitted_alphabet.is_known_multiplier_string() {
         let mut char_vec = vec![];
         while let Ok((new_buffer, i)) = read_int::<usize>(bit_size)(buffer) {
@@ -537,7 +537,7 @@ fn decode_varlength_integer<O: num::Integer + num::FromPrimitive + Copy>(
     let (input, length_det) = decode_length_determinant(input)?;
     match length_det {
         LengthDeterminant::Content(size) => {
-            let (input, buffer) = take(8 * size)(input)?;
+            let (input, buffer) = take((8 * size) as u64)(input)?;
             match (min, size) {
                 (Some(m), s) => Ok((
                     input,
@@ -640,38 +640,41 @@ fn bits_to_int(input: BitIn) -> u64 {
     return int;
 }
 
+macro_rules! int_from_bytes {
+    ($input:ident,$int_type:ident,$from_int_type:ident,$byte_length:literal) => {
+        {
+            let mut as_bytes = $input.as_bytes().to_vec();
+            for _ in 0..($byte_length - as_bytes.len()) {
+                as_bytes.push(0)
+            }
+            match as_bytes.try_into() {
+                Ok(int) => I::$from_int_type($int_type::from_be_bytes(int)).ok_or(DecodingError {
+                    details: "Error parsing integer buffer.".into(),
+                    kind: DecodingErrorType::GenericParsingError,
+                    input: Some($input),
+                }),
+                Err(_e) => Err(DecodingError {
+                    details: "Error parsing integer buffer.".into(),
+                    kind: DecodingErrorType::GenericParsingError,
+                    input: Some($input),
+                }),
+            }
+        }
+    };
+}
+
 fn integer_from_bits<I: num::Integer + num::FromPrimitive>(
     input: BitIn,
     byte_length: usize,
     signed: bool,
 ) -> Result<I, DecodingError<BitIn>> {
-    let error = DecodingError {
-        details: "Error parsing integer buffer.".into(),
-        kind: DecodingErrorType::GenericParsingError,
-        input: Some(input),
-    };
     if signed {
         match byte_length {
-            s if s == 1 => match input.as_bytes().try_into() {
-                Ok(int) => I::from_i8(i8::from_be_bytes(int)).ok_or(error),
-                Err(_e) => Err(error),
-            },
-            s if s <= 2 => match input.as_bytes().try_into() {
-                Ok(int) => I::from_i16(i16::from_be_bytes(int)).ok_or(error),
-                Err(_e) => Err(error),
-            },
-            s if s <= 4 => match input.as_bytes().try_into() {
-                Ok(int) => I::from_i32(i32::from_be_bytes(int)).ok_or(error),
-                Err(_e) => Err(error),
-            },
-            s if s <= 8 => match input.as_bytes().try_into() {
-                Ok(int) => I::from_i64(i64::from_be_bytes(int)).ok_or(error),
-                Err(_e) => Err(error),
-            },
-            s if s <= 16 => match input.as_bytes().try_into() {
-                Ok(int) => I::from_i128(i128::from_be_bytes(int)).ok_or(error),
-                Err(_e) => Err(error),
-            },
+            s if s == 1 => int_from_bytes!(input, i8, from_i8, 1),
+            s if s <= 2 => int_from_bytes!(input, i16, from_i16, 2),
+            s if s <= 4 => int_from_bytes!(input, i32, from_i32, 4),
+            s if s <= 8 => int_from_bytes!(input, i64, from_i64, 8),
+            s if s <= 16 => int_from_bytes!(input, i128, from_i128, 16),
             _ => Err(DecodingError {
                 details: "ASNR currently does not support integers longer than 128 bits.".into(),
                 kind: DecodingErrorType::Unsupported,
@@ -680,26 +683,11 @@ fn integer_from_bits<I: num::Integer + num::FromPrimitive>(
         }
     } else {
         match byte_length {
-            s if s == 1 => match input.as_bytes().try_into() {
-                Ok(int) => I::from_u8(u8::from_be_bytes(int)).ok_or(error),
-                Err(_e) => Err(error),
-            },
-            s if s <= 2 => match input.as_bytes().try_into() {
-                Ok(int) => I::from_u16(u16::from_be_bytes(int)).ok_or(error),
-                Err(_e) => Err(error),
-            },
-            s if s <= 4 => match input.as_bytes().try_into() {
-                Ok(int) => I::from_u32(u32::from_be_bytes(int)).ok_or(error),
-                Err(_e) => Err(error),
-            },
-            s if s <= 8 => match input.as_bytes().try_into() {
-                Ok(int) => I::from_u64(u64::from_be_bytes(int)).ok_or(error),
-                Err(_e) => Err(error),
-            },
-            s if s <= 16 => match input.as_bytes().try_into() {
-                Ok(int) => I::from_u128(u128::from_be_bytes(int)).ok_or(error),
-                Err(_e) => Err(error),
-            },
+            s if s == 1 => int_from_bytes!(input, u8, from_u8, 1),
+            s if s <= 2 => int_from_bytes!(input, u16, from_u16, 2),
+            s if s <= 4 => int_from_bytes!(input, u32, from_u32, 4),
+            s if s <= 8 => int_from_bytes!(input, u64, from_u64, 8),
+            s if s <= 16 => int_from_bytes!(input, u128, from_u128, 16),
             _ => Err(DecodingError {
                 details: "ASNR currently does not support integers longer than 128 bits.".into(),
                 kind: DecodingErrorType::Unsupported,
@@ -1225,5 +1213,16 @@ mod tests {
             .1,
             Greeting("💖".into())
         );
+    }
+
+    #[test]
+    fn try_frombe() {
+        assert_eq!(24, take::<u64, BSlice<'_, u8, bitvec::order::Msb0>, Error<_>>((8 * 3) as u64)(BSlice::from(bits![static u8, Msb0;
+            0,0,0,0,0,1,0,0,
+            1,1,1,1,0,0,0,0,
+            1,0,0,1,1,1,1,1,
+            1,0,0,1,0,0,1,0,
+            1,0,0,1,0,1,1,0,
+            ])).unwrap().1.len())
     }
 }

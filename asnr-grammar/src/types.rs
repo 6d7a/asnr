@@ -17,8 +17,11 @@ impl Integer {
         let (min, max) =
             self.constraints
                 .iter()
-                .fold((i128::MAX, i128::MIN), |(mut min, mut max), c| {
-                    if let Ok((cmin, cmax, _)) = c.unpack_as_value_range() {
+                .try_fold((i128::MAX, i128::MIN), |(mut min, mut max), c| {
+                    if let Ok((cmin, cmax, extensible)) = c.unpack_as_value_range() {
+                        if extensible {
+                            return Err("_");
+                        }
                         if let Some(ASN1Value::Integer(i)) = cmin {
                             min = (*i).min(min);
                         };
@@ -26,8 +29,8 @@ impl Integer {
                             max = (*i).max(max);
                         };
                     };
-                    (min, max)
-                });
+                    Ok((min, max))
+                }).unwrap_or((1,0));
         if min > max {
             "i128".to_owned()
         } else {

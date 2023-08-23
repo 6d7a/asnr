@@ -1,0 +1,12 @@
+[package]
+name = "asnr-tests"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+
+[dependencies]
+asnr-compiler = { path = "../asnr-compiler" }
+asnr-compiler-derive = { path = "../asnr-compiler-derive" }
+asnr-grammar = { path = "../asnr-grammar" }
+asnr-transcoder = { path = "../asnr-transcoder" }

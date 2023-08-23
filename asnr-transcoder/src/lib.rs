@@ -11,7 +11,6 @@ pub mod error;
 #[cfg(feature = "uper")]
 pub mod uper;
 pub use nom::AsBytes;
-mod generated;
 
 use alloc::{boxed::Box, string::String, vec::Vec};
 use asnr_grammar::{types::*, ASN1Type};
