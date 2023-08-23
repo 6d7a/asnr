@@ -476,7 +476,6 @@ pub fn sequence_template(
     inner_members: String,
     name: String,
     member_declaration: String,
-    extension_decl: String,
     decode_member_body: String,
     encoder_member_body: String,
     extension_decoder: String,
@@ -488,7 +487,7 @@ pub fn sequence_template(
   
   {comments}{derive}
   pub struct {name} {{
-    {member_declaration}{extension_decl}
+    {member_declaration}
   }}
   
   impl<'a, I: AsBytes + Debug + 'a> DecodeMember<'a, I> for {name} {{

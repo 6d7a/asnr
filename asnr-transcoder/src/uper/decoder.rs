@@ -952,8 +952,8 @@ mod tests {
             .1,
             TestSequence {
                 item_code: TestSequence_item_code(27),
-                item_name: TestSequence_item_name("SHERRY".into()),
-                urgency: TestSequence_urgency::normal
+                item_name: Some(TestSequence_item_name("SHERRY".into())),
+                urgency: None
             }
         );
     }
@@ -988,9 +988,8 @@ mod tests {
             .1,
             TestSequence {
                 item_code: TestSequence_item_code(27),
-                item_name: TestSequence_item_name("SHERRY".into()),
-                urgency: TestSequence_urgency::high,
-                unknown_extension: vec![]
+                item_name: Some(TestSequence_item_name("SHERRY".into())),
+                urgency: Some(TestSequence_urgency::high),
             }
         );
     }

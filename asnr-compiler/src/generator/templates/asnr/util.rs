@@ -310,16 +310,21 @@ pub fn format_option_declaration(members: &Vec<StringifiedNameType>) -> String {
 pub fn extract_sequence_members(
     members: &Vec<SequenceOrSetMember>,
     parent_name: &String,
+    index_of_first_extension: Option<usize>
 ) -> Vec<StringifiedNameType> {
     members
         .iter()
-        .map(|m| {
+        .enumerate()
+        .map(|(index, m)| {
             let name = rustify_name(&m.name);
-            let rtype = match &m.r#type {
+            let mut rtype = match &m.r#type {
                 ASN1Type::ElsewhereDeclaredType(d) => rustify_name(&d.identifier),
                 ASN1Type::InformationObjectFieldReference(_) => "ASN1_OPEN".to_string(),
                 _ => inner_name(&m.name, parent_name),
             };
+            if m.is_optional || index >= index_of_first_extension.unwrap_or(usize::MAX) {
+                rtype = String::from("Option<") + &rtype + ">"
+            }
             StringifiedNameType {
                 name,
                 r#type: rtype,
@@ -336,27 +341,20 @@ pub fn format_member_declaration(members: &Vec<StringifiedNameType>) -> String {
         .join("\n  ")
 }
 
-pub fn format_extensible_sequence<'a>(_name: &String, extensible: bool) -> (String, String) {
-    (
-        if extensible {
-            "\n  pub unknown_extension: Vec<u8>,".into()
-        } else {
-            "".into()
-        },
-        if extensible {
-            "{ (input, self.unknown_extension) = D::decode_unknown_extension(input)? },".into()
-        } else {
-            format!(
-                r#"return Err(
+pub fn format_extensible_sequence<'a>(_name: &String, extensible: bool) -> String {
+    if extensible {
+        "{ (input, _) = D::decode_unknown_extension(input)? },".into()
+    } else {
+        format!(
+            r#"return Err(
         DecodingError {{
           details: format!("Invalid member index decoding TestSequence. Received index {{}}",index), 
           kind: DecodingErrorType::InvalidEnumeratedIndex, 
           input: None
         }}
       )"#
-            )
-        },
-    )
+        )
+    }
 }
 
 pub fn format_decode_member_body(members: &Vec<StringifiedNameType>) -> String {
@@ -364,11 +362,19 @@ pub fn format_decode_member_body(members: &Vec<StringifiedNameType>) -> String {
         .iter()
         .enumerate()
         .map(|(i, m)| {
-            format!(
-                "{i} => {{ (input, self.{name}) = {t}::decode::<D>(input)? }},",
-                t = m.r#type,
-                name = m.name
-            )
+            if m.r#type.starts_with("Option<") {
+                format!(
+                    "{i} => {{ (input, self.{name}) = {t}::decode::<D>(input).map(|(i, v)| (i, Some(v)))? }},",
+                    t = &m.r#type[7..m.r#type.len() - 1],
+                    name = m.name
+                )
+            } else {
+                format!(
+                    "{i} => {{ (input, self.{name}) = {t}::decode::<D>(input)? }},",
+                    t = m.r#type,
+                    name = m.name
+                )
+            }
         })
         .collect::<Vec<String>>()
         .join("\n      ")
@@ -379,11 +385,25 @@ pub fn format_encoder_member_body(members: &Vec<StringifiedNameType>) -> String 
         .iter()
         .enumerate()
         .map(|(i, m)| {
-            format!(
-                "{i} => Ok(|parent, output| {t}::encode::<E>(parent.{name}.clone(), output)),",
-                name = m.name,
-                t = m.r#type,
-            )
+            if m.r#type.starts_with("Option<") {
+                format!(
+                    r#"{i} => Ok(|parent, output| {{
+                        if let Some(value) = parent.{name}.clone() {{
+                        {t}::encode::<E>(value, output)
+                    }} else {{
+                        return Ok(output);
+                    }}
+                }}),"#,
+                    name = m.name,
+                    t = &m.r#type[7..m.r#type.len() - 1],
+                )
+            } else {
+                format!(
+                    "{i} => Ok(|parent, output| {t}::encode::<E>(parent.{name}.clone(), output)),",
+                    name = m.name,
+                    t = m.r#type,
+                )
+            }
         })
         .collect::<Vec<String>>()
         .join("\n      ")

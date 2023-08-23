@@ -129,6 +129,17 @@ where
     )
 }
 
+pub fn in_version_brackets<'a, F, O>(inner: F) -> impl FnMut(&'a str) -> IResult<&'a str, O>
+where
+    F: FnMut(&'a str) -> IResult<&'a str, O>,
+{
+    delimited(
+        skip_ws_and_comments(tag("[[")),
+        skip_ws_and_comments(inner),
+        skip_ws_and_comments(tag("]]")),
+    )
+}
+
 pub fn opt_parentheses<'a, F, O>(inner: F) -> impl FnMut(&'a str) -> IResult<&'a str, O>
 where
     F: FnMut(&'a str) -> IResult<&'a str, O>,

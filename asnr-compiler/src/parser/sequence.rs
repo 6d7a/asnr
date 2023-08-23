@@ -50,7 +50,28 @@ pub fn sequence<'a>(input: &'a str) -> IResult<&'a str, ASN1Type> {
                     )),
                     opt(terminated(extension_marker, opt(char(COMMA)))),
                     opt(many0(terminated(
-                        skip_ws_and_comments(sequence_or_set_member),
+                        skip_ws_and_comments(alt((
+                            map(
+                                in_version_brackets(many1(terminated(
+                                    skip_ws_and_comments(sequence_or_set_member),
+                                    optional_comma,
+                                ))),
+                                |ext_group| SequenceOrSetMember {
+                                    name: String::from("ext_group_")
+                                        + &ext_group.first().unwrap().name,
+                                    tag: None,
+                                    r#type: ASN1Type::Sequence(SequenceOrSet {
+                                        extensible: None,
+                                        constraints: vec![],
+                                        members: ext_group,
+                                    }),
+                                    default_value: None,
+                                    is_optional: false,
+                                    constraints: vec![],
+                                },
+                            ),
+                            sequence_or_set_member,
+                        ))),
                         optional_comma,
                     ))),
                 ))),
@@ -515,6 +536,84 @@ mod tests {
                     Box::new(ASN1Value::ElsewhereDeclaredValue("c-ctxRefNull".into()))
                 )
             ])
+        )
+    }
+
+    #[test]
+    fn parses_sequence_with_extension_group() {
+        assert_eq!(
+            sequence(
+                "SEQUENCE {item-code INTEGER (0..254),
+                ...,
+                [[ alternate-item-code INTEGER (0..254),
+                    and-another BOOLEAN DEFAULT TRUE
+                 ]] }"
+            )
+            .unwrap()
+            .1,
+            ASN1Type::Sequence(SequenceOrSet {
+                extensible: Some(1),
+                constraints: vec![],
+                members: vec![
+                    SequenceOrSetMember {
+                        name: "item-code".into(),
+                        tag: None,
+                        r#type: ASN1Type::Integer(Integer {
+                            constraints: vec![Constraint::SubtypeConstraint(ElementSet {
+                                set: ElementOrSetOperation::Element(SubtypeElement::ValueRange {
+                                    min: Some(ASN1Value::Integer(0)),
+                                    max: Some(ASN1Value::Integer(254)),
+                                    extensible: false
+                                }),
+                                extensible: false
+                            })],
+                            distinguished_values: None
+                        }),
+                        default_value: None,
+                        is_optional: false,
+                        constraints: vec![]
+                    },
+                    SequenceOrSetMember {
+                        name: "ext_group_alternate-item-code".into(),
+                        tag: None,
+                        r#type: ASN1Type::Sequence(SequenceOrSet {
+                            extensible: None,
+                            constraints: vec![],
+                            members: vec![SequenceOrSetMember {
+                                name: "alternate-item-code".into(),
+                                tag: None,
+                                r#type: ASN1Type::Integer(Integer {
+                                    constraints: vec![Constraint::SubtypeConstraint(ElementSet {
+                                        set: ElementOrSetOperation::Element(
+                                            SubtypeElement::ValueRange {
+                                                min: Some(ASN1Value::Integer(0)),
+                                                max: Some(ASN1Value::Integer(254)),
+                                                extensible: false
+                                            }
+                                        ),
+                                        extensible: false
+                                    })],
+                                    distinguished_values: None
+                                }),
+                                default_value: None,
+                                is_optional: false,
+                                constraints: vec![]
+                            },
+                            SequenceOrSetMember {
+                                name: "and-another".into(),
+                                tag: None,
+                                r#type: ASN1Type::Boolean,
+                                default_value: Some(ASN1Value::Boolean(true)),
+                                is_optional: true,
+                                constraints: vec![]
+                            }]
+                        }),
+                        default_value: None,
+                        is_optional: false,
+                        constraints: vec![]
+                    }
+                ]
+            })
         )
     }
 }
