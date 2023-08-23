@@ -378,8 +378,8 @@ pub fn generate_sequence<'a>(
 ) -> Result<String, GeneratorError> {
     if let ASN1Type::Sequence(ref seq) = tld.r#type {
         let name = rustify_name(&tld.name);
-        let members = extract_sequence_members(&seq.members, &name);
-        let (extension_decl, extension_decoder) =
+        let members = extract_sequence_members(&seq.members, &name, seq.extensible);
+        let extension_decoder =
             format_extensible_sequence(&name, seq.extensible.is_some());
 
         Ok(sequence_template(
@@ -388,7 +388,6 @@ pub fn generate_sequence<'a>(
             flatten_nested_sequence_members(&seq.members, &name)?.join("\n"),
             name,
             format_member_declaration(&members),
-            extension_decl,
             format_decode_member_body(&members),
             format_encoder_member_body(&members),
             extension_decoder,

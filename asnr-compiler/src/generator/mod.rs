@@ -16,7 +16,7 @@ use self::{
 mod builder;
 pub(crate) mod error;
 pub(crate) mod template;
-mod util;
+pub(crate) mod util;
 
 pub fn generate<'a>(
     tld: ToplevelDeclaration,

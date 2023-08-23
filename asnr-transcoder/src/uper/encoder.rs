@@ -183,22 +183,36 @@ impl Encoder<u8, BitOut> for Uper {
             .members
             .iter()
             .enumerate()
-            .map(|(i, m)| (i, rustify_name(&m.name), m.is_optional))
+            .map(|(i, m)| {
+                (
+                    i,
+                    rustify_name(&m.name),
+                    (m.is_optional || i >= sequence.extensible.unwrap_or(usize::MAX)),
+                )
+            })
             .collect();
         let encode_optional_map = |encodable: S,
                                    mut output: BitOut,
-                                   member_list: &Vec<(usize, String, bool)>|
+                                   member_list: &Vec<(usize, String, bool)>,
+                                   index_of_first_ext: Option<usize>|
          -> (S, BitOut, Vec<bool>) {
             // This is performance-wise pretty ugly and should be handled differently
             // in the future
             let stringified_encodable = format!("{encodable:?}");
             let mut skip_list: Vec<bool> = member_list
                 .iter()
-                .filter_map(|(_, name, opt)| {
-                    opt.then(|| stringified_encodable.contains(&format!("{name}: None")))
+                .filter_map(|(index, name, opt)| {
+                    (*opt || index >= &index_of_first_ext.unwrap_or(usize::MAX)).then(|| {
+                        (
+                            index,
+                            stringified_encodable.contains(&format!("{name}: None")),
+                        )
+                    })
                 })
-                .map(|not_present| {
-                    output.push(!not_present);
+                .map(|(index, not_present)| {
+                    if index < &index_of_first_ext.unwrap_or(usize::MAX) {
+                        output.push(!not_present);
+                    }
                     not_present
                 })
                 .collect();
@@ -210,8 +224,12 @@ impl Encoder<u8, BitOut> for Uper {
             Ok(Box::new(move |encodable, mut output| {
                 let root_bits = bitvec![u8, Msb0;];
                 let mut extension_bits = bitvec![u8, Msb0;];
-                let (encodable, mut root_bits, mut skip_list) =
-                    encode_optional_map(encodable, root_bits, &member_list);
+                let (encodable, mut root_bits, mut skip_list) = encode_optional_map(
+                    encodable,
+                    root_bits,
+                    &member_list,
+                    Some(index_of_first_extension),
+                );
                 let mut extension_presence = Vec::new();
                 'encoding_members: for (index, _, optional) in &member_list {
                     if *optional
@@ -244,7 +262,7 @@ impl Encoder<u8, BitOut> for Uper {
                             })?)?(&encodable, bitvec![u8, Msb0;])?;
                         extension = align_back(extension);
                         extension_bits = wrap_in_length_determinant(
-                            extension_bits.len() / 8,
+                            extension.len() / 8,
                             extension,
                             Some(0),
                             extension_bits,
@@ -265,7 +283,7 @@ impl Encoder<u8, BitOut> for Uper {
         } else {
             Ok(Box::new(move |encodable, output| {
                 let (encodable, mut output, mut skip_list) =
-                    encode_optional_map(encodable, output, &member_list);
+                    encode_optional_map(encodable, output, &member_list, None);
                 'encoding_members: for (index, _, optional) in &member_list {
                     if *optional
                         && skip_list.pop().ok_or(EncodingError {
@@ -454,7 +472,9 @@ impl Encoder<u8, BitOut> for Uper {
                     let encodable_length = encodable.len();
                     let mut encoded_members = encodable
                         .into_iter()
-                        .try_fold(bitvec![u8, Msb0;], |acc, curr| curr.encode_self::<Uper>(acc))?;
+                        .try_fold(bitvec![u8, Msb0;], |acc, curr| {
+                            curr.encode_self::<Uper>(acc)
+                        })?;
                     if constraints.lies_within::<usize>(&encodable_length)? {
                         output.push(false);
                         let mut output = encode_constrained_integer(
@@ -501,7 +521,12 @@ impl Encoder<u8, BitOut> for Uper {
     }
 
     fn encode_open_type(input: &[u8], output: BitOut) -> Result<BitOut, EncodingError> {
-        wrap_in_length_determinant(input.len(), input.view_bits::<Msb0>().to_bitvec(), Some(0), output)
+        wrap_in_length_determinant(
+            input.len(),
+            input.view_bits::<Msb0>().to_bitvec(),
+            Some(0),
+            output,
+        )
     }
 }
 
@@ -1149,6 +1174,82 @@ mod tests {
             )
             .unwrap(),
             bitvec![u8, Msb0; 1, 0,0,0,0,0,0,0, 0,0,0,0,0,0,0,0]
+        );
+    }
+
+    #[test]
+    fn encodes_extension_group_sequence() {
+        asn1_internal_tests!(
+            r#"ExtendedSequence ::= SEQUENCE {item-code INTEGER (0..254),
+            ...,
+            test-ext BOOLEAN OPTIONAL,
+            [[ alternate-item-code INTEGER (0..254),
+                and-another BOOLEAN DEFAULT TRUE
+             ]] }"#
+        );
+        assert_eq!(
+            ExtendedSequence::encode::<Uper>(
+                ExtendedSequence {
+                    item_code: ExtendedSequence_item_code(5),
+                    test_ext: Some(ExtendedSequence_test_ext(false)),
+                    ext_group_alternate_item_code: Some(
+                        ExtendedSequence_ext_group_alternate_item_code {
+                            alternate_item_code:
+                                ExtendedSequence_ext_group_alternate_item_code_alternate_item_code(
+                                    3
+                                ),
+                            and_another: None
+                        }
+                    ),
+                },
+                bitvec![u8, Msb0;]
+            )
+            .unwrap(),
+            bitvec![u8, Msb0;
+            1, // is extended
+            0,0,0,0,0,1,0,1, // value of item-code
+            0,0,0,0,0,1,0, // normally-small number denoting size of extension bitmap
+            1,1, // extension presence bitmap
+            0,0,0,0,0,0,0,1, // length of test-ext
+            0, // value of test-ext
+            0,0,0,0,0,0,0, // padding
+            0,0,0,0,0,0,1,0, // length of extension group
+            0, // optionals presence
+            0,0,0,0,0,0,1,1, // value of alternate-item-code
+            0,0,0,0,0,0,0 // padding
+            ]
+        );
+    }
+
+    #[test]
+    fn encodes_omitted_extension_group_sequence() {
+        asn1_internal_tests!(
+            r#"ExtendedSequence ::= SEQUENCE {item-code INTEGER (0..254),
+            ...,
+            test-ext BOOLEAN OPTIONAL,
+            [[ alternate-item-code INTEGER (0..254),
+                and-another BOOLEAN DEFAULT TRUE
+             ]] }"#
+        );
+        assert_eq!(
+            ExtendedSequence::encode::<Uper>(
+                ExtendedSequence {
+                    item_code: ExtendedSequence_item_code(5),
+                    test_ext: Some(ExtendedSequence_test_ext(false)),
+                    ext_group_alternate_item_code: None,
+                },
+                bitvec![u8, Msb0;]
+            )
+            .unwrap(),
+            bitvec![u8, Msb0;
+            1, // is extended
+            0,0,0,0,0,1,0,1, // value of item-code
+            0,0,0,0,0,1,0, // normally-small number denoting size of extension bitmap
+            1,0, // extension presence bitmap
+            0,0,0,0,0,0,0,1, // length of test-ext
+            0, // value of test-ext
+            0,0,0,0,0,0,0 // padding
+            ]
         );
     }
 }
