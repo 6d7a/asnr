@@ -1,7 +1,12 @@
-use bitvec::prelude::Msb0;
+use bitvec::{bitvec, prelude::Msb0, vec::BitVec, view::BitView};
 use bitvec_nom::BSlice;
 
-use alloc::string::String;
+use alloc::{string::String, vec::Vec};
+
+use crate::{
+    error::{DecodingError, EncodingError},
+    Decode, Encode,
+};
 
 mod decoder;
 mod encoder;
@@ -9,7 +14,23 @@ mod per_visible;
 
 pub struct Uper;
 
+impl Uper {
+    pub fn decode<'a, T: Decode<'a, BitIn<'a>>>(
+        input: &'a [u8],
+    ) -> Result<T, DecodingError<BitIn>> {
+        T::decode::<Uper>(BitIn::from(input.view_bits::<Msb0>())).map(|(_, res)| res)
+    }
+
+    pub fn encode<'a, T: Encode<u8, BitOut>>(input: T) -> Result<Vec<u8>, EncodingError> {
+        T::encode::<Uper>(input, bitvec![u8, Msb0;]).map(|mut bitvec| {
+            bitvec.set_uninitialized(false);
+            bitvec.into_vec()
+        })
+    }
+}
+
 pub(crate) type BitIn<'a> = BSlice<'a, u8, Msb0>;
+pub(crate) type BitOut = BitVec<u8, Msb0>;
 pub(crate) type AsBytesDummy = [u8; 0];
 
 const RUST_KEYWORDS: [&'static str; 38] = [
@@ -51,5 +72,6 @@ mod tests {
         assert_eq!(bit_length(0, 32000), 15);
         assert_eq!(bit_length(0, 65538), 17);
         assert_eq!(bit_length(-1, 127), 8);
+        assert_eq!(bit_length(-900000000, 900000001), 31);
     }
 }

@@ -61,6 +61,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "asnr-tests"
+version = "0.1.0"
+dependencies = [
+ "asnr-compiler",
+ "asnr-compiler-derive",
+ "asnr-grammar",
+ "asnr-transcoder",
+]
+
+[[package]]
 name = "asnr-traits"
 version = "0.1.0"
 

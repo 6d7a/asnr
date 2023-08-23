@@ -6,5 +6,6 @@ members = [
     "asnr-grammar",
     "asnr-grammar-derive",
     "asnr-transcoder",
-    "asnr-traits"
+    "asnr-traits",
+    "asnr-tests"
 ]
