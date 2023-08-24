@@ -11,7 +11,7 @@ use crate::{
 use super::{
     bit_length,
     per_visible::{PerVisibleAlphabetConstraints, PerVisibleRangeConstraints},
-    rustify_name, AsBytesDummy, Uper, BitOut,
+    rustify_name, AsBytesDummy, BitOut, Uper,
 };
 
 impl Encoder<u8, BitOut> for Uper {
@@ -39,7 +39,11 @@ impl Encoder<u8, BitOut> for Uper {
                             )
                         } else {
                             encode_constrained_integer(
-                                encodable - constraints.min().unwrap(),
+                                constraints.offset_from_min::<u128, _>(encodable).ok_or(EncodingError {
+                                    details:
+                                        "Failed to compute offset of integer from its minimum."
+                                            .into(),
+                                })?,
                                 bit_length,
                                 output,
                             )
@@ -76,7 +80,11 @@ impl Encoder<u8, BitOut> for Uper {
                     move |encodable, output| -> Result<BitOut, EncodingError> {
                         constraints.lies_within(&encodable)?;
                         encode_constrained_integer(
-                            encodable - constraints.min().unwrap(),
+                            constraints.offset_from_min::<u128, _>(encodable).ok_or(EncodingError {
+                                details:
+                                    "Failed to compute offset of integer from its minimum."
+                                        .into(),
+                            })?,
                             bit_length,
                             output,
                         )
@@ -499,7 +507,7 @@ impl Encoder<u8, BitOut> for Uper {
             ))
         } else {
             Ok(Box::new(
-                move |encodable, mut output| -> Result<BitOut, EncodingError> {
+                move |encodable, output| -> Result<BitOut, EncodingError> {
                     let output = encode_constrained_integer(
                         encodable.len()
                             - constraints.min::<usize>().ok_or(

@@ -254,6 +254,18 @@ impl PerVisibleRangeConstraints {
         self.min.map(|m| I::from_i128(m)).flatten()
     }
 
+    pub fn offset_from_min<
+        I: num::Integer + num::FromPrimitive + num::ToPrimitive + Copy,
+        V: num::Integer + num::ToPrimitive,
+    >(
+        &self,
+        value: V,
+    ) -> Option<I> {
+        let min = self.min::<i128>()?;
+        let value_as_i128 = value.to_i128()?;
+        I::from_i128(value_as_i128 - min)
+    }
+
     pub fn range_width<I: AsBytes>(&self) -> Result<Option<usize>, DecodingError<I>> {
         self.min
             .zip(self.max)

@@ -55,10 +55,19 @@ impl LengthDeterminant {
 
 impl<'a> Decoder<'a, BitIn<'a>> for Uper {
     fn decode_open_type(input: BitIn<'a>) -> IResult<BitIn<'a>, Vec<u8>> {
-        let (input, ext_length) = decode_varlength_integer::<usize>(input, Some(0))?;
-        Ok(map(take((8 * ext_length) as u64), |buffer: BitIn| {
-            buffer.as_bytes().to_vec()
-        })(input)?)
+        let (input, ext_length) = decode_length_determinant(input)?;
+        match ext_length {
+            LengthDeterminant::Content(size) => Ok(map(take((8 * size) as u64), |buffer: BitIn| {
+                buffer.as_bytes().to_vec()
+            })(input)?),
+            LengthDeterminant::ContentFragment(_) => 
+                Err(DecodingError {
+                    input: Some(input),
+                    details: "Open type payloads larger than 65536 bits are not supported yet!".into(),
+                    kind: DecodingErrorType::Unsupported,
+                }),
+        }
+        
     }
 
     fn decode_integer<O>(
