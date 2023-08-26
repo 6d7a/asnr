@@ -16,7 +16,61 @@ asn1! {
       
       BEGIN
       
+      PartialMapem ::= SEQUENCE {
+        header ItsPduHeader,
+        map PartialMapData
+      }
       
+      PartialMapData ::= SEQUENCE {
+       timeStamp MinuteOfTheYear OPTIONAL, 
+       msgIssueRevision MsgCount, 
+       layerType LayerType OPTIONAL,
+       layerID LayerID OPTIONAL,
+       firstIntersection FirstIntersection OPTIONAL,
+       dummy1 NULL OPTIONAL,
+       dummy2 NULL OPTIONAL,
+       dummy3 NULL OPTIONAL,
+       dummy4 NULL OPTIONAL,
+       ...
+      }
+      
+      FirstIntersection ::= SEQUENCE {
+        numberOfIntersections INTEGER(1..32),
+        partialIntersection PartialIntersection,
+      }
+      
+      PartialIntersection ::= SEQUENCE {
+        dummyBitmap BIT STRING (SIZE(4)),
+        name DescriptiveName OPTIONAL, 
+        id IntersectionReferenceID, 
+        ...
+      }
+      
+      FirstSpat ::= SEQUENCE {
+        numberOfIntersections INTEGER(1..32),
+        partialSpatIntersection PartialSpatIntersection,
+      }
+
+      PartialSpatIntersection ::= SEQUENCE {
+        dummyBitmap BIT STRING (SIZE (5)),
+        name DescriptiveName OPTIONAL,
+        id IntersectionReferenceID,
+        ...
+      }
+
+      PartialSpatem ::= SEQUENCE {
+        header ItsPduHeader,
+        spat PartialSpat
+      }
+
+      PartialSpat ::= SEQUENCE {
+        timeStamp MinuteOfTheYear OPTIONAL,
+        name DescriptiveName OPTIONAL,
+        intersections FirstSpat,
+        dummy NULL OPTIONAL,
+        ...
+      }
+
       CAM ::= SEQUENCE {
        header ItsPduHeader,
        cam CoopAwareness

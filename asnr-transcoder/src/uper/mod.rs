@@ -29,8 +29,8 @@ impl Uper {
     }
 }
 
-pub(crate) type BitIn<'a> = BSlice<'a, u8, Msb0>;
-pub(crate) type BitOut = BitVec<u8, Msb0>;
+pub type BitIn<'a> = BSlice<'a, u8, Msb0>;
+pub type BitOut = BitVec<u8, Msb0>;
 pub(crate) type AsBytesDummy = [u8; 0];
 
 const RUST_KEYWORDS: [&'static str; 38] = [
@@ -60,7 +60,9 @@ pub fn rustify_name(name: &String) -> String {
 
 #[cfg(test)]
 mod tests {
-    use crate::uper::bit_length;
+    use asnr_compiler_derive::asn1_internal_tests;
+
+    use crate::uper::{bit_length, Uper};
 
     #[test]
     fn computes_bit_size() {
@@ -73,5 +75,22 @@ mod tests {
         assert_eq!(bit_length(0, 65538), 17);
         assert_eq!(bit_length(-1, 127), 8);
         assert_eq!(bit_length(-900000000, 900000001), 31);
+    }
+
+    #[test]
+    fn encodes_as_decodes_integer() {
+        asn1_internal_tests!(r#"Int-1 ::= INTEGER
+            Int-2 ::= INTEGER(42)
+            Int-3 ::= INTEGER(-1..65355)
+            Int-4 ::= INTEGER(23..MAX)
+            Int-5 ::= INTEGER(20,...)
+            Int-6 ::= INTEGER(1..24,...)"#);
+
+        assert_eq!(42, Uper::decode::<Int_1>(&Uper::encode(Int_1(42)).unwrap()).unwrap().0);
+        assert_eq!(42, Uper::decode::<Int_2>(&Uper::encode(Int_2(42)).unwrap()).unwrap().0);
+        assert_eq!(42, Uper::decode::<Int_3>(&Uper::encode(Int_3(42)).unwrap()).unwrap().0);
+        assert_eq!(42, Uper::decode::<Int_4>(&Uper::encode(Int_4(42)).unwrap()).unwrap().0);
+        assert_eq!(87000, Uper::decode::<Int_5>(&Uper::encode(Int_5(87000)).unwrap()).unwrap().0);
+        assert_eq!(42, Uper::decode::<Int_6>(&Uper::encode(Int_6(42)).unwrap()).unwrap().0);
     }
 }

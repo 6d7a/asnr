@@ -26,18 +26,9 @@ impl Encoder<u8, BitOut> for Uper {
             if let Some(bit_length) = constraints.bit_length() {
                 Ok(Box::new(
                     move |encodable, mut output| -> Result<BitOut, EncodingError> {
-                        let extends_constraints =
+                        let within_constraints =
                             write_extended_bit(&constraints, encodable, &mut output)?;
-                        if extends_constraints {
-                            let varlength = encode_varlength_integer(encodable, None)?;
-                            assert_byte_alignment(varlength.len())?;
-                            wrap_in_length_determinant::<I>(
-                                varlength.len() / 8,
-                                varlength,
-                                None,
-                                output,
-                            )
-                        } else {
+                        if within_constraints {
                             encode_constrained_integer(
                                 constraints.offset_from_min::<u128, _>(encodable).ok_or(EncodingError {
                                     details:
@@ -45,6 +36,15 @@ impl Encoder<u8, BitOut> for Uper {
                                             .into(),
                                 })?,
                                 bit_length,
+                                output,
+                            )
+                        } else {
+                            let varlength = encode_varlength_integer(encodable, None)?;
+                            assert_byte_alignment(varlength.len())?;
+                            wrap_in_length_determinant::<I>(
+                                varlength.len() / 8,
+                                varlength,
+                                None,
                                 output,
                             )
                         }
@@ -871,6 +871,23 @@ mod tests {
         assert_eq!(
             TestInteger::encode::<Uper>(TestInteger(128), bitvec![u8, Msb0;]).unwrap(),
             bitvec![u8, Msb0; 0,0,0,0,0,0,1,0, 0,0,0,0,0,0,0,0, 1,0,0,0,0,0,0,0]
+        );
+    }
+
+    #[test]
+    fn encodes_extended_integer() {
+        asn1_internal_tests!("TestInteger ::= INTEGER (3..6, ...)");
+        assert_eq!(
+            TestInteger::encode::<Uper>(TestInteger(4), bitvec![u8, Msb0;]).unwrap(),
+            bitvec![u8, Msb0; 0, 0,1]
+        );
+        assert_eq!(
+            TestInteger::encode::<Uper>(TestInteger(7), bitvec![u8, Msb0;]).unwrap(),
+            bitvec![u8, Msb0; 1, 0,0,0,0,0,0,0,1, 0,0,0,0,0,1,1,1]
+        );
+        assert_eq!(
+            TestInteger::encode::<Uper>(TestInteger(8), bitvec![u8, Msb0;]).unwrap(),
+            bitvec![u8, Msb0; 1, 0,0,0,0,0,0,0,1, 0,0,0,0,1,0,0,0]
         );
     }
 

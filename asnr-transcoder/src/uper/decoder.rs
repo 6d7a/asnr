@@ -1,6 +1,6 @@
 use alloc::{boxed::Box, string::String, vec, vec::Vec};
 use asnr_grammar::types::SequenceOrSet;
-use bitvec::{bits, bitvec, prelude::Msb0, vec::BitVec};
+use bitvec::{bits, bitvec, prelude::Msb0, vec::BitVec, field::BitField};
 use bitvec_nom::BSlice;
 use nom::{bytes::complete::take, combinator::map, error::Error, AsBytes};
 use num::{FromPrimitive, Integer};
@@ -651,24 +651,11 @@ fn bits_to_int(input: BitIn) -> u64 {
 
 macro_rules! int_from_bytes {
     ($input:ident,$int_type:ident,$from_int_type:ident,$byte_length:literal) => {
-        {
-            let mut as_bytes = $input.as_bytes().to_vec();
-            for _ in 0..($byte_length - as_bytes.len()) {
-                as_bytes.push(0)
-            }
-            match as_bytes.try_into() {
-                Ok(int) => I::$from_int_type($int_type::from_be_bytes(int)).ok_or(DecodingError {
+            I::$from_int_type($input.load_be::<$int_type>()).ok_or(DecodingError {
                     details: "Error parsing integer buffer.".into(),
                     kind: DecodingErrorType::GenericParsingError,
                     input: Some($input),
-                }),
-                Err(_e) => Err(DecodingError {
-                    details: "Error parsing integer buffer.".into(),
-                    kind: DecodingErrorType::GenericParsingError,
-                    input: Some($input),
-                }),
-            }
-        }
+                })
     };
 }
 
@@ -872,6 +859,26 @@ mod tests {
             .unwrap()
             .1,
             65538
+        );
+    }
+
+    #[test]
+    fn decodes_extended_integer() {
+        asn1_internal_tests!("TestInt ::= INTEGER (3..6,...)");
+
+        let decoder = TestInt::decoder::<Uper>().unwrap();
+
+        assert_eq!(
+            decoder(BSlice::from(bits![static u8, Msb0; 0,0,1]))
+                .unwrap()
+                .1.0,
+            4
+        );
+        assert_eq!(
+            decoder(BSlice::from(bits![static u8, Msb0; 1, 0,0,0,0,0,0,0,1, 0,0,0,0,0,1,1,1]))
+                .unwrap()
+                .1.0,
+            7
         );
     }
 

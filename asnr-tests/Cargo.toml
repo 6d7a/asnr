@@ -10,3 +10,12 @@ asnr-compiler = { path = "../asnr-compiler" }
 asnr-compiler-derive = { path = "../asnr-compiler-derive" }
 asnr-grammar = { path = "../asnr-grammar" }
 asnr-transcoder = { path = "../asnr-transcoder" }
+
+[dev-dependencies]
+criterion = { version = "0.5", features = ["html_reports"] }
+bitvec = { version = "1" }
+bitvec-nom = { version = "0.2" }
+
+[[bench]]
+name = "uper_bench"
+harness = false
