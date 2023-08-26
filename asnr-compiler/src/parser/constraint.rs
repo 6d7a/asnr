@@ -98,6 +98,7 @@ fn single_value<'a>(input: &'a str) -> IResult<&'a str, SubtypeElement> {
                 extension_marker,
             ))),
         ))),
+        // TODO: Parse extension additions like INTEGER (3, ..., 7, 8) 
         skip_ws_and_comments(char(RIGHT_PARENTHESIS)),
     )(input)
 }
@@ -145,6 +146,7 @@ fn value_range<'a>(input: &'a str) -> IResult<&'a str, SubtypeElement> {
                     char(COMMA),
                     extension_marker,
                 ))),
+                // TODO: Parse extension additions like INTEGER (-1..MAX, ..., -20..0 ) INTEGER (3..6, ..., 7, 8) 
             )),
             |(min, max, ext)| SubtypeElement::ValueRange {
                 min,
