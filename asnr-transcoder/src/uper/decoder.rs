@@ -39,7 +39,7 @@ impl LengthDeterminant {
                     take(usize::try_from(c * factor).map_err(|_| DecodingError {
                         details: "Failed to cast to usize.".into(),
                         input: Some(input),
-                        kind: DecodingErrorType::GenericParsingError
+                        kind: DecodingErrorType::GenericParsingError,
                     })?),
                     |res: BitIn| temp.extend_from_bitslice(res.0),
                 )(input)?
@@ -47,13 +47,14 @@ impl LengthDeterminant {
                 Ok((input, temp))
             }
             LengthDeterminant::ContentFragment(f) => {
-                let input = map(take(usize::try_from(f * factor).map_err(|_| DecodingError {
-                    details: "Failed to cast to usize.".into(),
-                    input: Some(input),
-                    kind: DecodingErrorType::GenericParsingError
-                })?), |res: BitIn| {
-                    temp.extend_from_bitslice(res.0)
-                })(input)?
+                let input = map(
+                    take(usize::try_from(f * factor).map_err(|_| DecodingError {
+                        details: "Failed to cast to usize.".into(),
+                        input: Some(input),
+                        kind: DecodingErrorType::GenericParsingError,
+                    })?),
+                    |res: BitIn| temp.extend_from_bitslice(res.0),
+                )(input)?
                 .0;
                 let (input, length_det) = decode_length_determinant(input)?;
                 length_det._recursive_collect(input, factor, temp)
@@ -66,15 +67,7 @@ impl<'a> Decoder<'a, BitIn<'a>> for Uper {
     fn decode_open_type(input: BitIn<'a>) -> IResult<BitIn<'a>, Vec<u8>> {
         let (input, ext_length) = decode_length_determinant(input)?;
         match ext_length {
-            LengthDeterminant::Content(size) => {
-                Ok(map(take(usize::try_from(8 * size).map_err(|_| DecodingError {
-                    details: "Failed to cast to usize.".into(),
-                    input: Some(input),
-                    kind: DecodingErrorType::GenericParsingError
-                })?), |buffer: BitIn| {
-                    buffer.as_bytes().to_vec()
-                })(input)?)
-            }
+            LengthDeterminant::Content(size) => bitslice_to_bytes(size, input),
             LengthDeterminant::ContentFragment(_) => Err(DecodingError {
                 input: Some(input),
                 details: "Open type payloads larger than 65536 bits are not supported yet!".into(),
@@ -192,11 +185,12 @@ impl<'a> Decoder<'a, BitIn<'a>> for Uper {
                         index = index + choice.extensible.unwrap();
                         let (mut inner_input, ext_length) =
                             decode_varlength_integer::<usize>(input, Some(0))?;
-                        (input, inner_input) = take(usize::try_from(8 * ext_length).map_err(|_| DecodingError {
-                            details: "Failed to cast to usize.".into(),
-                            input: Some(input),
-                            kind: DecodingErrorType::GenericParsingError
-                        })?)(inner_input)?;
+                        (input, inner_input) =
+                            take(usize::try_from(8 * ext_length).map_err(|_| DecodingError {
+                                details: "Failed to cast to usize.".into(),
+                                input: Some(input),
+                                kind: DecodingErrorType::GenericParsingError,
+                            })?)(inner_input)?;
                         O::decoder_for_index::<Uper>(index as i128).map_err(|_| {
                             nom::Err::Error(Error {
                                 input,
@@ -316,27 +310,15 @@ impl<'a> Decoder<'a, BitIn<'a>> for Uper {
             Ok(Box::new(
                 move |input: BitIn<'a>| -> IResult<BitIn<'a>, Vec<u8>> {
                     let (input, is_extended) = read_bit(input)?;
-                    let (input, length_det) =
+                    let (mut input, length_det) =
                         size_length_det(is_extended, &range_constraints, input)?;
-                    Ok(map(take(usize::try_from(length_det * 8).map_err(|_| DecodingError {
-                        details: "Failed to cast to usize.".into(),
-                        input: Some(input),
-                        kind: DecodingErrorType::GenericParsingError
-                    })?), |slice: BitIn<'a>| {
-                        slice.as_bytes().to_vec()
-                    })(input)?)
+                    bitslice_to_bytes(length_det, input)
                 },
             ))
         } else {
             Ok(Box::new(move |input| {
                 let (input, length_det) = size_length_det(false, &range_constraints, input)?;
-                Ok(map(take(usize::try_from(length_det * 8).map_err(|_| DecodingError {
-                        details: "Failed to cast to usize.".into(),
-                        input: Some(input),
-                        kind: DecodingErrorType::GenericParsingError
-                    })?), |slice: BitIn<'a>| {
-                    slice.as_bytes().to_vec()
-                })(input)?)
+                bitslice_to_bytes(length_det, input)
             }))
         }
     }
@@ -362,10 +344,12 @@ impl<'a> Decoder<'a, BitIn<'a>> for Uper {
                             match length_det {
                                 LengthDeterminant::Content(ext_length) => {
                                     (input, inner_input) =
-                                        take(usize::try_from(8 * ext_length).map_err(|_| DecodingError {
-                                            details: "Failed to cast to usize.".into(),
-                                            input: Some(input),
-                                            kind: DecodingErrorType::GenericParsingError
+                                        take(usize::try_from(8 * ext_length).map_err(|_| {
+                                            DecodingError {
+                                                details: "Failed to cast to usize.".into(),
+                                                input: Some(input),
+                                                kind: DecodingErrorType::GenericParsingError,
+                                            }
                                         })?)(inner_input)?;
                                     let _ = instance.decode_member_at_index::<Uper>(
                                         index + extension_index,
@@ -418,7 +402,7 @@ impl<'a> Decoder<'a, BitIn<'a>> for Uper {
         } else {
             Ok(Box::new(
                 move |input: BitIn<'a>| -> IResult<BitIn<'a>, Vec<T>> {
-                    let (input, length_det) = decode_unextensible_int(&constraints, input)?;
+                    let (input, length_det) = size_length_det(false, &constraints, input)?;
                     n_times(input, member_decoder, length_det)
                 },
             ))
@@ -426,11 +410,21 @@ impl<'a> Decoder<'a, BitIn<'a>> for Uper {
     }
 
     fn decode_unknown_extension(input: BitIn<'a>) -> IResult<BitIn<'a>, Vec<u8>> {
-        Ok((
-            BSlice::from(bits![static u8, Msb0;]),
-            input.as_bytes().to_vec(),
-        ))
+        bitslice_to_bytes(input.len() / 8, input)
     }
+}
+
+fn bitslice_to_bytes(
+    length_det: usize,
+    mut input: BSlice<'_, u8, Msb0>,
+) -> Result<(BSlice<'_, u8, Msb0>, Vec<u8>), DecodingError<BSlice<'_, u8, Msb0>>> {
+    let mut bytes = vec![];
+    for _ in 0..length_det {
+        let (new_input, byte) = map(take(8_usize), |bits: BitIn| bits.load_be::<u8>())(input)?;
+        input = new_input;
+        bytes.push(byte);
+    }
+    Ok((input, bytes))
 }
 
 fn size_length_det<'a>(
@@ -547,11 +541,14 @@ fn decode_sized_string<'a>(
             input,
         );
     }
-    let (input, mut buffer) = take(usize::try_from(bit_size * length_det).map_err(|_| DecodingError {
-        details: "Failed to cast to usize.".into(),
-        input: Some(input),
-        kind: DecodingErrorType::GenericParsingError
-    })?)(input)?;
+    let (input, mut buffer) =
+        take(
+            usize::try_from(bit_size * length_det).map_err(|_| DecodingError {
+                details: "Failed to cast to usize.".into(),
+                input: Some(input),
+                kind: DecodingErrorType::GenericParsingError,
+            })?,
+        )(input)?;
     if permitted_alphabet.is_known_multiplier_string() {
         let mut char_vec = vec![];
         while let Ok((new_buffer, i)) = read_int::<usize>(bit_size)(buffer) {
@@ -583,7 +580,7 @@ fn decode_varlength_integer<O: num::Integer + num::FromPrimitive + Copy>(
             let (input, buffer) = take(usize::try_from(8 * size).map_err(|_| DecodingError {
                 details: "Failed to cast to usize.".into(),
                 input: Some(input),
-                kind: DecodingErrorType::GenericParsingError
+                kind: DecodingErrorType::GenericParsingError,
             })?)(input)?;
             match (min, size) {
                 (Some(m), s) => Ok((
@@ -1270,6 +1267,66 @@ mod tests {
             .unwrap()
             .1,
             Greeting("💖".into())
+        );
+    }
+
+    #[test]
+    fn decodes_sequence_of_with_definite_size() {
+        asn1_internal_tests!(r#"Sequence-of ::= SEQUENCE (SIZE(3)) OF INTEGER(1..3)"#);
+        assert_eq!(
+            Sequence_of::decode::<Uper>(BSlice::from(bits![static u8, Msb0; 0,0,0,1,1,0]))
+                .unwrap()
+                .1,
+            Sequence_of(vec![
+                Anonymous_Sequence_of(1),
+                Anonymous_Sequence_of(2),
+                Anonymous_Sequence_of(3)
+            ])
+        );
+    }
+
+    #[test]
+    fn decodes_sequence_of_with_range_size() {
+        asn1_internal_tests!(r#"Sequence-of ::= SEQUENCE (SIZE(1..2)) OF INTEGER(1..3)"#);
+        assert_eq!(
+            Sequence_of::decode::<Uper>(BSlice::from(bits![u8, Msb0; 1,0,0,0,1]))
+                .unwrap()
+                .1,
+            Sequence_of(vec![Anonymous_Sequence_of(1), Anonymous_Sequence_of(2)]),
+        );
+    }
+
+    #[test]
+    fn decodes_sequence_of_with_extended_range_size() {
+        asn1_internal_tests!(r#"Sequence-of ::= SEQUENCE (SIZE(1..2,...)) OF INTEGER(1..3)"#);
+        assert_eq!(
+            Sequence_of::decode::<Uper>(BSlice::from(
+                bits![u8, Msb0; 1, 0,0,0,0,0,0,1,1, 0,0, 0,1, 1,0]
+            ))
+            .unwrap()
+            .1,
+            Sequence_of(vec![
+                Anonymous_Sequence_of(1),
+                Anonymous_Sequence_of(2),
+                Anonymous_Sequence_of(3)
+            ])
+        );
+    }
+
+    #[test]
+    fn decodes_sequence_of_with_unrestricted_size() {
+        asn1_internal_tests!(r#"Sequence-of ::= SEQUENCE OF INTEGER(1..3)"#);
+        assert_eq!(
+            Sequence_of::decode::<Uper>(BSlice::from(
+                bits![u8, Msb0; 0,0,0,0,0,0,1,1, 0,0, 0,1, 1,0]
+            ))
+            .unwrap()
+            .1,
+            Sequence_of(vec![
+                Anonymous_Sequence_of(1),
+                Anonymous_Sequence_of(2),
+                Anonymous_Sequence_of(3)
+            ]),
         );
     }
 }

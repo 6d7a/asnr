@@ -478,6 +478,7 @@ pub fn sequence_template(
     member_declaration: String,
     decode_member_body: String,
     encoder_member_body: String,
+    has_optional_body: String,
     extension_decoder: String,
     seq_descriptor: String,
 ) -> String {
@@ -515,6 +516,15 @@ pub fn sequence_template(
             _ => Err(EncodingError {{ details: format!("No sequence member at field index {{index}}!") }})
           }}
         }}
+  }}
+
+  impl HasOptionalField for {name} {{
+    fn has_optional_field(&self, index: usize) -> bool {{
+      match index {{
+        {has_optional_body}
+        _ => true
+      }}
+    }}
   }}
   
   impl<'a, I: AsBytes + Debug + 'a> Decode<'a, I> for {name} {{

@@ -6,7 +6,6 @@ use criterion::{BenchmarkId, criterion_group, criterion_main, Criterion};
 use asnr_compiler_derive::asn1;
 use bitvec::prelude::*;
 use bitvec_nom::BSlice;
-use etsi_parser::{decode_its_header, decode_cam};
 
 fn decode_hex(s: &str) -> Result<Vec<u8>, ParseIntError> {
   (0..s.len())

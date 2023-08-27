@@ -5,8 +5,8 @@ use nom::{
     character::complete::char,
     combinator::{into, map, opt, value},
     error::Error,
-    multi::{many0_count, many1, separated_list1},
-    sequence::{pair, preceded, terminated, tuple},
+    multi::{many0_count, many1, separated_list0, separated_list1},
+    sequence::{delimited, pair, preceded, terminated, tuple},
     IResult,
 };
 
@@ -88,17 +88,51 @@ fn subtype_element<'a>(input: &'a str) -> IResult<&'a str, SubtypeElement> {
     ))(input)
 }
 
+fn extension_additions<'a>(input: &'a str) -> IResult<&'a str, ()> {
+    value(
+        (),
+        opt(pair(
+            skip_ws_and_comments(char(COMMA)),
+            skip_ws_and_comments(separated_list0(
+                skip_ws_and_comments(char(COMMA)),
+                skip_ws_and_comments(alt((
+                    value(0, asn1_value),
+                    value(
+                        0,
+                        pair(
+                            terminated(
+                                alt((value(None, tag(MIN)), map(asn1_value, |v| Some(v)))),
+                                skip_ws_and_comments(opt(char(GREATER_THAN))),
+                            ),
+                            preceded(
+                                range_seperator,
+                                preceded(
+                                    opt(char(LESS_THAN)),
+                                    skip_ws_and_comments(alt((
+                                        value(None, tag(MAX)),
+                                        map(asn1_value, |v| Some(v)),
+                                    ))),
+                                ),
+                            ),
+                        ),
+                    ),
+                ))),
+            )),
+        )),
+    )(input)
+}
+
 fn single_value<'a>(input: &'a str) -> IResult<&'a str, SubtypeElement> {
     opt_delimited::<char, SubtypeElement, char, Error<&str>, _, _, _>(
         skip_ws_and_comments(char(LEFT_PARENTHESIS)),
         skip_ws_and_comments(into(pair(
             asn1_value,
-            opt(skip_ws_and_comments(preceded(
+            opt(skip_ws_and_comments(delimited(
                 char(COMMA),
                 extension_marker,
+                extension_additions,
             ))),
         ))),
-        // TODO: Parse extension additions like INTEGER (3, ..., 7, 8) 
         skip_ws_and_comments(char(RIGHT_PARENTHESIS)),
     )(input)
 }
@@ -142,11 +176,11 @@ fn value_range<'a>(input: &'a str) -> IResult<&'a str, SubtypeElement> {
                         ))),
                     ),
                 ),
-                opt(skip_ws_and_comments(preceded(
+                opt(skip_ws_and_comments(delimited(
                     char(COMMA),
                     extension_marker,
+                    extension_additions
                 ))),
-                // TODO: Parse extension additions like INTEGER (-1..MAX, ..., -20..0 ) INTEGER (3..6, ..., 7, 8) 
             )),
             |(min, max, ext)| SubtypeElement::ValueRange {
                 min,
@@ -314,6 +348,21 @@ mod tests {
                 extensible: false
             })]
         );
+    }
+
+    #[test]
+    fn handles_added_extension_values() {
+        assert_eq!(
+            constraint("(1..32767,..., 8388607)").unwrap().1,
+            vec![Constraint::SubtypeConstraint(ElementSet {
+                set: ElementOrSetOperation::Element(SubtypeElement::ValueRange {
+                    min: Some(ASN1Value::Integer(1)),
+                    max: Some(ASN1Value::Integer(32767)),
+                    extensible: true
+                }),
+                extensible: false
+            })]
+        )
     }
 
     #[test]
@@ -880,18 +929,17 @@ mod tests {
                     extensible: false
                 }),
                 Constraint::SubtypeConstraint(ElementSet {
-                    set: ElementOrSetOperation::Element(
-                        SubtypeElement::SizeConstraint(Box::new(ElementOrSetOperation::Element(
-                            SubtypeElement::ValueRange {
-                                min: Some(ASN1Value::Integer(1)),
-                                max: Some(ASN1Value::Integer(255)),
-                                extensible: false
-                            }
-                        )))
-                    ),
+                    set: ElementOrSetOperation::Element(SubtypeElement::SizeConstraint(Box::new(
+                        ElementOrSetOperation::Element(SubtypeElement::ValueRange {
+                            min: Some(ASN1Value::Integer(1)),
+                            max: Some(ASN1Value::Integer(255)),
+                            extensible: false
+                        })
+                    ))),
                     extensible: false
                 })
-            ])
+            ]
+        )
     }
 
     #[test]

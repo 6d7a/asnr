@@ -408,6 +408,27 @@ pub fn format_encoder_member_body(members: &Vec<StringifiedNameType>) -> String 
         .collect::<Vec<String>>()
         .join("\n      ")
 }
+
+pub fn format_has_optional_body(members: &Vec<StringifiedNameType>) -> String {
+    members
+        .iter()
+        .enumerate()
+        .map(|(i, m)| {
+            if m.r#type.starts_with("Option<") {
+                format!(
+                    r#"{i} => self.{name} != None,"#,
+                    name = m.name,
+                )
+            } else {
+                format!(
+                    "{i} => true,"
+                )
+            }
+        })
+        .collect::<Vec<String>>()
+        .join("\n      ")
+}
+
 fn declare_inner_sequence_member(
     member: &SequenceOrSetMember,
     parent_name: &String,

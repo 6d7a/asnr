@@ -78,6 +78,10 @@ pub trait EncoderForIndex<T, O: Extend<T> + Debug + 'static> {
         Self: Sized;
 }
 
+pub trait HasOptionalField {
+    fn has_optional_field(&self, index: usize) -> bool;
+}
+
 pub trait DecoderForKey<'a, I: AsBytes + Debug + 'a, T> {
     fn decoder_for_key<D>(key: T) -> Result<fn(I) -> IResult<I, Self>, DecodingError<I>>
     where
@@ -137,7 +141,7 @@ pub trait Encoder<T, O: Extend<T> + Debug + 'static> {
     fn encode_character_string(
         character_string: CharacterString,
     ) -> Result<Box<dyn Fn(&str, O) -> Result<O, EncodingError>>, EncodingError>;
-    fn encode_sequence<S: EncoderForIndex<T, O> + Debug>(
+    fn encode_sequence<S: EncoderForIndex<T, O> + Debug + HasOptionalField>(
         sequence: SequenceOrSet,
     ) -> Result<Box<dyn Fn(S, O) -> Result<O, EncodingError>>, EncodingError>;
     fn encode_enumerated<E: Encode<T, O> + Debug>(

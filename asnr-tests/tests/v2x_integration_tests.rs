@@ -1,8 +1,5 @@
 use crate::helpers::decode_hex;
-use asnr_tests::asn1::v2x::{
-    Code, HighFrequencyContainer, ItsPduHeader, IviContainer, LowFrequencyContainer, NodeListXY,
-    NodeOffsetPointXY, PartialMapem, PartialSpatem, CAM, CPM, DENM, IVIM, MAPEM, SPATEM, SREM,
-};
+use asnr_tests::asn1::v2x::*;
 use asnr_transcoder::uper::Uper;
 
 mod helpers;
@@ -378,6 +375,43 @@ fn encodes_denms_as_decodes() {
 }
 
 #[test]
+fn encodes_partial_mapems_as_decodes() {
+    let partial_mapem = PartialMapem {
+        header: ItsPduHeader {
+            protocolVersion: ItsPduHeader_protocolVersion(2),
+            messageID: ItsPduHeader_messageID(5),
+            stationID: StationID(12310),
+        },
+        map: PartialMapData {
+            timeStamp: None,
+            msgIssueRevision: MsgCount(0),
+            layerType: None,
+            layerID: None,
+            firstIntersection: Some(FirstIntersection {
+                numberOfIntersections: FirstIntersection_numberOfIntersections(1),
+                partialIntersection: PartialIntersection {
+                    dummyBitmap: PartialIntersection_dummyBitmap(vec![true, true, true, true]),
+                    name: Some(DescriptiveName("MAP_ITS_25\\2501\\2.2".into())),
+                    id: IntersectionReferenceID {
+                        region: Some(RoadRegulatorID(3)),
+                        id: IntersectionID(2501),
+                    },
+                },
+            }),
+            dummy1: None,
+            dummy2: None,
+            dummy3: None,
+            dummy4: None,
+        },
+    };
+
+    let encoded = Uper::encode(partial_mapem.clone()).unwrap();
+    println!("{encoded:?}");
+    let decoded: PartialMapem = Uper::decode(&encoded).unwrap();
+    assert_eq!(partial_mapem, decoded)
+}
+
+#[test]
 fn encodes_mapems_as_decodes() {
     let test_mapems = vec![
         decode_hex("020500003016080003094d8342fc9a94efb26b7193560c6e325cca0006138a08558f2236713c8327028a24482a480420000036d02fc0de2200b061c10fc05be4f4c3c7abc9878347f002c5a0000404405908084000002ceca22680460c05546623dd7dc2401242200000db40d500e280020ece061e011f102dbb76e1e6bdf820b068000102100642220000049dd5c0a611c6f4824e5f892011210000006da0787f1640010e407e83d47bd985efef062cd080c0582c0000818802a1100000024ef41efb09f57ca1034f5c9024d0800000367a06adaa00088f8e074646f7b108699bc487393f520b0b8000704100b6220000004b4ceae9781caeec43e35d292051a11000006ce08945d400109447b622467c818d51cf83137c02c16190000e0a2018c44400000969941cdd83eb1c407133cd241734021000002b38294ddd10055109c47da33483d8c2031ac0430b8810e1be70cd8501e058c4000383080c310108000005b4c62e50c08a887803900ec1770480ea84000002b68101e59d00040fede609af4a052f8d02eeabc1e8ce23e213b705616800080eb0c4000408040f604080000033f1f89610004102cc80a1002090410604080000033eec78dd00040fdb380a0f030a0411604080000033e6f59fd0004102cc80a12080b0412604080000033e3d499900040fdb380a11090c0413604080000033ee85fb100040ce3f40a14050d0414604080000036884de075000413240c0a13060e0").unwrap(),
@@ -391,7 +425,27 @@ fn encodes_mapems_as_decodes() {
    ];
     for i in 0..test_mapems.len() {
         let decoded: MAPEM = Uper::decode(&test_mapems[i]).unwrap();
-        let encoded = Uper::encode(decoded).unwrap();
-        assert_eq!(test_mapems[i], encoded);
+        let encoded = Uper::encode(decoded.clone()).unwrap();
+        let redecoded: MAPEM = Uper::decode(&encoded).unwrap();
+        assert_eq!(decoded, redecoded);
+    }
+}
+
+#[test]
+fn encodes_spatems_as_decodes() {
+    let test_spatems = vec![
+        decode_hex("02040000301600384a6c1a17e4d4a77d935b8c9ab0637192e65000309c5040000ea71d4ff01000228ce2f944ff635b634871adb1aea1aea78010a1b8be2940a0d6d8d15c6b6c6c0c6c0de006280e2dfa68f635b634571adb1b031b0378020a1b8d8b8dc00da70d11c6d386d4c6d4de00a28ae35f236c4366034371b301bb71bad18030a038af798650d6d8d15c6b6c6c0c6c0c600e28ce35fc36ce366a34871b351b441b4478040a1b8d8b8dc00da70d15c6d386e3c6e146012280e2dfa5cd035b634571adb1b1c1b0d180").unwrap(),
+        decode_hex("020400122a80413376018800184e20102001337618a10320134373ae33afc3aed5a339d971e141e0ca50dcee20f230f1e128ce77a67b707b4891000400220334673ad43be23b01021b9d9c1e259db51119cee0cf5dcf258e86e77d87bc079fe82000c0040014808d15ceb00eb64eb3ce86e7684780a77f694573b6a3c323c23521b9df61eaf1ea7a84006001c810d0dceb8cef88ec5428ae76167814767a34373b973d363c693a2b9ddf9eaf1e48a040080024").unwrap(),
+        decode_hex("1C475378283520BBD3960036AA4FDC72BECE400C9D6650E870C5EB9B2E10764894C3A74EBCF3B5039D19E1C8804F0301E650A3278D80602AC6895C25E8194B1DA31381FE5EB43DF131BD82847869F4A9D11E3ED7B532968EDB61583664B6D0030C92183CCCA9E400180803256E5B88C80180803A6E85AA37500C0401D8E2CA5881C0602000602000602010180800183A0B1FD6BC20590018622429E301C703229384471980").unwrap(),
+        decode_hex("B73D70AA7EC500142E1721118E31A4210AA9002F90362410941233818102801EB167E72BC018102803C8181028040602AC060200060200679F0EE52060200061887996E3AD4885F33F001BB80236843DBE12BBA9D5D00642B2A8D2A748A68CE0BD417998D596EB1594456E74F249B31E62745D52837D5AAF00").unwrap(),
+        decode_hex("D2A649CC013C41DD36007F77C4CCB6D3AA308300651B4FDB0B1B4D79FBB383A62588B31C70AFAEA5E81301EB8E2ECCEF018102800C01810280087C000C75469F43A5DB4355040EE09B49EC58F1DC1D0701BF13A9141B44CC8E21819D96EA9BCA00C04001A955F7421D00602000").unwrap(),
+        decode_hex("5E9373A9179F64F784159CD85165E6097C4B75AF002892536D222D77B80007034BC819010580602002ECEB1BCE02F03010003165044B0739B83A5B66CE1C1F6A645FA4030205007520003276157C6FD718BE2E70501D3E6D69FC2D8AB0D2977310AC20A4C78A0DBC04F1D3A75A3AB81D633D00301000378DF030205000377A21E20602000602000183A0BC675E6822F0331F34D9D1D842D14BF751989B03A2D9A6CF00107CFCF269D99B5E6880576B6BC136340F592D8006029C09B618E900C250D65415A5D6806F6BD03184D10D2C19CFFE91D4F83D49D24691860BA91482FC8E009C0030740D4610C7270000").unwrap(),
+        decode_hex("08687FFFFFFF000C8EE0983A29D26634C016D580232D04858158A2F0006AD8275864B103010003236227FFD2625D935FA6BF72AB0AAB18FB8E701CE07675D128B09E001E1A8E9EB14608A06440C081403C00C0814009884D81A480A4C01808021809F6512382D004934D2201808015282305A0237ED3719D00752629A064031443DB103014E03014E1AC0C081400").unwrap(),
+    ];
+    for i in 0..test_spatems.len() {
+        let decoded: SPATEM = Uper::decode(&test_spatems[i]).unwrap();
+        let encoded = Uper::encode(decoded.clone()).unwrap();
+        let redecoded: SPATEM = Uper::decode(&encoded).unwrap();
+        assert_eq!(decoded, redecoded);
     }
 }
