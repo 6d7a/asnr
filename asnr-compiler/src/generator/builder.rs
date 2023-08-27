@@ -390,6 +390,7 @@ pub fn generate_sequence<'a>(
             format_member_declaration(&members),
             format_decode_member_body(&members),
             format_encoder_member_body(&members),
+            format_has_optional_body(&members),
             extension_decoder,
             seq.declare(),
         ))

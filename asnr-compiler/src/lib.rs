@@ -283,8 +283,8 @@ mod tests {
                 .no_std(false)
                 // .add_asn_by_path(PathBuf::from("test_asn1/AddGrpC.asn"))
                 // .add_asn_by_path(PathBuf::from("test_asn1/ETSI-ITS-CDD.asn"))
-                // .add_asn_by_path(PathBuf::from("test_asn1/REGION.asn"))
-                .add_asn_by_path(PathBuf::from("test_asn1/denm_2_0.asn"))
+                 .add_asn_by_path(PathBuf::from("test_asn1/REGION.asn"))
+                // .add_asn_by_path(PathBuf::from("test_asn1/denm_2_0.asn"))
                 // .add_asn_by_path(PathBuf::from(
                 //     "test_asn1/CPM-OriginatingStationContainers.asn"
                 // ))

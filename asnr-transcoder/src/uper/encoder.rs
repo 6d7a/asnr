@@ -5,7 +5,7 @@ use core::fmt::Debug;
 
 use crate::{
     error::{DecodingError, EncodingError},
-    Encode, Encoder, EncoderForIndex,
+    Encode, Encoder, EncoderForIndex, HasOptionalField,
 };
 
 use super::{
@@ -30,11 +30,13 @@ impl Encoder<u8, BitOut> for Uper {
                             write_extended_bit(&constraints, encodable, &mut output)?;
                         if within_constraints {
                             encode_constrained_integer(
-                                constraints.offset_from_min::<u128, _>(encodable).ok_or(EncodingError {
-                                    details:
-                                        "Failed to compute offset of integer from its minimum."
-                                            .into(),
-                                })?,
+                                constraints.offset_from_min::<u128, _>(encodable).ok_or(
+                                    EncodingError {
+                                        details:
+                                            "Failed to compute offset of integer from its minimum."
+                                                .into(),
+                                    },
+                                )?,
                                 bit_length,
                                 output,
                             )
@@ -80,11 +82,13 @@ impl Encoder<u8, BitOut> for Uper {
                     move |encodable, output| -> Result<BitOut, EncodingError> {
                         constraints.lies_within(&encodable)?;
                         encode_constrained_integer(
-                            constraints.offset_from_min::<u128, _>(encodable).ok_or(EncodingError {
-                                details:
-                                    "Failed to compute offset of integer from its minimum."
-                                        .into(),
-                            })?,
+                            constraints.offset_from_min::<u128, _>(encodable).ok_or(
+                                EncodingError {
+                                    details:
+                                        "Failed to compute offset of integer from its minimum."
+                                            .into(),
+                                },
+                            )?,
                             bit_length,
                             output,
                         )
@@ -182,7 +186,7 @@ impl Encoder<u8, BitOut> for Uper {
         }
     }
 
-    fn encode_sequence<S: EncoderForIndex<u8, BitOut> + Debug>(
+    fn encode_sequence<S: EncoderForIndex<u8, BitOut> + Debug + HasOptionalField>(
         sequence: SequenceOrSet,
     ) -> Result<Box<dyn Fn(S, BitOut) -> Result<BitOut, EncodingError>>, EncodingError> {
         let member_list: Vec<(usize, String, bool)> = sequence
@@ -204,14 +208,13 @@ impl Encoder<u8, BitOut> for Uper {
          -> (S, BitOut, Vec<bool>) {
             // This is performance-wise pretty ugly and should be handled differently
             // in the future
-            let stringified_encodable = format!("{encodable:?}");
             let mut skip_list: Vec<bool> = member_list
                 .iter()
-                .filter_map(|(index, name, opt)| {
+                .filter_map(|(index, _, opt)| {
                     (*opt || index >= &index_of_first_ext.unwrap_or(usize::MAX)).then(|| {
                         (
                             index,
-                            stringified_encodable.contains(&format!("{name}: None")),
+                            !encodable.has_optional_field(*index),
                         )
                     })
                 })
@@ -476,51 +479,36 @@ impl Encoder<u8, BitOut> for Uper {
             Ok(Box::new(
                 move |encodable, mut output| -> Result<BitOut, EncodingError> {
                     let encodable_length = encodable.len();
-                    let mut encoded_members = encodable
+                    let encoded_members = encodable
                         .into_iter()
                         .try_fold(bitvec![u8, Msb0;], |acc, curr| {
                             curr.encode_self::<Uper>(acc)
                         })?;
-                    if constraints.lies_within::<usize>(&encodable_length)? {
-                        output.push(false);
-                        let mut output = encode_constrained_integer(
-                            encodable_length - constraints.min::<usize>().ok_or(
-                                "Could not determine minimum value of Sequence size constraints!",
-                            )?,
-                            constraints.bit_length().ok_or(
-                                "Could not determine bit length of Sequence size constraints!",
-                            )?,
-                            output,
-                        )?;
-                        output.append(&mut encoded_members);
-                        Ok(output)
-                    } else {
-                        output.push(true);
-                        wrap_in_length_determinant(
-                            encodable_length,
-                            encoded_members,
-                            Some(0),
-                            output,
-                        )
-                    }
+
+                    let _ = write_extended_bit(&constraints, encodable_length, &mut output)?;
+                    with_size_length_determinant(
+                        encodable_length,
+                        &constraints,
+                        encoded_members,
+                        output,
+                    )
                 },
             ))
         } else {
             Ok(Box::new(
-                move |encodable, output| -> Result<BitOut, EncodingError> {
-                    let output = encode_constrained_integer(
-                        encodable.len()
-                            - constraints.min::<usize>().ok_or(
-                                "Could not determine minimum value of Sequence size constraints!",
-                            )?,
-                        constraints.bit_length().ok_or(
-                            "Could not determine bit length of Sequence size constraints!",
-                        )?,
-                        output,
-                    )?;
-                    encodable
+                move |encodable,   output| -> Result<BitOut, EncodingError> {
+                    let encodable_length = encodable.len();
+                    let encoded_members = encodable
                         .into_iter()
-                        .try_fold(output, |acc, curr| curr.encode_self::<Uper>(acc))
+                        .try_fold(bitvec![u8, Msb0;], |acc, curr| {
+                            curr.encode_self::<Uper>(acc)
+                        })?;
+                    with_size_length_determinant(
+                        encodable_length,
+                        &constraints,
+                        encoded_members,
+                        output,
+                    )
                 },
             ))
         }
@@ -1273,6 +1261,66 @@ mod tests {
             0, // value of test-ext
             0,0,0,0,0,0,0 // padding
             ]
+        );
+    }
+
+    #[test]
+    fn encodes_sequence_of_with_definite_size() {
+        asn1_internal_tests!(
+            r#"Sequence-of ::= SEQUENCE (SIZE(3)) OF INTEGER(1..3)"#
+        );
+        assert_eq!(
+            Sequence_of::encode::<Uper>(
+                Sequence_of(vec![Anonymous_Sequence_of(1),Anonymous_Sequence_of(2),Anonymous_Sequence_of(3)]),
+                bitvec![u8, Msb0;]
+            )
+            .unwrap(),
+            bitvec![u8, Msb0; 0,0,0,1,1,0]
+        );
+    }
+
+    #[test]
+    fn encodes_sequence_of_with_range_size() {
+        asn1_internal_tests!(
+            r#"Sequence-of ::= SEQUENCE (SIZE(1..2)) OF INTEGER(1..3)"#
+        );
+        assert_eq!(
+            Sequence_of::encode::<Uper>(
+                Sequence_of(vec![Anonymous_Sequence_of(1),Anonymous_Sequence_of(2)]),
+                bitvec![u8, Msb0;]
+            )
+            .unwrap(),
+            bitvec![u8, Msb0; 1,0,0,0,1]
+        );
+    }
+
+    #[test]
+    fn encodes_sequence_of_with_extended_range_size() {
+        asn1_internal_tests!(
+            r#"Sequence-of ::= SEQUENCE (SIZE(1..2,...)) OF INTEGER(1..3)"#
+        );
+        assert_eq!(
+            Sequence_of::encode::<Uper>(
+                Sequence_of(vec![Anonymous_Sequence_of(1),Anonymous_Sequence_of(2),Anonymous_Sequence_of(3)]),
+                bitvec![u8, Msb0;]
+            )
+            .unwrap(),
+            bitvec![u8, Msb0; 1, 0,0,0,0,0,0,1,1, 0,0, 0,1, 1,0]
+        );
+    }
+
+    #[test]
+    fn encodes_sequence_of_with_unrestricted_size() {
+        asn1_internal_tests!(
+            r#"Sequence-of ::= SEQUENCE OF INTEGER(1..3)"#
+        );
+        assert_eq!(
+            Sequence_of::encode::<Uper>(
+                Sequence_of(vec![Anonymous_Sequence_of(1),Anonymous_Sequence_of(2),Anonymous_Sequence_of(3)]),
+                bitvec![u8, Msb0;]
+            )
+            .unwrap(),
+            bitvec![u8, Msb0; 0,0,0,0,0,0,1,1, 0,0, 0,1, 1,0]
         );
     }
 }
