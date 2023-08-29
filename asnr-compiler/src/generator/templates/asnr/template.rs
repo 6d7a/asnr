@@ -1,6 +1,5 @@
 use super::builder::StringifiedNameType;
 
-
 pub fn imports_and_generic_types(
     derive: Option<&str>,
     no_std: bool,
@@ -406,8 +405,8 @@ pub fn enumerated_template(
     derive: &str,
     name: String,
     enumerals: String,
-    unknown_index_case: String,
     enumerals_from_int: String,
+    unknown_index_case: String,
     enum_descriptor: String,
 ) -> String {
     format!(

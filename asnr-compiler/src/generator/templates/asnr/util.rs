@@ -1,4 +1,3 @@
-use crate::Framework;
 use asnr_grammar::{
     information_object::{
         InformationObjectClass, ObjectFieldIdentifier, SyntaxApplication, SyntaxExpression,
@@ -8,9 +7,12 @@ use asnr_grammar::{
     *,
 };
 
-use crate::generator::{
-    error::{GeneratorError, GeneratorErrorType},
-    generate,
+use crate::{
+    generator::{
+        error::{GeneratorError, GeneratorErrorType},
+        generate,
+    },
+    Framework,
 };
 
 use super::builder::StringifiedNameType;
@@ -310,7 +312,7 @@ pub fn format_option_declaration(members: &Vec<StringifiedNameType>) -> String {
 pub fn extract_sequence_members(
     members: &Vec<SequenceOrSetMember>,
     parent_name: &String,
-    index_of_first_extension: Option<usize>
+    index_of_first_extension: Option<usize>,
 ) -> Vec<StringifiedNameType> {
     members
         .iter()
@@ -415,14 +417,9 @@ pub fn format_has_optional_body(members: &Vec<StringifiedNameType>) -> String {
         .enumerate()
         .map(|(i, m)| {
             if m.r#type.starts_with("Option<") {
-                format!(
-                    r#"{i} => self.{name} != None,"#,
-                    name = m.name,
-                )
+                format!(r#"{i} => self.{name} != None,"#, name = m.name,)
             } else {
-                format!(
-                    "{i} => true,"
-                )
+                format!("{i} => true,")
             }
         })
         .collect::<Vec<String>>()
@@ -478,7 +475,7 @@ pub fn rustify_name(name: &String) -> String {
 mod tests {
     use asnr_grammar::types::*;
 
-    use super::format_enumeral;
+    use crate::generator::templates::asnr::util::format_enumeral;
 
     #[test]
     fn formats_enumeral() {
