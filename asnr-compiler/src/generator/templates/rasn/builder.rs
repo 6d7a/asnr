@@ -1,69 +1,63 @@
-// use crate::{generator::Generator, Framework};
-// use asnr_grammar::{information_object::*, utils::int_type_token, *};
-// use asnr_traits::*;
+use asnr_grammar::{ToplevelValueDeclaration, ASN1Value, INTEGER, utils::int_type_token, ToplevelDeclaration, ToplevelTypeDeclaration, ASN1Type};
 
-// use crate::generator::{
-//     error::{GeneratorError, GeneratorErrorType},
-//     generate,
-// };
+use crate::generator::{error::{GeneratorError, GeneratorErrorType}, util::{format_comments, rustify_name}}};
 
-// use super::{template::*, util::*};
+use super::template::integer_template;
 
-// pub struct StringifiedNameType {
-//     pub name: String,
-//     pub r#type: String,
-// }
 
-// pub struct RasnGenerator;
 
-// impl Generator for RasnGenerator {
-//     fn generate_integer_value(tld: ToplevelValueDeclaration) -> Result<String, GeneratorError> {
-//         if let ASN1Value::Integer(i) = tld.value {
-//             if tld.type_name == INTEGER {
-//                 Ok(integer_value_template(
-//                     format_comments(&tld.comments),
-//                     rustify_name(&tld.name),
-//                     int_type_token(i, i),
-//                     i.to_string(),
-//                 ))
-//             } else {
-//                 Ok(integer_value_template(
-//                     format_comments(&tld.comments),
-//                     rustify_name(&tld.name),
-//                     tld.type_name.as_str(),
-//                     format!("{}({})", tld.type_name, i),
-//                 ))
-//             }
-//         } else {
-//             Err(GeneratorError::new(
-//                 Some(ToplevelDeclaration::Value(tld)),
-//                 "Expected INTEGER value top-level declaration",
-//                 GeneratorErrorType::Asn1TypeMismatch,
-//             ))
-//         }
-//     }
+pub struct StringifiedNameType {
+    pub name: String,
+    pub r#type: String,
+}
 
-//     fn generate_integer<'a>(
-//         tld: ToplevelTypeDeclaration,
-//         custom_derive: Option<&'a str>,
-//     ) -> Result<String, GeneratorError> {
-//         if let ASN1Type::Integer(ref int) = tld.r#type {
-//             Ok(integer_template(
-//                 format_comments(&tld.comments),
-//                 custom_derive.unwrap_or(DERIVE_DEFAULT),
-//                 rustify_name(&tld.name),
-//                 int.type_token(),
-//                 format_distinguished_values(&tld),
-//                 int.declare(),
-//             ))
-//         } else {
-//             Err(GeneratorError::new(
-//                 Some(ToplevelDeclaration::Type(tld)),
-//                 "Expected INTEGER top-level declaration",
-//                 GeneratorErrorType::Asn1TypeMismatch,
-//             ))
-//         }
-//     }
+pub struct RasnGenerator;
+
+impl /*Generator for */RasnGenerator {
+    fn generate_integer_value(tld: ToplevelValueDeclaration) -> Result<String, GeneratorError> {
+        if let ASN1Value::Integer(i) = tld.value {
+            if tld.type_name == INTEGER {
+                Ok(integer_value_template(
+                    format_comments(&tld.comments),
+                    rustify_name(&tld.name),
+                    int_type_token(i, i),
+                    i.to_string(),
+                ))
+            } else {
+                Ok(integer_value_template(
+                    format_comments(&tld.comments),
+                    rustify_name(&tld.name),
+                    tld.type_name.as_str(),
+                    format!("{}({})", tld.type_name, i),
+                ))
+            }
+        } else {
+            Err(GeneratorError::new(
+                Some(ToplevelDeclaration::Value(tld)),
+                "Expected INTEGER value top-level declaration",
+                GeneratorErrorType::Asn1TypeMismatch,
+            ))
+        }
+    }
+
+    fn generate_integer<'a>(
+        tld: ToplevelTypeDeclaration,
+        custom_derive: Option<&'a str>,
+    ) -> Result<String, GeneratorError> {
+        if let ASN1Type::Integer(ref int) = tld.r#type {
+            Ok(integer_template(
+                format_comments(&tld.comments),
+                rustify_name(&tld.name),
+                None
+            ))
+        } else {
+            Err(GeneratorError::new(
+                Some(ToplevelDeclaration::Type(tld)),
+                "Expected INTEGER top-level declaration",
+                GeneratorErrorType::Asn1TypeMismatch,
+            ))
+        }
+    }
 
 //     fn generate_bit_string<'a>(
 //         tld: ToplevelTypeDeclaration,
@@ -471,207 +465,4 @@
 //             ))
 //         }
 //     }
-// }
-
-// #[cfg(test)]
-// mod tests {
-//     use asnr_grammar::{constraints::*, types::*, *};
-
-//     use crate::generator::templates::asnr::builder::*;
-
-//     #[test]
-//     fn generates_enumerated_from_template() {
-//         let enum_tld = ToplevelTypeDeclaration {
-//             parameterization: None,
-
-//             name: "TestEnum".into(),
-//             comments: "".into(),
-//             r#type: ASN1Type::Enumerated(Enumerated {
-//                 constraints: vec![],
-//                 members: vec![
-//                     Enumeral {
-//                         name: "forward".into(),
-//                         description: Some("This means forward".into()),
-//                         index: 1,
-//                     },
-//                     Enumeral {
-//                         name: "backward".into(),
-//                         description: Some("This means backward".into()),
-//                         index: 2,
-//                     },
-//                     Enumeral {
-//                         name: "unavailable".into(),
-//                         description: Some("This means nothing".into()),
-//                         index: 3,
-//                     },
-//                 ],
-//                 extensible: None,
-//             }),
-//         };
-//         println!(
-//             "{}",
-//             AsnrGenerator::generate_enumerated(enum_tld, None).unwrap()
-//         )
-//     }
-
-//     #[test]
-//     fn generates_bitstring_from_template() {
-//         let bs_tld = ToplevelTypeDeclaration {
-//             parameterization: None,
-//             name: "BitString".into(),
-//             comments: "".into(),
-//             r#type: ASN1Type::BitString(BitString {
-//                 constraints: vec![Constraint::SubtypeConstraint(ElementSet {
-//                     set: ElementOrSetOperation::Element(SubtypeElement::SizeConstraint(Box::new(
-//                         ElementOrSetOperation::Element(SubtypeElement::ValueRange {
-//                             min: Some(ASN1Value::Integer(8)),
-//                             max: Some(ASN1Value::Integer(18)),
-//                             extensible: false,
-//                         }),
-//                     ))),
-//                     extensible: false,
-//                 })],
-//                 distinguished_values: Some(vec![
-//                     DistinguishedValue {
-//                         name: "firstBit".into(),
-//                         value: 0,
-//                     },
-//                     DistinguishedValue {
-//                         name: "secondBit".into(),
-//                         value: 0,
-//                     },
-//                     DistinguishedValue {
-//                         name: "thirdBit".into(),
-//                         value: 0,
-//                     },
-//                 ]),
-//             }),
-//         };
-//         println!("{}",  AsnrGenerator::generate_bit_string(bs_tld, None).unwrap())
-//     }
-
-//     #[test]
-//     fn generates_integer_from_template() {
-//         let int_tld = ToplevelTypeDeclaration {
-//             parameterization: None,
-//             name: "TestInt".into(),
-//             comments: "".into(),
-//             r#type: ASN1Type::Integer(Integer {
-//                 constraints: vec![Constraint::SubtypeConstraint(ElementSet {
-//                     set: ElementOrSetOperation::Element(SubtypeElement::ValueRange {
-//                         min: Some(ASN1Value::Integer(8)),
-//                         max: Some(ASN1Value::Integer(18)),
-//                         extensible: false,
-//                     }),
-//                     extensible: false,
-//                 })],
-//                 distinguished_values: Some(vec![
-//                     DistinguishedValue {
-//                         name: "negativeOutOfRange".into(),
-//                         value: -16898,
-//                     },
-//                     DistinguishedValue {
-//                         name: "positiveOutOfRange".into(),
-//                         value: 16898,
-//                     },
-//                     DistinguishedValue {
-//                         name: "invalid".into(),
-//                         value: 16899,
-//                     },
-//                 ]),
-//             }),
-//         };
-//         println!("{}",  AsnrGenerator::generate_integer(int_tld, None).unwrap())
-//     }
-
-//     #[test]
-//     fn generates_sequence_from_template() {
-//         let seq_tld = ToplevelTypeDeclaration {
-//             parameterization: None,
-//             name: "Sequence".into(),
-//             comments: "".into(),
-//             r#type: ASN1Type::Sequence(Sequence {
-//                 constraints: vec![],
-//                 extensible: Some(1),
-//                 members: vec![SequenceMember {
-//                     name: "nested".into(),
-//                     tag: None,
-//                     r#type: ASN1Type::Sequence(Sequence {
-//                         extensible: Some(3),
-//                         constraints: vec![],
-//                         members: vec![
-//                             SequenceMember {
-//                                 name: "wow".into(),
-//                                 tag: None,
-//                                 r#type: ASN1Type::ElsewhereDeclaredType(DeclarationElsewhere {
-//                                     identifier: "Wow".into(),
-//                                     constraints: vec![],
-//                                 }),
-//                                 default_value: None,
-//                                 is_optional: false,
-//                                 constraints: vec![],
-//                             },
-//                             SequenceMember {
-//                                 name: "this-is-annoying".into(),
-//                                 tag: None,
-//                                 r#type: ASN1Type::Boolean,
-//                                 default_value: Some(ASN1Value::Boolean(true)),
-//                                 is_optional: true,
-//                                 constraints: vec![],
-//                             },
-//                             SequenceMember {
-//                                 name: "another".into(),
-//                                 tag: None,
-//                                 r#type: ASN1Type::Sequence(Sequence {
-//                                     extensible: None,
-//                                     constraints: vec![],
-//                                     members: vec![SequenceMember {
-//                                         name: "inner".into(),
-
-//                                         tag: None,
-//                                         r#type: ASN1Type::BitString(BitString {
-//                                             constraints: vec![Constraint::SubtypeConstraint(
-//                                                 ElementSet {
-//                                                     set: ElementOrSetOperation::Element(
-//                                                         SubtypeElement::SizeConstraint(Box::new(
-//                                                             ElementOrSetOperation::Element(
-//                                                                 SubtypeElement::ValueRange {
-//                                                                     min: Some(ASN1Value::Integer(
-//                                                                         8,
-//                                                                     )),
-//                                                                     max: Some(ASN1Value::Integer(
-//                                                                         18,
-//                                                                     )),
-//                                                                     extensible: false,
-//                                                                 },
-//                                                             ),
-//                                                         )),
-//                                                     ),
-//                                                     extensible: false,
-//                                                 },
-//                                             )],
-//                                             distinguished_values: None,
-//                                         }),
-//                                         default_value: Some(ASN1Value::String("0".into())),
-//                                         is_optional: true,
-//                                         constraints: vec![],
-//                                     }],
-//                                 }),
-//                                 default_value: None,
-//                                 is_optional: true,
-//                                 constraints: vec![],
-//                             },
-//                         ],
-//                     }),
-//                     default_value: None,
-//                     is_optional: false,
-//                     constraints: vec![],
-//                 }],
-//             }),
-//         };
-//         println!(
-//             "{}",
-//             AsnrGenerator::generate_sequence(seq_tld, None).unwrap()
-//         )
-//     }
-// }
+}
