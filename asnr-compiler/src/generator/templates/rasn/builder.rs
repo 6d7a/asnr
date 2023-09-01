@@ -1,8 +1,8 @@
 use asnr_grammar::{ToplevelValueDeclaration, ASN1Value, INTEGER, utils::int_type_token, ToplevelDeclaration, ToplevelTypeDeclaration, ASN1Type};
 
-use crate::generator::{error::{GeneratorError, GeneratorErrorType}, util::{format_comments, rustify_name}}};
+use crate::generator::{error::{GeneratorError, GeneratorErrorType}, templates::asnr::util::{format_comments, rustify_name}};
 
-use super::template::integer_template;
+use super::{template::{integer_template, integer_value_template}, utils::format_constraint_generics};
 
 
 
@@ -42,13 +42,13 @@ impl /*Generator for */RasnGenerator {
 
     fn generate_integer<'a>(
         tld: ToplevelTypeDeclaration,
-        custom_derive: Option<&'a str>,
+        _custom_derive: Option<&'a str>,
     ) -> Result<String, GeneratorError> {
         if let ASN1Type::Integer(ref int) = tld.r#type {
             Ok(integer_template(
                 format_comments(&tld.comments),
                 rustify_name(&tld.name),
-                None
+                format_constraint_generics(&int.constraints)?
             ))
         } else {
             Err(GeneratorError::new(

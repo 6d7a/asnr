@@ -65,7 +65,7 @@ pub fn integer_template(comments: String, name: String, constraints: Option<Stri
 {comments}
 pub type {name} = {}Integer{}
 "#,
-        constraints.map_or("", |_| "Constrained"),
+        constraints.as_ref().map_or("", |_| "Constrained"),
         constraints.unwrap_or_default(),
     )
 }
