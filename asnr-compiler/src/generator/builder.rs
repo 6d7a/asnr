@@ -8,6 +8,8 @@ use super::{
     util::*,
 };
 
+use crate::utils::{to_rust_camel_case, to_rust_title_case};
+
 pub struct StringifiedNameType {
     pub name: String,
     pub r#type: String,
@@ -18,14 +20,14 @@ pub fn generate_integer_value(tld: ToplevelValueDeclaration) -> Result<String, G
         if tld.type_name == INTEGER {
             Ok(integer_value_template(
                 format_comments(&tld.comments),
-                rustify_name(&tld.name),
+                to_rust_camel_case(&tld.name),
                 int_type_token(i, i),
                 i.to_string(),
             ))
         } else {
             Ok(integer_value_template(
                 format_comments(&tld.comments),
-                rustify_name(&tld.name),
+                to_rust_camel_case(&tld.name),
                 tld.type_name.as_str(),
                 format!("{}({})", tld.type_name, i),
             ))
@@ -47,7 +49,7 @@ pub fn generate_integer<'a>(
         Ok(integer_template(
             format_comments(&tld.comments),
             custom_derive.unwrap_or(DERIVE_DEFAULT),
-            rustify_name(&tld.name),
+            to_rust_title_case(&tld.name),
             int.type_token(),
             format_distinguished_values(&tld),
             int.declare(),
@@ -69,7 +71,7 @@ pub fn generate_bit_string<'a>(
         Ok(bit_string_template(
             format_comments(&tld.comments),
             custom_derive.unwrap_or(DERIVE_DEFAULT),
-            rustify_name(&tld.name),
+            to_rust_title_case(&tld.name),
             format_distinguished_values(&tld),
             bitstr.declare(),
         ))
@@ -90,7 +92,7 @@ pub fn generate_octet_string<'a>(
       Ok(octet_string_template(
           format_comments(&tld.comments),
           custom_derive.unwrap_or(DERIVE_DEFAULT),
-          rustify_name(&tld.name),
+          to_rust_title_case(&tld.name),
           oct_str.declare(),
       ))
   } else {
@@ -110,7 +112,7 @@ pub fn character_string_template<'a>(
         Ok(char_string_template(
             format_comments(&tld.comments),
             custom_derive.unwrap_or(DERIVE_DEFAULT),
-            rustify_name(&tld.name),
+            to_rust_title_case(&tld.name),
             char_str.declare(),
         ))
     } else {
@@ -130,7 +132,7 @@ pub fn generate_boolean<'a>(
         Ok(boolean_template(
             format_comments(&tld.comments),
             custom_derive.unwrap_or(DERIVE_DEFAULT),
-            rustify_name(&tld.name),
+            to_rust_title_case(&tld.name),
         ))
     } else {
         Err(GeneratorError::new(
@@ -149,8 +151,8 @@ pub fn generate_typealias<'a>(
         Ok(typealias_template(
             format_comments(&tld.comments),
             custom_derive.unwrap_or(DERIVE_DEFAULT),
-            rustify_name(&tld.name),
-            rustify_name(&dec.identifier),
+            to_rust_title_case(&tld.name),
+            to_rust_title_case(&dec.identifier),
             tld.r#type.declare(),
         ))
     } else {
@@ -166,7 +168,7 @@ pub fn generate_null_value(tld: ToplevelValueDeclaration) -> Result<String, Gene
     if let ASN1Value::Null = tld.value {
         Ok(null_value_template(
             format_comments(&tld.comments),
-            rustify_name(&tld.name),
+            to_rust_camel_case(&tld.name),
         ))
     } else {
         Err(GeneratorError::new(
@@ -185,7 +187,7 @@ pub fn generate_null<'a>(
         Ok(null_template(
             format_comments(&tld.comments),
             custom_derive.unwrap_or(DERIVE_DEFAULT),
-            rustify_name(&tld.name),
+            to_rust_title_case(&tld.name),
         ))
     } else {
         Err(GeneratorError::new(
@@ -202,7 +204,8 @@ pub fn generate_enumerated<'a>(
 ) -> Result<String, GeneratorError> {
     if let ASN1Type::Enumerated(ref mut enumerated) = tld.r#type {
         enumerated.members.sort_by(|a, b| a.index.cmp(&b.index));
-        let name = rustify_name(&tld.name);
+        handle_duplicate_enumerals(&mut enumerated.members);
+        let name = to_rust_title_case(&tld.name);
         let mut enumerals = enumerated
             .members
             .iter()
@@ -251,10 +254,10 @@ pub fn generate_enumerated<'a>(
 
 pub fn generate_choice_value(tld: ToplevelValueDeclaration) -> Result<String, GeneratorError> {
     if let ASN1Value::Choice(id, val) = tld.value {
-        let type_name = rustify_name(&tld.type_name);
+        let type_name = to_rust_camel_case(&tld.type_name);
         Ok(choice_value_template(
             format_comments(&tld.comments),
-            rustify_name(&tld.name),
+            to_rust_camel_case(&tld.name),
             &type_name,
             id,
             val.value_as_string(Some(&type_name))?,
@@ -269,11 +272,12 @@ pub fn generate_choice_value(tld: ToplevelValueDeclaration) -> Result<String, Ge
 }
 
 pub fn generate_choice<'a>(
-    tld: ToplevelTypeDeclaration,
+    mut tld: ToplevelTypeDeclaration,
     custom_derive: Option<&'a str>,
 ) -> Result<String, GeneratorError> {
-    if let ASN1Type::Choice(ref choice) = tld.r#type {
-        let name = rustify_name(&tld.name);
+    if let ASN1Type::Choice(ref mut choice) = tld.r#type {
+        handle_duplicate_options(&mut choice.options);
+        let name = to_rust_title_case(&tld.name);
         let inner_options = flatten_nested_choice_options(&choice.options, &name).join("\n");
         let options = extract_choice_options(&choice.options, &name);
         let mut options_declaration = format_option_declaration(&options);
@@ -342,7 +346,7 @@ pub fn generate_information_object_class<'a>(
     if let ASN1Information::ObjectClass(ref ioc) = tld.value {
         Ok(information_object_class_template(
             format_comments(&tld.comments),
-            rustify_name(&tld.name),
+            to_rust_title_case(&tld.name),
             ioc.declare(),
         ))
     } else {
@@ -356,10 +360,10 @@ pub fn generate_information_object_class<'a>(
 
 pub fn generate_sequence_value(tld: ToplevelValueDeclaration) -> Result<String, GeneratorError> {
   if let ASN1Value::Sequence(_) = tld.value {
-      let type_name = rustify_name(&tld.type_name);
+      let type_name = to_rust_camel_case(&tld.type_name);
       Ok(sequence_value_template(
           format_comments(&tld.comments),
-          rustify_name(&tld.name),
+          to_rust_camel_case(&tld.name),
           &type_name,
           tld.value.value_as_string(Some(&type_name))?
       ))
@@ -377,7 +381,7 @@ pub fn generate_sequence<'a>(
     custom_derive: Option<&'a str>,
 ) -> Result<String, GeneratorError> {
     if let ASN1Type::Sequence(ref seq) = tld.r#type {
-        let name = rustify_name(&tld.name);
+        let name = to_rust_title_case(&tld.name);
         let members = extract_sequence_members(&seq.members, &name, seq.extensible);
         let extension_decoder =
             format_extensible_sequence(&name, seq.extensible.is_some());
@@ -408,14 +412,14 @@ pub fn generate_sequence_of<'a>(
     custom_derive: Option<&'a str>,
 ) -> Result<String, GeneratorError> {
     if let ASN1Type::SequenceOf(ref seq_of) = tld.r#type {
-        let name = rustify_name(&tld.name);
+        let name = to_rust_title_case(&tld.name);
         let anonymous_item = match seq_of.r#type.as_ref() {
             ASN1Type::ElsewhereDeclaredType(_) => None,
             n => Some(generate(
                 ToplevelDeclaration::Type(ToplevelTypeDeclaration {
                     parameterization: None,
                     comments: " Anonymous SEQUENCE OF member ".into(),
-                    name: String::from("Anonymous_") + &name,
+                    name: String::from("Anonymous") + &name,
                     r#type: n.clone(),
                 }),
                 None,
@@ -423,8 +427,8 @@ pub fn generate_sequence_of<'a>(
         }
         .unwrap_or(String::new());
         let member_type = match seq_of.r#type.as_ref() {
-            ASN1Type::ElsewhereDeclaredType(d) => rustify_name(&d.identifier),
-            _ => String::from("Anonymous_") + &name,
+            ASN1Type::ElsewhereDeclaredType(d) => to_rust_title_case(&d.identifier),
+            _ => String::from("Anonymous") + &name,
         };
         Ok(sequence_of_template(
             format_comments(&tld.comments),
@@ -520,7 +524,7 @@ pub fn generate_information_object_set<'a>(
         }
         Ok(information_object_set_template(
             format_comments(&tld.comments),
-            rustify_name(&tld.name),
+            to_rust_title_case(&tld.name),
             options,
             key_type,
             branches,

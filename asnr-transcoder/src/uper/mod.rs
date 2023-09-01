@@ -49,13 +49,42 @@ pub(crate) fn bit_length(min: i128, max: i128) -> usize {
     power as usize
 }
 
-pub fn rustify_name(name: &String) -> String {
-    let name = name.replace("-", "_");
-    if RUST_KEYWORDS.contains(&name.as_str()) {
-        String::from("r_") + &name
+pub fn to_rust_camel_case(input: &String) -> String {
+    let mut input = input.replace("-", "_");
+    let input = input.drain(..).fold(String::new(), |mut acc, c| {
+        if acc.is_empty() && c.is_uppercase() {
+            acc.push(c.to_ascii_lowercase());
+        } else if acc.ends_with(|last: char| last.is_lowercase() || last == '_') && c.is_uppercase() {
+            acc.push('_');
+            acc.push(c.to_ascii_lowercase());
+        } else {
+            acc.push(c);
+        }
+        acc
+    });
+    if RUST_KEYWORDS.contains(&input.as_str()) {
+        String::from("r_") + &input
     } else {
-        name
+        input
     }
+}
+
+pub fn to_rust_title_case(input: &String) -> String {
+    let mut input = input.replace("-", "_");
+    input.drain(..).fold(String::new(), |mut acc, c| {
+        if acc.is_empty() && c.is_lowercase() {
+            acc.push(c.to_ascii_uppercase());
+        } else if acc.ends_with(|last: char| last == '_') && c.is_uppercase() {
+            acc.pop();
+            acc.push(c);
+        } else if acc.ends_with(|last: char| last == '_') {
+            acc.pop();
+            acc.push(c.to_ascii_uppercase());
+        } else {
+            acc.push(c);
+        }
+        acc
+    })
 }
 
 #[cfg(test)]
@@ -90,37 +119,37 @@ mod tests {
 
         assert_eq!(
             42,
-            Uper::decode::<Int_1>(&Uper::encode(Int_1(42)).unwrap())
+            Uper::decode::<Int1>(&Uper::encode(Int1(42)).unwrap())
                 .unwrap()
                 .0
         );
         assert_eq!(
             42,
-            Uper::decode::<Int_2>(&Uper::encode(Int_2(42)).unwrap())
+            Uper::decode::<Int2>(&Uper::encode(Int2(42)).unwrap())
                 .unwrap()
                 .0
         );
         assert_eq!(
             42,
-            Uper::decode::<Int_3>(&Uper::encode(Int_3(42)).unwrap())
+            Uper::decode::<Int3>(&Uper::encode(Int3(42)).unwrap())
                 .unwrap()
                 .0
         );
         assert_eq!(
             42,
-            Uper::decode::<Int_4>(&Uper::encode(Int_4(42)).unwrap())
+            Uper::decode::<Int4>(&Uper::encode(Int4(42)).unwrap())
                 .unwrap()
                 .0
         );
         assert_eq!(
             87000,
-            Uper::decode::<Int_5>(&Uper::encode(Int_5(87000)).unwrap())
+            Uper::decode::<Int5>(&Uper::encode(Int5(87000)).unwrap())
                 .unwrap()
                 .0
         );
         assert_eq!(
             42,
-            Uper::decode::<Int_6>(&Uper::encode(Int_6(42)).unwrap())
+            Uper::decode::<Int6>(&Uper::encode(Int6(42)).unwrap())
                 .unwrap()
                 .0
         );
@@ -138,39 +167,39 @@ mod tests {
 
         assert_eq!(
             vec![true],
-            Uper::decode::<Bit_string_1>(&Uper::encode(Bit_string_1(vec![true])).unwrap())
+            Uper::decode::<BitString1>(&Uper::encode(BitString1(vec![true])).unwrap())
                 .unwrap()
                 .0
         );
         assert_eq!(
             vec![true, false, true, false],
-            Uper::decode::<Bit_string_2>(
-                &Uper::encode(Bit_string_2(vec![true, false, true, false])).unwrap()
+            Uper::decode::<BitString2>(
+                &Uper::encode(BitString2(vec![true, false, true, false])).unwrap()
             )
             .unwrap()
             .0
         );
         assert_eq!(
             vec![true, false],
-            Uper::decode::<Bit_string_3>(&Uper::encode(Bit_string_3(vec![true, false])).unwrap())
+            Uper::decode::<BitString3>(&Uper::encode(BitString3(vec![true, false])).unwrap())
                 .unwrap()
                 .0
         );
         assert_eq!(
             vec![true],
-            Uper::decode::<Bit_string_4>(&Uper::encode(Bit_string_4(vec![true])).unwrap())
+            Uper::decode::<BitString4>(&Uper::encode(BitString4(vec![true])).unwrap())
                 .unwrap()
                 .0
         );
         assert_eq!(
             vec![true],
-            Uper::decode::<Bit_string_5>(&Uper::encode(Bit_string_5(vec![true])).unwrap())
+            Uper::decode::<BitString5>(&Uper::encode(BitString5(vec![true])).unwrap())
                 .unwrap()
                 .0
         );
         assert_eq!(
             vec![true, false],
-            Uper::decode::<Bit_string_5>(&Uper::encode(Bit_string_5(vec![true, false])).unwrap())
+            Uper::decode::<BitString5>(&Uper::encode(BitString5(vec![true, false])).unwrap())
                 .unwrap()
                 .0
         );
@@ -188,39 +217,39 @@ mod tests {
 
         assert_eq!(
             vec![22],
-            Uper::decode::<Octet_string_1>(&Uper::encode(Octet_string_1(vec![22])).unwrap())
+            Uper::decode::<OctetString1>(&Uper::encode(OctetString1(vec![22])).unwrap())
                 .unwrap()
                 .0
         );
         assert_eq!(
-            vec![22,55,33,44],
-            Uper::decode::<Octet_string_2>(
-                &Uper::encode(Octet_string_2(vec![22,55,33,44])).unwrap()
+            vec![22, 55, 33, 44],
+            Uper::decode::<OctetString2>(
+                &Uper::encode(OctetString2(vec![22, 55, 33, 44])).unwrap()
             )
             .unwrap()
             .0
         );
         assert_eq!(
-            vec![33,77],
-            Uper::decode::<Octet_string_3>(&Uper::encode(Octet_string_3(vec![33,77])).unwrap())
+            vec![33, 77],
+            Uper::decode::<OctetString3>(&Uper::encode(OctetString3(vec![33, 77])).unwrap())
                 .unwrap()
                 .0
         );
         assert_eq!(
             vec![22],
-            Uper::decode::<Octet_string_4>(&Uper::encode(Octet_string_4(vec![22])).unwrap())
+            Uper::decode::<OctetString4>(&Uper::encode(OctetString4(vec![22])).unwrap())
                 .unwrap()
                 .0
         );
         assert_eq!(
             vec![22],
-            Uper::decode::<Octet_string_5>(&Uper::encode(Octet_string_5(vec![22])).unwrap())
+            Uper::decode::<OctetString5>(&Uper::encode(OctetString5(vec![22])).unwrap())
                 .unwrap()
                 .0
         );
         assert_eq!(
-            vec![33,44],
-            Uper::decode::<Octet_string_5>(&Uper::encode(Octet_string_5(vec![33,44])).unwrap())
+            vec![33, 44],
+            Uper::decode::<OctetString5>(&Uper::encode(OctetString5(vec![33, 44])).unwrap())
                 .unwrap()
                 .0
         );
@@ -238,32 +267,32 @@ mod tests {
 
         assert_eq!(
             "Hello",
-            &Uper::decode::<String_1>(&Uper::encode(String_1("Hello".into())).unwrap())
+            &Uper::decode::<String1>(&Uper::encode(String1("Hello".into())).unwrap())
                 .unwrap()
                 .0
         );
         assert_eq!(
             "WRLD",
-            &Uper::decode::<String_2>(&Uper::encode(String_2("WRLD".into())).unwrap())
+            &Uper::decode::<String2>(&Uper::encode(String2("WRLD".into())).unwrap())
                 .unwrap()
                 .0
         );
         assert_eq!(
             "Hello, World!",
-            &Uper::decode::<String_3>(&Uper::encode(String_3("Hello, World!".into())).unwrap())
+            &Uper::decode::<String3>(&Uper::encode(String3("Hello, World!".into())).unwrap())
                 .unwrap()
                 .0
         );
         assert_eq!(
             "Hello, ASN1!",
-            &Uper::decode::<String_4>(&Uper::encode(String_4("Hello, ASN1!".into())).unwrap())
+            &Uper::decode::<String4>(&Uper::encode(String4("Hello, ASN1!".into())).unwrap())
                 .unwrap()
                 .0
         );
         assert_eq!(
             "Hello, Abstract Syntax Notation 1!",
-            &Uper::decode::<String_5>(
-                &Uper::encode(String_5("Hello, Abstract Syntax Notation 1!".into())).unwrap()
+            &Uper::decode::<String5>(
+                &Uper::encode(String5("Hello, Abstract Syntax Notation 1!".into())).unwrap()
             )
             .unwrap()
             .0
@@ -284,16 +313,16 @@ mod tests {
 
         assert_eq!(
             vec![Member(true)],
-            Uper::decode::<Sequence_of_1>(
-                &Uper::encode(Sequence_of_1(vec![Member(true)])).unwrap()
+            Uper::decode::<SequenceOf1>(
+                &Uper::encode(SequenceOf1(vec![Member(true)])).unwrap()
             )
             .unwrap()
             .0
         );
         assert_eq!(
             vec![Member(true), Member(true), Member(false), Member(true)],
-            Uper::decode::<Sequence_of_2>(
-                &Uper::encode(Sequence_of_2(vec![
+            Uper::decode::<SequenceOf2>(
+                &Uper::encode(SequenceOf2(vec![
                     Member(true),
                     Member(true),
                     Member(false),
@@ -306,23 +335,23 @@ mod tests {
         );
         assert_eq!(
             vec![Member(true)],
-            Uper::decode::<Sequence_of_3>(
-                &Uper::encode(Sequence_of_3(vec![Member(true)])).unwrap()
+            Uper::decode::<SequenceOf3>(
+                &Uper::encode(SequenceOf3(vec![Member(true)])).unwrap()
             )
             .unwrap()
             .0
         );
         assert_eq!(
             vec![Member(true)],
-            Uper::decode::<Sequence_of_4>(
-                &Uper::encode(Sequence_of_4(vec![Member(true)])).unwrap()
+            Uper::decode::<SequenceOf4>(
+                &Uper::encode(SequenceOf4(vec![Member(true)])).unwrap()
             )
             .unwrap()
             .0
         );
         assert_eq!(
             Vec::<Member>::new(),
-            Uper::decode::<Sequence_of_5>(&Uper::encode(Sequence_of_5(vec![])).unwrap())
+            Uper::decode::<SequenceOf5>(&Uper::encode(SequenceOf5(vec![])).unwrap())
                 .unwrap()
                 .0
         );
@@ -364,167 +393,206 @@ mod tests {
         );
 
         assert_eq!(
-            Seq_1 {
-                member1: Member_1(true)  
+            Seq1 {
+                member1: Member1(true)
             },
-            Uper::decode::<Seq_1>(
-                &Uper::encode(Seq_1 {
-                    member1: Member_1(true)
-                }).unwrap()
+            Uper::decode::<Seq1>(
+                &Uper::encode(Seq1 {
+                    member1: Member1(true)
+                })
+                .unwrap()
             )
             .unwrap()
         );
 
         assert_eq!(
-            Seq_2 {
-                member1: Member_1(true),
+            Seq2 {
+                member1: Member1(true),
                 ext1: None,
             },
-            Uper::decode::<Seq_2>(
-                &Uper::encode(Seq_2 {
-                    member1: Member_1(true),
+            Uper::decode::<Seq2>(
+                &Uper::encode(Seq2 {
+                    member1: Member1(true),
                     ext1: None,
-                }).unwrap()
+                })
+                .unwrap()
             )
             .unwrap()
         );
 
         assert_eq!(
-            Seq_2 {
-                member1: Member_1(true),
-                ext1: Some(Member_2(1)),
+            Seq2 {
+                member1: Member1(true),
+                ext1: Some(Member2(1)),
             },
-            Uper::decode::<Seq_2>(
-                &Uper::encode(Seq_2 {
-                    member1: Member_1(true),
-                    ext1: Some(Member_2(1)),
-                }).unwrap()
+            Uper::decode::<Seq2>(
+                &Uper::encode(Seq2 {
+                    member1: Member1(true),
+                    ext1: Some(Member2(1)),
+                })
+                .unwrap()
             )
             .unwrap()
         );
 
         assert_eq!(
-            Seq_3 {
+            Seq3 {
                 member1: None,
-                member2: Some(Member_2(1)),
+                member2: Some(Member2(1)),
                 member3: None,
-                member4: Some(Member_4(vec![false]))
+                member4: Some(Member4(vec![false]))
             },
-            Uper::decode::<Seq_3>(
-                &Uper::encode(Seq_3 {
+            Uper::decode::<Seq3>(
+                &Uper::encode(Seq3 {
                     member1: None,
-                    member2: Some(Member_2(1)),
+                    member2: Some(Member2(1)),
                     member3: None,
-                    member4: Some(Member_4(vec![false]))
-                }).unwrap()
+                    member4: Some(Member4(vec![false]))
+                })
+                .unwrap()
             )
             .unwrap()
         );
 
         assert_eq!(
-            Seq_3 {
-                member1: Some(Member_1(false)),
-                member2: Some(Member_2(1)),
-                member3: Some(Member_3(vec![Member_1(true)])),
-                member4: Some(Member_4(vec![false]))
+            Seq3 {
+                member1: Some(Member1(false)),
+                member2: Some(Member2(1)),
+                member3: Some(Member3(vec![Member1(true)])),
+                member4: Some(Member4(vec![false]))
             },
-            Uper::decode::<Seq_3>(
-                &Uper::encode(Seq_3 {
-                    member1: Some(Member_1(false)),
-                    member2: Some(Member_2(1)),
-                    member3: Some(Member_3(vec![Member_1(true)])),
-                    member4: Some(Member_4(vec![false]))
-                }).unwrap()
+            Uper::decode::<Seq3>(
+                &Uper::encode(Seq3 {
+                    member1: Some(Member1(false)),
+                    member2: Some(Member2(1)),
+                    member3: Some(Member3(vec![Member1(true)])),
+                    member4: Some(Member4(vec![false]))
+                })
+                .unwrap()
             )
             .unwrap()
         );
 
         assert_eq!(
-            Seq_3 {
+            Seq3 {
                 member1: None,
                 member2: None,
                 member3: None,
                 member4: None,
             },
-            Uper::decode::<Seq_3>(
-                &Uper::encode(Seq_3 {
+            Uper::decode::<Seq3>(
+                &Uper::encode(Seq3 {
                     member1: None,
                     member2: None,
                     member3: None,
                     member4: None,
-                }).unwrap()
+                })
+                .unwrap()
             )
             .unwrap()
         );
 
         assert_eq!(
-            Seq_4 {
+            Seq4 {
                 member1: None,
-                member2: Some(Member_2(1)),
+                member2: Some(Member2(1)),
                 member3: None,
-                ext1: Some(Member_4(vec![false]))
+                ext1: Some(Member4(vec![false]))
             },
-            Uper::decode::<Seq_4>(
-                &Uper::encode(Seq_4 {
+            Uper::decode::<Seq4>(
+                &Uper::encode(Seq4 {
                     member1: None,
-                    member2: Some(Member_2(1)),
+                    member2: Some(Member2(1)),
                     member3: None,
-                    ext1: Some(Member_4(vec![false]))
-                }).unwrap()
+                    ext1: Some(Member4(vec![false]))
+                })
+                .unwrap()
             )
             .unwrap()
         );
 
         assert_eq!(
-            Seq_4 {
-                member1: Some(Member_1(false)),
-                member2: Some(Member_2(1)),
-                member3: Some(Member_3(vec![Member_1(true)])),
-                ext1: Some(Member_4(vec![false]))
+            Seq4 {
+                member1: Some(Member1(false)),
+                member2: Some(Member2(1)),
+                member3: Some(Member3(vec![Member1(true)])),
+                ext1: Some(Member4(vec![false]))
             },
-            Uper::decode::<Seq_4>(
-                &Uper::encode(Seq_4 {
-                    member1: Some(Member_1(false)),
-                    member2: Some(Member_2(1)),
-                    member3: Some(Member_3(vec![Member_1(true)])),
-                    ext1: Some(Member_4(vec![false]))
-                }).unwrap()
+            Uper::decode::<Seq4>(
+                &Uper::encode(Seq4 {
+                    member1: Some(Member1(false)),
+                    member2: Some(Member2(1)),
+                    member3: Some(Member3(vec![Member1(true)])),
+                    ext1: Some(Member4(vec![false]))
+                })
+                .unwrap()
             )
             .unwrap()
         );
 
         assert_eq!(
-            Seq_4 {
-                member1: Some(Member_1(false)),
-                member2: Some(Member_2(1)),
-                member3: Some(Member_3(vec![Member_1(true)])),
+            Seq4 {
+                member1: Some(Member1(false)),
+                member2: Some(Member2(1)),
+                member3: Some(Member3(vec![Member1(true)])),
                 ext1: None
             },
-            Uper::decode::<Seq_4>(
-                &Uper::encode(Seq_4 {
-                    member1: Some(Member_1(false)),
-                    member2: Some(Member_2(1)),
-                    member3: Some(Member_3(vec![Member_1(true)])),
+            Uper::decode::<Seq4>(
+                &Uper::encode(Seq4 {
+                    member1: Some(Member1(false)),
+                    member2: Some(Member2(1)),
+                    member3: Some(Member3(vec![Member1(true)])),
                     ext1: None
-                }).unwrap()
+                })
+                .unwrap()
             )
             .unwrap()
         );
 
         assert_eq!(
-            Seq_4 {
+            Seq4 {
                 member1: None,
                 member2: None,
                 member3: None,
                 ext1: None,
             },
-            Uper::decode::<Seq_4>(
-                &Uper::encode(Seq_4 {
+            Uper::decode::<Seq4>(
+                &Uper::encode(Seq4 {
                     member1: None,
                     member2: None,
                     member3: None,
                     ext1: None,
-                }).unwrap()
+                })
+                .unwrap()
+            )
+            .unwrap()
+        );
+    }
+
+    #[test]
+    fn en_decodes_readme_example() {
+        asn1_internal_tests!(
+            r#"ExampleSequence ::= SEQUENCE {
+            member-1 IA5String (SIZE (1..24)),
+            member-2 INTEGER (0..15),
+            ...,
+            extension BOOLEAN OPTIONAL
+          }"#
+        );
+
+        assert_eq!(
+            ExampleSequence {
+                member_1: InnerExampleSequenceMember1("Hello, World!".into()),
+                member_2: InnerExampleSequenceMember2(8),
+                extension: None
+            },
+            Uper::decode::<ExampleSequence>(
+                &Uper::encode(ExampleSequence {
+                    member_1: InnerExampleSequenceMember1("Hello, World!".into()),
+                    member_2: InnerExampleSequenceMember2(8),
+                    extension: None
+                })
+                .unwrap()
             )
             .unwrap()
         );

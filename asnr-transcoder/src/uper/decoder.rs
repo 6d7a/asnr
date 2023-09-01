@@ -994,8 +994,8 @@ mod tests {
             .unwrap()
             .1,
             TestSequence {
-                item_code: TestSequence_item_code(27),
-                item_name: Some(TestSequence_item_name("SHERRY".into())),
+                item_code: InnerTestSequenceItemcode(27),
+                item_name: Some(InnerTestSequenceItemname("SHERRY".into())),
                 urgency: None
             }
         );
@@ -1030,9 +1030,9 @@ mod tests {
             .unwrap()
             .1,
             TestSequence {
-                item_code: TestSequence_item_code(27),
-                item_name: Some(TestSequence_item_name("SHERRY".into())),
-                urgency: Some(TestSequence_urgency::high),
+                item_code: InnerTestSequenceItemcode(27),
+                item_name: Some(InnerTestSequenceItemname("SHERRY".into())),
+                urgency: Some(InnerTestSequenceUrgency::High),
             }
         );
     }
@@ -1043,18 +1043,18 @@ mod tests {
             "Choice-example ::= CHOICE {normal NULL, high NULL, ..., medium NULL }"
         );
         assert_eq!(
-            Choice_example::decode::<Uper>(BSlice::from(bits![static u8, Msb0; 0,0]))
+            ChoiceExample::decode::<Uper>(BSlice::from(bits![static u8, Msb0; 0,0]))
                 .unwrap()
                 .1,
-            Choice_example::normal(Choice_example_normal)
+            ChoiceExample::Normal(InnerChoiceExampleNormal)
         );
         assert_eq!(
-            Choice_example::decode::<Uper>(BSlice::from(
+            ChoiceExample::decode::<Uper>(BSlice::from(
                 bits![static u8, Msb0; 1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0]
             ))
             .unwrap()
             .1,
-            Choice_example::medium(Choice_example_medium)
+            ChoiceExample::Medium(InnerChoiceExampleMedium)
         )
     }
 
@@ -1272,60 +1272,60 @@ mod tests {
 
     #[test]
     fn decodes_sequence_of_with_definite_size() {
-        asn1_internal_tests!(r#"Sequence-of ::= SEQUENCE (SIZE(3)) OF INTEGER(1..3)"#);
+        asn1_internal_tests!(r#"Test-Sequence-of ::= SEQUENCE (SIZE(3)) OF INTEGER(1..3)"#);
         assert_eq!(
-            Sequence_of::decode::<Uper>(BSlice::from(bits![static u8, Msb0; 0,0,0,1,1,0]))
+            TestSequenceOf::decode::<Uper>(BSlice::from(bits![static u8, Msb0; 0,0,0,1,1,0]))
                 .unwrap()
                 .1,
-            Sequence_of(vec![
-                Anonymous_Sequence_of(1),
-                Anonymous_Sequence_of(2),
-                Anonymous_Sequence_of(3)
+            TestSequenceOf(vec![
+                AnonymousTestSequenceOf(1),
+                AnonymousTestSequenceOf(2),
+                AnonymousTestSequenceOf(3)
             ])
         );
     }
 
     #[test]
     fn decodes_sequence_of_with_range_size() {
-        asn1_internal_tests!(r#"Sequence-of ::= SEQUENCE (SIZE(1..2)) OF INTEGER(1..3)"#);
+        asn1_internal_tests!(r#"Test-Sequence-of ::= SEQUENCE (SIZE(1..2)) OF INTEGER(1..3)"#);
         assert_eq!(
-            Sequence_of::decode::<Uper>(BSlice::from(bits![u8, Msb0; 1,0,0,0,1]))
+            TestSequenceOf::decode::<Uper>(BSlice::from(bits![u8, Msb0; 1,0,0,0,1]))
                 .unwrap()
                 .1,
-            Sequence_of(vec![Anonymous_Sequence_of(1), Anonymous_Sequence_of(2)]),
+            TestSequenceOf(vec![AnonymousTestSequenceOf(1), AnonymousTestSequenceOf(2)]),
         );
     }
 
     #[test]
     fn decodes_sequence_of_with_extended_range_size() {
-        asn1_internal_tests!(r#"Sequence-of ::= SEQUENCE (SIZE(1..2,...)) OF INTEGER(1..3)"#);
+        asn1_internal_tests!(r#"Test-Sequence-of ::= SEQUENCE (SIZE(1..2,...)) OF INTEGER(1..3)"#);
         assert_eq!(
-            Sequence_of::decode::<Uper>(BSlice::from(
+            TestSequenceOf::decode::<Uper>(BSlice::from(
                 bits![u8, Msb0; 1, 0,0,0,0,0,0,1,1, 0,0, 0,1, 1,0]
             ))
             .unwrap()
             .1,
-            Sequence_of(vec![
-                Anonymous_Sequence_of(1),
-                Anonymous_Sequence_of(2),
-                Anonymous_Sequence_of(3)
+            TestSequenceOf(vec![
+                AnonymousTestSequenceOf(1),
+                AnonymousTestSequenceOf(2),
+                AnonymousTestSequenceOf(3)
             ])
         );
     }
 
     #[test]
     fn decodes_sequence_of_with_unrestricted_size() {
-        asn1_internal_tests!(r#"Sequence-of ::= SEQUENCE OF INTEGER(1..3)"#);
+        asn1_internal_tests!(r#"Test-Sequence-of ::= SEQUENCE OF INTEGER(1..3)"#);
         assert_eq!(
-            Sequence_of::decode::<Uper>(BSlice::from(
+            TestSequenceOf::decode::<Uper>(BSlice::from(
                 bits![u8, Msb0; 0,0,0,0,0,0,1,1, 0,0, 0,1, 1,0]
             ))
             .unwrap()
             .1,
-            Sequence_of(vec![
-                Anonymous_Sequence_of(1),
-                Anonymous_Sequence_of(2),
-                Anonymous_Sequence_of(3)
+            TestSequenceOf(vec![
+                AnonymousTestSequenceOf(1),
+                AnonymousTestSequenceOf(2),
+                AnonymousTestSequenceOf(3)
             ]),
         );
     }

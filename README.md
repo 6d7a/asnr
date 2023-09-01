@@ -1,6 +1,4 @@
 # ASNR
-_Disclaimer: This is a pet project and heavy WIP. I advise looking into [`rasn`](https://github.com/XAMPPRocky/rasn) for something more mature._
-
 ASNR - an ASN1 compiler for Rust that makes your skin tingle.
 
 ### Motivation
@@ -20,17 +18,52 @@ use std::path::PathBuf;
 use asnr_compiler::Asnr;
 
 fn main() {
-  match Asnr::compiler()                                    // Initialize the compiler
-    .add_asn_source(PathBuf::from("spec_1.asn"))            // add a single ASN1 source file
-    .add_asn_sources(vec![                                  // add several ASN1 source files
+  // Initialize the compiler
+  match Asnr::new()
+    // add a single ASN1 source file
+    .add_asn_by_path(PathBuf::from("spec_1.asn"))
+    // add several ASN1 source files
+    .add_asn_sources_by_path(vec![
         PathBuf::from("spec_2.asn"),
         PathBuf::from("spec_3.asn"),
-    ])
-    .set_output_path(PathBuf::from("./asn/generated.rs"))   // Set an output path for the generated rust code
+    ].iter())
+    // set an output path for the generated rust code
+    .set_output_path(PathBuf::from("./asn/generated.rs"))
+    // you may also compile literal ASN1 snippets
+    .add_asn_literal("My-test-integer ::= INTEGER (1..128)")
+    // optionally choose to support `no_std`
+    .no_std(true)
     .compile() {
-    Ok(warnings: Vec<Box<dyn Error>>) -> { /* handle compilation warnings */ }
-    Err(error: Box<dyn Error>) -> { /* handle unrecoverable compilation error */ }
+    Ok(warnings /* Vec<Box<dyn Error>> */) => { /* handle compilation warnings */ }
+    Err(error /* Box<dyn Error> */) => { /* handle unrecoverable compilation error */ }
   }
+}
+```
+
+See also the `asnr-compiler-derive` crate, that provides shorthand macros for inline ASN1 support.
+```rust
+use asnr_compiler_derive::asn1;
+
+asn1! { 
+  r#"
+    HashAlgorithm ::= ENUMERATED { 
+      sha256,
+      ...,
+      sha384
+    }
+  "#
+}
+
+// or
+
+asn1_no_std! {
+  r#"
+    ServiceSpecificPermissions ::= CHOICE {
+      opaque    OCTET STRING (SIZE(0..MAX)),
+      ...,
+      extension BOOLEAN DEFAULT TRUE
+    }
+  "#
 }
 ```
 
@@ -46,3 +79,34 @@ that choice has led to a lot of boxing and unboxing, but I hope to find a more e
 in the future. The advantage of this design is that authors of custom encoders and decoders have
 pretty much all of the information concerning the data element as it's specified in an 
 ASN1 specification, including constraints, even comments up to a certain degree. 
+
+## Usage
+Let's consider the following ASN1 Sequence:
+```asn1
+ExampleSequence ::= SEQUENCE {
+  member-1 IA5String (SIZE (1..24)),
+  member-2 INTEGER (0..15),
+  ...,
+  extension BOOLEAN OPTIONAL
+}
+```
+
+```rust
+use asnr_transcoder::uper::Uper;
+/// import your generated ASN1 representations
+use my_asn_spec::*;
+
+fn decode_example_sequence(binary: &[u8]) -> ExampleSequence {
+  Uper::decode(binary).unwrap()
+}
+
+fn encode_example_sequence() -> Vec<u8> {
+  let example_sequence = ExampleSequence {
+    // ASN1-built-in types are represented as new types within SEQUENCEs
+    member_1: InnerExampleSequenceMember1("Hello, World!".into()),
+    member_2: InnerExampleSequenceMember2(8),
+    extension: None
+  };
+  Uper::encode(example_sequence).unwrap()
+}
+```

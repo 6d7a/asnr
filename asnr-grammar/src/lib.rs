@@ -744,7 +744,7 @@ impl ASN1Type {
 impl ToString for ASN1Type {
     fn to_string(&self) -> String {
         match self {
-            ASN1Type::Null => "ASN1_NULL".to_owned(),
+            ASN1Type::Null => "Asn1Null".to_owned(),
             ASN1Type::Boolean => "bool".to_owned(),
             ASN1Type::Integer(i) => i.type_token(),
             ASN1Type::Real(_) => "f64".to_owned(),
@@ -1008,8 +1008,8 @@ impl ASN1Value {
 
     pub fn value_as_string(&self, type_name: Option<&str>) -> Result<String, GrammarError> {
         match self {
-            ASN1Value::All => Ok("ASN1_ALL".to_owned()),
-            ASN1Value::Null => Ok("ASN1_NULL".to_owned()),
+            ASN1Value::All => Ok("Asn1All".to_owned()),
+            ASN1Value::Null => Ok("Asn1Null".to_owned()),
             ASN1Value::Choice(i, v) => {
                 if let Some(ty_n) = type_name {
                     Ok(format!("{ty_n}::{i}({})", v.value_as_string(None)?))

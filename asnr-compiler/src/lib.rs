@@ -14,13 +14,21 @@
 //! use asnr_compiler::Asnr;
 //!
 //! fn main() {
-//!   match Asnr::compiler()                                    // Initialize the compiler
-//!     .add_asn_by_path(PathBuf::from("spec_1.asn"))            // add a single ASN1 source file
-//!     .add_asn_sources_by_path(vec![                                  // add several ASN1 source files
+//!   // Initialize the compiler
+//!   match Asnr::new()
+//!     // add a single ASN1 source file
+//!     .add_asn_by_path(PathBuf::from("spec_1.asn"))
+//!     // add several ASN1 source files
+//!     .add_asn_sources_by_path(vec![
 //!         PathBuf::from("spec_2.asn"),
 //!         PathBuf::from("spec_3.asn"),
-//!     ])
-//!     .set_output_path(PathBuf::from("./asn/generated.rs"))   // Set an output path for the generated rust code
+//!     ].iter())
+//!     // set an output path for the generated rust code
+//!     .set_output_path(PathBuf::from("./asn/generated.rs"))
+//!     // you may also compile literal ASN1 snippets
+//!     .add_asn_literal("My-test-integer ::= INTEGER (1..128)")
+//!     // optionally choose to support `no_std`
+//!     .no_std(true)
 //!     .compile() {
 //!     Ok(warnings /* Vec<Box<dyn Error>> */) => { /* handle compilation warnings */ }
 //!     Err(error /* Box<dyn Error> */) => { /* handle unrecoverable compilation error */ }
@@ -30,14 +38,16 @@
 mod generator;
 mod parser;
 mod validator;
+pub(crate) mod utils;
 
 use std::{
-    env::{self, var},
+    env::{self},
     error::Error,
     fs::{self, read_to_string},
     io::{self, Write},
     path::PathBuf,
     process::{Command, Stdio},
+    vec,
 };
 
 use asnr_grammar::ToplevelDeclaration;
@@ -47,9 +57,46 @@ use validator::Validator;
 
 /// The ASNR compiler
 #[derive(Debug, PartialEq)]
-pub struct Asnr {
-    sources: Vec<PathBuf>,
+pub struct Asnr<S: AsnrState> {
+    state: S,
 }
+
+/// Typestate representing compiler with missing parameters
+pub struct AsnrMissingParams {
+    no_std: bool,
+}
+
+impl Default for AsnrMissingParams {
+    fn default() -> Self {
+        Self { no_std: false }
+    }
+}
+
+/// Typestate representing compiler that is ready to compile
+pub struct AsnrCompileReady {
+    sources: Vec<AsnSource>,
+    output_path: PathBuf,
+    no_std: bool,
+}
+
+/// Typestate representing compiler that has the output path set, but is missing ASN1 sources
+pub struct AsnrOutputSet {
+    output_path: PathBuf,
+    no_std: bool,
+}
+
+/// Typestate representing compiler that knows about ASN1 sources, but doesn't have an output path set
+pub struct AsnrSourcesSet {
+    sources: Vec<AsnSource>,
+    no_std: bool,
+}
+
+/// State of the Asnr compiler
+pub trait AsnrState {}
+impl AsnrState for AsnrCompileReady {}
+impl AsnrState for AsnrOutputSet {}
+impl AsnrState for AsnrSourcesSet {}
+impl AsnrState for AsnrMissingParams {}
 
 #[derive(Debug, PartialEq)]
 enum AsnSource {
@@ -57,97 +104,214 @@ enum AsnSource {
     Literal(String),
 }
 
-impl Asnr {
+impl Asnr<AsnrMissingParams> {
     /// Provides a Builder for building ASNR compiler commands
-    pub fn compiler() -> AsnrCompiler {
-        AsnrCompiler::default()
-    }
-}
-
-#[derive(Default)]
-pub struct AsnrCompiler {
-    sources: Vec<AsnSource>,
-    output_path: PathBuf,
-    no_std: bool,
-}
-
-impl From<Vec<PathBuf>> for AsnrCompiler {
-    fn from(value: Vec<PathBuf>) -> Self {
-        AsnrCompiler {
-            sources: value.into_iter().map(|p| AsnSource::Path(p)).collect(),
-            output_path: default_output_dir(),
-            no_std: false,
+    pub fn new() -> Asnr<AsnrMissingParams> {
+        Asnr {
+            state: AsnrMissingParams::default(),
         }
     }
-}
 
-impl From<PathBuf> for AsnrCompiler {
-    fn from(value: PathBuf) -> Self {
-        AsnrCompiler {
-            sources: vec![AsnSource::Path(value)],
-            output_path: default_output_dir(),
-            no_std: false,
-        }
-    }
-}
-
-impl From<&str> for AsnrCompiler {
-    fn from(value: &str) -> Self {
-        AsnrCompiler {
-            sources: vec![AsnSource::Literal(value.into())],
-            output_path: default_output_dir(),
-            no_std: false,
-        }
-    }
-}
-
-impl AsnrCompiler {
     /// Add an ASN1 source to the compile command by path
     /// * `path_to_source` - path to ASN1 file to include
-    pub fn add_asn_by_path(mut self, path_to_source: PathBuf) -> AsnrCompiler {
-        self.sources.push(AsnSource::Path(path_to_source));
-        self
+    pub fn add_asn_by_path(self, path_to_source: impl Into<PathBuf>) -> Asnr<AsnrSourcesSet> {
+        Asnr {
+            state: AsnrSourcesSet {
+                sources: vec![AsnSource::Path(path_to_source.into())],
+                no_std: self.state.no_std,
+            },
+        }
+    }
+
+    /// Generate Rust representations compatible with an environment without the standard library
+    /// * `is_supporting` - whether the generated Rust should comply with no_std
+    pub fn no_std(self, is_supporting: bool) -> Self {
+        Self {
+            state: AsnrMissingParams {
+                no_std: is_supporting,
+            },
+        }
     }
 
     /// Add several ASN1 sources by path to the compile command
-    /// * `path_to_source` - vector of paths to the ASN1 files to be included
-    pub fn add_asn_sources_by_path(mut self, paths_to_sources: Vec<PathBuf>) -> AsnrCompiler {
-        self.sources
-            .extend(paths_to_sources.into_iter().map(|p| AsnSource::Path(p)));
-        self
+    /// * `path_to_source` - iterator of paths to the ASN1 files to be included
+    pub fn add_asn_sources_by_path(
+        self,
+        paths_to_sources: impl Iterator<Item = impl Into<PathBuf>>,
+    ) -> Asnr<AsnrSourcesSet> {
+        Asnr {
+            state: AsnrSourcesSet {
+                sources: paths_to_sources
+                    .map(|p| AsnSource::Path(p.into()))
+                    .collect(),
+                no_std: self.state.no_std,
+            },
+        }
     }
 
     /// Add a literal ASN1 source to the compile command
     /// * `literal` - literal ASN1 statement to include
     /// ```rust
     /// # use asnr_compiler::Asnr;
-    /// Asnr::compiler().add_asn_literal("My-test-integer ::= INTEGER (1..128)").compile_to_string();
+    /// Asnr::new().add_asn_literal("My-test-integer ::= INTEGER (1..128)").compile_to_string();
     /// ```
-    pub fn add_asn_literal(mut self, literal: &str) -> AsnrCompiler {
-        self.sources.push(AsnSource::Literal(literal.into()));
-        self
+    pub fn add_asn_literal(self, literal: impl Into<String>) -> Asnr<AsnrSourcesSet> {
+        Asnr {
+            state: AsnrSourcesSet {
+                sources: vec![AsnSource::Literal(literal.into())],
+                no_std: self.state.no_std,
+            },
+        }
+    }
+
+    /// Set the output path for the generated rust representation.
+    /// * `output_path` - path to an output file or directory, if path indicates
+    ///                   a directory, the output file is named `asnr_generated.rs`
+    pub fn set_output_path(self, output_path: impl Into<PathBuf>) -> Asnr<AsnrOutputSet> {
+        let mut path: PathBuf = output_path.into();
+        if path.is_dir() {
+            path.set_file_name("asnr_generated.rs");
+        }
+        Asnr {
+            state: AsnrOutputSet {
+                output_path: path,
+                no_std: self.state.no_std,
+            },
+        }
+    }
+}
+
+impl Asnr<AsnrOutputSet> {
+    /// Add an ASN1 source to the compile command by path
+    /// * `path_to_source` - path to ASN1 file to include
+    pub fn add_asn_by_path(self, path_to_source: impl Into<PathBuf>) -> Asnr<AsnrCompileReady> {
+        Asnr {
+            state: AsnrCompileReady {
+                sources: vec![AsnSource::Path(path_to_source.into())],
+                no_std: self.state.no_std,
+                output_path: self.state.output_path,
+            },
+        }
     }
 
     /// Generate Rust representations compatible with an environment without the standard library
     /// * `is_supporting` - whether the generated Rust should comply with no_std
-    pub fn no_std(mut self, is_supporting: bool) -> AsnrCompiler {
-        self.no_std = is_supporting;
-        self
+    pub fn no_std(self, is_supporting: bool) -> Self {
+        Self {
+            state: AsnrOutputSet {
+                output_path: self.state.output_path,
+                no_std: is_supporting,
+            },
+        }
+    }
+
+    /// Add several ASN1 sources by path to the compile command
+    /// * `path_to_source` - iterator of paths to the ASN1 files to be included
+    pub fn add_asn_sources_by_path(
+        self,
+        paths_to_sources: impl Iterator<Item = impl Into<PathBuf>>,
+    ) -> Asnr<AsnrCompileReady> {
+        Asnr {
+            state: AsnrCompileReady {
+                sources: paths_to_sources
+                    .map(|p| AsnSource::Path(p.into()))
+                    .collect(),
+                no_std: self.state.no_std,
+                output_path: self.state.output_path,
+            },
+        }
+    }
+
+    /// Add a literal ASN1 source to the compile command
+    /// * `literal` - literal ASN1 statement to include
+    /// ```rust
+    /// # use asnr_compiler::Asnr;
+    /// Asnr::new().add_asn_literal("My-test-integer ::= INTEGER (1..128)").compile_to_string();
+    /// ```
+    pub fn add_asn_literal(self, literal: impl Into<String>) -> Asnr<AsnrCompileReady> {
+        Asnr {
+            state: AsnrCompileReady {
+                sources: vec![AsnSource::Literal(literal.into())],
+                no_std: self.state.no_std,
+                output_path: self.state.output_path,
+            },
+        }
+    }
+}
+
+impl Asnr<AsnrSourcesSet> {
+    /// Add an ASN1 source to the compile command by path
+    /// * `path_to_source` - path to ASN1 file to include
+    pub fn add_asn_by_path(self, path_to_source: impl Into<PathBuf>) -> Asnr<AsnrSourcesSet> {
+        let mut sources: Vec<AsnSource> = self.state.sources;
+        sources.push(AsnSource::Path(path_to_source.into()));
+        Asnr {
+            state: AsnrSourcesSet {
+                sources,
+                no_std: self.state.no_std,
+            },
+        }
+    }
+
+    /// Generate Rust representations compatible with an environment without the standard library
+    /// * `is_supporting` - whether the generated Rust should comply with no_std
+    pub fn no_std(self, is_supporting: bool) -> Asnr<AsnrSourcesSet> {
+        Self {
+            state: AsnrSourcesSet {
+                sources: self.state.sources,
+                no_std: is_supporting,
+            },
+        }
+    }
+
+    /// Add several ASN1 sources by path to the compile command
+    /// * `path_to_source` - iterator of paths to the ASN1 files to be included
+    pub fn add_asn_sources_by_path(
+        self,
+        paths_to_sources: impl Iterator<Item = impl Into<PathBuf>>,
+    ) -> Asnr<AsnrSourcesSet> {
+        let mut sources: Vec<AsnSource> = self.state.sources;
+        sources.extend(paths_to_sources.map(|p| AsnSource::Path(p.into())));
+        Asnr {
+            state: AsnrSourcesSet {
+                sources,
+                no_std: self.state.no_std,
+            },
+        }
+    }
+
+    /// Add a literal ASN1 source to the compile command
+    /// * `literal` - literal ASN1 statement to include
+    /// ```rust
+    /// # use asnr_compiler::Asnr;
+    /// Asnr::new().add_asn_literal("My-test-integer ::= INTEGER (1..128)").compile_to_string();
+    /// ```
+    pub fn add_asn_literal(self, literal: impl Into<String>) -> Asnr<AsnrSourcesSet> {
+        let mut sources: Vec<AsnSource> = self.state.sources;
+        sources.push(AsnSource::Literal(literal.into()));
+        Asnr {
+            state: AsnrSourcesSet {
+                sources,
+                no_std: self.state.no_std,
+            },
+        }
     }
 
     /// Set the output path for the generated rust representation.
-    /// The ASNR's output directory defaults in sequence to env(`OUT_DIR`),
-    /// std::env::current_dir(), and "."
     /// * `output_path` - path to an output file or directory, if path indicates
     ///                   a directory, the output file is named `asnr_generated.rs`
-    pub fn set_output_path(mut self, mut output_path: PathBuf) -> AsnrCompiler {
-        self.output_path = if output_path.is_dir() {
-            output_path.set_file_name("asnr_generated.rs");
-            output_path
-        } else {
-            output_path
-        };
-        self
+    pub fn set_output_path(self, output_path: impl Into<PathBuf>) -> Asnr<AsnrCompileReady> {
+        let mut path: PathBuf = output_path.into();
+        if path.is_dir() {
+            path.set_file_name("asnr_generated.rs");
+        }
+        Asnr {
+            state: AsnrCompileReady {
+                sources: self.state.sources,
+                output_path: path,
+                no_std: self.state.no_std,
+            },
+        }
     }
 
     /// Runs the ASNR compiler command and returns stringified Rust.
@@ -155,48 +319,83 @@ impl AsnrCompiler {
     /// * _Ok_  - tuple containing the stringified Rust representation of the ASN1 spec as well as a vector of warnings raised during the compilation
     /// * _Err_ - Unrecoverable error, no rust representations were generated
     pub fn compile_to_string(self) -> Result<(String, Vec<Box<dyn Error>>), Box<dyn Error>> {
-        self.internal_compile(false)
+        internal_compile(&self, false)
+    }
+}
+
+impl Asnr<AsnrCompileReady> {
+    /// Add an ASN1 source to the compile command by path
+    /// * `path_to_source` - path to ASN1 file to include
+    pub fn add_asn_by_path(self, path_to_source: impl Into<PathBuf>) -> Asnr<AsnrCompileReady> {
+        let mut sources: Vec<AsnSource> = self.state.sources;
+        sources.push(AsnSource::Path(path_to_source.into()));
+        Asnr {
+            state: AsnrCompileReady {
+                output_path: self.state.output_path,
+                sources,
+                no_std: self.state.no_std,
+            },
+        }
     }
 
-    fn internal_compile(
-        &self,
-        include_clippy_allows: bool,
-    ) -> Result<(String, Vec<Box<dyn Error>>), Box<dyn Error>> {
-        let mut result = imports_and_generic_types(None, self.no_std, include_clippy_allows);
-        let mut warnings = Vec::<Box<dyn Error>>::new();
-        let mut modules: Vec<ToplevelDeclaration> = vec![];
-        for src in &self.sources {
-            let stringified_src = match src {
-                AsnSource::Path(p) => read_to_string(p)?,
-                AsnSource::Literal(l) => l.clone(),
-            };
-            modules.append(
-                &mut asn_spec(&stringified_src)?
-                    .into_iter()
-                    .flat_map(|(_, tld)| tld)
-                    .collect(),
-            );
-        }
-        let (valid_tlds, mut validator_errors) = Validator::new(modules).validate()?;
-        let (generated, mut generator_errors) = valid_tlds.into_iter().fold(
-            (String::new(), Vec::<Box<dyn Error>>::new()),
-            |(mut rust, mut errors), tld| {
-                match generate(tld, None) {
-                    Ok(r) => {
-                        rust = rust + &r + "\n";
-                    }
-                    Err(e) => errors.push(Box::new(e)),
-                }
-                (rust, errors)
+    /// Generate Rust representations compatible with an environment without the standard library
+    /// * `is_supporting` - whether the generated Rust should comply with no_std
+    pub fn no_std(self, is_supporting: bool) -> Asnr<AsnrCompileReady> {
+        Self {
+            state: AsnrCompileReady {
+                output_path: self.state.output_path,
+                sources: self.state.sources,
+                no_std: is_supporting,
             },
-        );
-        result += &generated;
-        warnings.append(&mut validator_errors);
-        warnings.append(&mut generator_errors);
+        }
+    }
 
-        result = format_bindings(&result).unwrap_or(result);
+    /// Add several ASN1 sources by path to the compile command
+    /// * `path_to_source` - iterator of paths to the ASN1 files to be included
+    pub fn add_asn_sources_by_path(
+        self,
+        paths_to_sources: impl Iterator<Item = impl Into<PathBuf>>,
+    ) -> Asnr<AsnrCompileReady> {
+        let mut sources: Vec<AsnSource> = self.state.sources;
+        sources.extend(paths_to_sources.map(|p| AsnSource::Path(p.into())));
+        Asnr {
+            state: AsnrCompileReady {
+                sources,
+                output_path: self.state.output_path,
+                no_std: self.state.no_std,
+            },
+        }
+    }
 
-        Ok((result, warnings))
+    /// Add a literal ASN1 source to the compile command
+    /// * `literal` - literal ASN1 statement to include
+    /// ```rust
+    /// # use asnr_compiler::Asnr;
+    /// Asnr::new().add_asn_literal("My-test-integer ::= INTEGER (1..128)").compile_to_string();
+    /// ```
+    pub fn add_asn_literal(self, literal: impl Into<String>) -> Asnr<AsnrCompileReady> {
+        let mut sources: Vec<AsnSource> = self.state.sources;
+        sources.push(AsnSource::Literal(literal.into()));
+        Asnr {
+            state: AsnrCompileReady {
+                output_path: self.state.output_path,
+                sources,
+                no_std: self.state.no_std,
+            },
+        }
+    }
+
+    /// Runs the ASNR compiler command and returns stringified Rust.
+    /// Returns a Result wrapping a compilation result:
+    /// * _Ok_  - tuple containing the stringified Rust representation of the ASN1 spec as well as a vector of warnings raised during the compilation
+    /// * _Err_ - Unrecoverable error, no rust representations were generated
+    pub fn compile_to_string(self) -> Result<(String, Vec<Box<dyn Error>>), Box<dyn Error>> {
+        internal_compile(&Asnr {
+            state: AsnrSourcesSet {
+                sources: self.state.sources,
+                no_std: self.state.no_std,
+            },
+        }, false)
     }
 
     /// Runs the ASNR compiler command.
@@ -204,23 +403,61 @@ impl AsnrCompiler {
     /// * _Ok_  - Vector of warnings raised during the compilation
     /// * _Err_ - Unrecoverable error, no rust representations were generated
     pub fn compile(self) -> Result<Vec<Box<dyn Error>>, Box<dyn Error>> {
-        let (result, warnings) = self.internal_compile(true)?;
+        let (result, warnings) = internal_compile(
+            &Asnr {
+                state: AsnrSourcesSet {
+                    sources: self.state.sources,
+                    no_std: self.state.no_std,
+                },
+            },
+            true,
+        )?;
 
-        fs::write(self.output_path, result)?;
+        fs::write(self.state.output_path, result)?;
 
         Ok(warnings)
     }
 }
 
-fn default_output_dir() -> PathBuf {
-    if let Ok(p) = var("OUT_DIR") {
-        PathBuf::from(p + "/asnr_generated.rs")
-    } else if let Ok(mut d) = std::env::current_dir() {
-        d.set_file_name("asnr_generated.rs");
-        d
-    } else {
-        PathBuf::from("./asnr_generated.rs")
+fn internal_compile(
+    asnr: &Asnr<AsnrSourcesSet>,
+    include_clippy_allows: bool,
+) -> Result<(String, Vec<Box<dyn Error>>), Box<dyn Error>> {
+    let mut result = imports_and_generic_types(None, asnr.state.no_std, include_clippy_allows);
+    let mut warnings = Vec::<Box<dyn Error>>::new();
+    let mut modules: Vec<ToplevelDeclaration> = vec![];
+    for src in &asnr.state.sources {
+        let stringified_src = match src {
+            AsnSource::Path(p) => read_to_string(p)?,
+            AsnSource::Literal(l) => l.clone(),
+        };
+        modules.append(
+            &mut asn_spec(&stringified_src)?
+                .into_iter()
+                .flat_map(|(_, tld)| tld)
+                .collect(),
+        );
     }
+    let (valid_tlds, mut validator_errors) = Validator::new(modules).validate()?;
+    let (generated, mut generator_errors) = valid_tlds.into_iter().fold(
+        (String::new(), Vec::<Box<dyn Error>>::new()),
+        |(mut rust, mut errors), tld| {
+            match generate(tld, None) {
+                Ok(r) => {
+                    rust = rust + &r + "\n";
+                }
+                Err(e) => errors.push(Box::new(e)),
+            }
+            (rust, errors)
+        },
+    );
+    result += &generated;
+    warnings.append(&mut validator_errors);
+    warnings.append(&mut generator_errors);
+
+    result = format_bindings(&result).unwrap_or(result);
+
+    Ok((result, warnings))
 }
 
 fn format_bindings(bindings: &String) -> Result<String, Box<dyn Error>> {
@@ -279,11 +516,11 @@ mod tests {
     fn compiles_a_simple_spec() {
         println!(
             "{:#?}",
-            Asnr::compiler()
-                .no_std(false)
+            Asnr::new()
+                .no_std(true)
                 // .add_asn_by_path(PathBuf::from("test_asn1/AddGrpC.asn"))
                 // .add_asn_by_path(PathBuf::from("test_asn1/ETSI-ITS-CDD.asn"))
-                 .add_asn_by_path(PathBuf::from("test_asn1/REGION.asn"))
+                .add_asn_by_path(PathBuf::from("test_asn1/v2x.asn"))
                 // .add_asn_by_path(PathBuf::from("test_asn1/denm_2_0.asn"))
                 // .add_asn_by_path(PathBuf::from(
                 //     "test_asn1/CPM-OriginatingStationContainers.asn"

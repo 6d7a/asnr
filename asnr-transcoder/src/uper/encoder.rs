@@ -11,7 +11,7 @@ use crate::{
 use super::{
     bit_length,
     per_visible::{PerVisibleAlphabetConstraints, PerVisibleRangeConstraints},
-    rustify_name, AsBytesDummy, BitOut, Uper,
+    to_rust_title_case, AsBytesDummy, BitOut, Uper, to_rust_camel_case,
 };
 
 impl Encoder<u8, BitOut> for Uper {
@@ -196,7 +196,7 @@ impl Encoder<u8, BitOut> for Uper {
             .map(|(i, m)| {
                 (
                     i,
-                    rustify_name(&m.name),
+                    to_rust_camel_case(&m.name),
                     (m.is_optional || i >= sequence.extensible.unwrap_or(usize::MAX)),
                 )
             })
@@ -211,12 +211,8 @@ impl Encoder<u8, BitOut> for Uper {
             let mut skip_list: Vec<bool> = member_list
                 .iter()
                 .filter_map(|(index, _, opt)| {
-                    (*opt || index >= &index_of_first_ext.unwrap_or(usize::MAX)).then(|| {
-                        (
-                            index,
-                            !encodable.has_optional_field(*index),
-                        )
-                    })
+                    (*opt || index >= &index_of_first_ext.unwrap_or(usize::MAX))
+                        .then(|| (index, !encodable.has_optional_field(*index)))
                 })
                 .map(|(index, not_present)| {
                     if index < &index_of_first_ext.unwrap_or(usize::MAX) {
@@ -321,7 +317,7 @@ impl Encoder<u8, BitOut> for Uper {
         let mut member_ids = enumerated
             .members
             .iter()
-            .map(|m| (rustify_name(&m.name), m.index))
+            .map(|m| (to_rust_title_case(&m.name), m.index))
             .collect::<Vec<(String, i128)>>();
         member_ids.sort_by(|(_, a), (_, b)| a.cmp(b));
         let indices_for_member = member_ids
@@ -381,7 +377,7 @@ impl Encoder<u8, BitOut> for Uper {
             .enumerate()
             .map(|(i, m)| {
                 (
-                    rustify_name(&m.name),
+                    to_rust_title_case(&m.name),
                     m.tag.as_ref().map_or(i, |t| t.id as usize),
                 )
             })
@@ -392,7 +388,7 @@ impl Encoder<u8, BitOut> for Uper {
                 let index = indices_for_member
                     .iter()
                     .find_map(|(name, index)| {
-                        (format!("{encodable:?}").contains(name)).then(|| *index)
+                        (format!("-{encodable:?}").contains(&format!("-{name}("))).then(|| *index)
                     })
                     .ok_or(EncodingError {
                         details: format!(
@@ -428,7 +424,7 @@ impl Encoder<u8, BitOut> for Uper {
                 let index = indices_for_member
                     .iter()
                     .find_map(|(name, index)| {
-                        (format!("{encodable:?}").contains(name)).then(|| *index)
+                        (format!("-{encodable:?}").contains(&format!("-{name}("))).then(|| *index)
                     })
                     .ok_or(EncodingError {
                         details: format!(
@@ -496,7 +492,7 @@ impl Encoder<u8, BitOut> for Uper {
             ))
         } else {
             Ok(Box::new(
-                move |encodable,   output| -> Result<BitOut, EncodingError> {
+                move |encodable, output| -> Result<BitOut, EncodingError> {
                     let encodable_length = encodable.len();
                     let encoded_members = encodable
                         .into_iter()
@@ -1070,15 +1066,15 @@ mod tests {
     fn encodes_simple_enumerated() {
         asn1_internal_tests!(r#"TestEnum ::= ENUMERATED {m1, m2, m3}"#);
         assert_eq!(
-            TestEnum::encode::<Uper>(TestEnum::m1, bitvec![u8, Msb0;]).unwrap(),
+            TestEnum::encode::<Uper>(TestEnum::M1, bitvec![u8, Msb0;]).unwrap(),
             bitvec![u8, Msb0; 0,0]
         );
         assert_eq!(
-            TestEnum::encode::<Uper>(TestEnum::m2, bitvec![u8, Msb0;]).unwrap(),
+            TestEnum::encode::<Uper>(TestEnum::M2, bitvec![u8, Msb0;]).unwrap(),
             bitvec![u8, Msb0; 0,1]
         );
         assert_eq!(
-            TestEnum::encode::<Uper>(TestEnum::m3, bitvec![u8, Msb0;]).unwrap(),
+            TestEnum::encode::<Uper>(TestEnum::M3, bitvec![u8, Msb0;]).unwrap(),
             bitvec![u8, Msb0; 1,0]
         );
     }
@@ -1087,15 +1083,15 @@ mod tests {
     fn encodes_indexed_enumerated() {
         asn1_internal_tests!(r#"TestEnum ::= ENUMERATED {m1( -8), m2(0), m3(-20)}"#);
         assert_eq!(
-            TestEnum::encode::<Uper>(TestEnum::m1, bitvec![u8, Msb0;]).unwrap(),
+            TestEnum::encode::<Uper>(TestEnum::M1, bitvec![u8, Msb0;]).unwrap(),
             bitvec![u8, Msb0; 0,1]
         );
         assert_eq!(
-            TestEnum::encode::<Uper>(TestEnum::m2, bitvec![u8, Msb0;]).unwrap(),
+            TestEnum::encode::<Uper>(TestEnum::M2, bitvec![u8, Msb0;]).unwrap(),
             bitvec![u8, Msb0; 1,0]
         );
         assert_eq!(
-            TestEnum::encode::<Uper>(TestEnum::m3, bitvec![u8, Msb0;]).unwrap(),
+            TestEnum::encode::<Uper>(TestEnum::M3, bitvec![u8, Msb0;]).unwrap(),
             bitvec![u8, Msb0; 0,0]
         );
     }
@@ -1110,11 +1106,11 @@ mod tests {
               }"#
         );
         assert_eq!(
-            HashAlgorithm::encode::<Uper>(HashAlgorithm::sha256, bitvec![u8, Msb0;]).unwrap(),
+            HashAlgorithm::encode::<Uper>(HashAlgorithm::Sha256, bitvec![u8, Msb0;]).unwrap(),
             bitvec![u8, Msb0; 0]
         );
         assert_eq!(
-            HashAlgorithm::encode::<Uper>(HashAlgorithm::sha384, bitvec![u8, Msb0;]).unwrap(),
+            HashAlgorithm::encode::<Uper>(HashAlgorithm::Sha384, bitvec![u8, Msb0;]).unwrap(),
             bitvec![u8, Msb0; 1,0,0,0,0,0,0,0]
         );
     }
@@ -1128,7 +1124,7 @@ mod tests {
               }"#
         );
         assert_eq!(
-            InitiallyEmpty::encode::<Uper>(InitiallyEmpty::now, bitvec![u8, Msb0;]).unwrap(),
+            InitiallyEmpty::encode::<Uper>(InitiallyEmpty::Now, bitvec![u8, Msb0;]).unwrap(),
             bitvec![u8, Msb0; 1,0,0,0,0,0,0,0]
         );
     }
@@ -1143,7 +1139,7 @@ mod tests {
         );
         assert_eq!(
             VarLengthNumber::encode::<Uper>(
-                VarLengthNumber::content(VarLengthNumber_content(42)),
+                VarLengthNumber::Content(InnerVarLengthNumberContent(42)),
                 bitvec![u8, Msb0;]
             )
             .unwrap(),
@@ -1151,7 +1147,7 @@ mod tests {
         );
         assert_eq!(
             VarLengthNumber::encode::<Uper>(
-                VarLengthNumber::extension(VarLengthNumber_extension(true)),
+                VarLengthNumber::Extension(InnerVarLengthNumberExtension(true)),
                 bitvec![u8, Msb0;]
             )
             .unwrap(),
@@ -1170,7 +1166,7 @@ mod tests {
         );
         assert_eq!(
             SymmetricEncryptionKey::encode::<Uper>(
-                SymmetricEncryptionKey::aes128Ccm(SymmetricEncryptionKey_aes128Ccm(
+                SymmetricEncryptionKey::Aes128Ccm(InnerSymmetricEncryptionKeyAes128Ccm(
                     [0xA2].to_vec()
                 )),
                 bitvec![u8, Msb0;]
@@ -1180,7 +1176,7 @@ mod tests {
         );
         assert_eq!(
             SymmetricEncryptionKey::encode::<Uper>(
-                SymmetricEncryptionKey::none(SymmetricEncryptionKey_none),
+                SymmetricEncryptionKey::None(InnerSymmetricEncryptionKeyNone),
                 bitvec![u8, Msb0;]
             )
             .unwrap(),
@@ -1201,12 +1197,12 @@ mod tests {
         assert_eq!(
             ExtendedSequence::encode::<Uper>(
                 ExtendedSequence {
-                    item_code: ExtendedSequence_item_code(5),
-                    test_ext: Some(ExtendedSequence_test_ext(false)),
+                    item_code: InnerExtendedSequenceItemcode(5),
+                    test_ext: Some(InnerExtendedSequenceTestext(false)),
                     ext_group_alternate_item_code: Some(
-                        ExtendedSequence_ext_group_alternate_item_code {
+                        InnerExtendedSequenceExtgroupalternateitemcode {
                             alternate_item_code:
-                                ExtendedSequence_ext_group_alternate_item_code_alternate_item_code(
+                                InnerInnerExtendedSequenceExtgroupalternateitemcodeAlternateitemcode(
                                     3
                                 ),
                             and_another: None
@@ -1245,8 +1241,8 @@ mod tests {
         assert_eq!(
             ExtendedSequence::encode::<Uper>(
                 ExtendedSequence {
-                    item_code: ExtendedSequence_item_code(5),
-                    test_ext: Some(ExtendedSequence_test_ext(false)),
+                    item_code: InnerExtendedSequenceItemcode(5),
+                    test_ext: Some(InnerExtendedSequenceTestext(false)),
                     ext_group_alternate_item_code: None,
                 },
                 bitvec![u8, Msb0;]
@@ -1266,12 +1262,14 @@ mod tests {
 
     #[test]
     fn encodes_sequence_of_with_definite_size() {
-        asn1_internal_tests!(
-            r#"Sequence-of ::= SEQUENCE (SIZE(3)) OF INTEGER(1..3)"#
-        );
+        asn1_internal_tests!(r#"Test-Sequence-of ::= SEQUENCE (SIZE(3)) OF INTEGER(1..3)"#);
         assert_eq!(
-            Sequence_of::encode::<Uper>(
-                Sequence_of(vec![Anonymous_Sequence_of(1),Anonymous_Sequence_of(2),Anonymous_Sequence_of(3)]),
+            TestSequenceOf::encode::<Uper>(
+                TestSequenceOf(vec![
+                    AnonymousTestSequenceOf(1),
+                    AnonymousTestSequenceOf(2),
+                    AnonymousTestSequenceOf(3)
+                ]),
                 bitvec![u8, Msb0;]
             )
             .unwrap(),
@@ -1281,12 +1279,10 @@ mod tests {
 
     #[test]
     fn encodes_sequence_of_with_range_size() {
-        asn1_internal_tests!(
-            r#"Sequence-of ::= SEQUENCE (SIZE(1..2)) OF INTEGER(1..3)"#
-        );
+        asn1_internal_tests!(r#"Test-Sequence-of ::= SEQUENCE (SIZE(1..2)) OF INTEGER(1..3)"#);
         assert_eq!(
-            Sequence_of::encode::<Uper>(
-                Sequence_of(vec![Anonymous_Sequence_of(1),Anonymous_Sequence_of(2)]),
+            TestSequenceOf::encode::<Uper>(
+                TestSequenceOf(vec![AnonymousTestSequenceOf(1), AnonymousTestSequenceOf(2)]),
                 bitvec![u8, Msb0;]
             )
             .unwrap(),
@@ -1296,12 +1292,14 @@ mod tests {
 
     #[test]
     fn encodes_sequence_of_with_extended_range_size() {
-        asn1_internal_tests!(
-            r#"Sequence-of ::= SEQUENCE (SIZE(1..2,...)) OF INTEGER(1..3)"#
-        );
+        asn1_internal_tests!(r#"Test-Sequence-of ::= SEQUENCE (SIZE(1..2,...)) OF INTEGER(1..3)"#);
         assert_eq!(
-            Sequence_of::encode::<Uper>(
-                Sequence_of(vec![Anonymous_Sequence_of(1),Anonymous_Sequence_of(2),Anonymous_Sequence_of(3)]),
+            TestSequenceOf::encode::<Uper>(
+                TestSequenceOf(vec![
+                    AnonymousTestSequenceOf(1),
+                    AnonymousTestSequenceOf(2),
+                    AnonymousTestSequenceOf(3)
+                ]),
                 bitvec![u8, Msb0;]
             )
             .unwrap(),
@@ -1311,12 +1309,14 @@ mod tests {
 
     #[test]
     fn encodes_sequence_of_with_unrestricted_size() {
-        asn1_internal_tests!(
-            r#"Sequence-of ::= SEQUENCE OF INTEGER(1..3)"#
-        );
+        asn1_internal_tests!(r#"Test-Sequence-of ::= SEQUENCE OF INTEGER(1..3)"#);
         assert_eq!(
-            Sequence_of::encode::<Uper>(
-                Sequence_of(vec![Anonymous_Sequence_of(1),Anonymous_Sequence_of(2),Anonymous_Sequence_of(3)]),
+            TestSequenceOf::encode::<Uper>(
+                TestSequenceOf(vec![
+                    AnonymousTestSequenceOf(1),
+                    AnonymousTestSequenceOf(2),
+                    AnonymousTestSequenceOf(3)
+                ]),
                 bitvec![u8, Msb0;]
             )
             .unwrap(),

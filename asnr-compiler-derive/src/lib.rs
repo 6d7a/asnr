@@ -19,7 +19,7 @@ pub fn asn1(item: TokenStream) -> TokenStream {
     if !literal_asn1.contains("BEGIN") {
         literal_asn1 = String::from(DUMMY_HEADER) + &literal_asn1 + DUMMY_FOOTER;
     }
-    asnr_compiler::Asnr::compiler()
+    asnr_compiler::Asnr::new()
         .add_asn_literal(&literal_asn1)
         .compile_to_string()
         .unwrap()
@@ -39,7 +39,7 @@ pub fn asn1_no_std(item: TokenStream) -> TokenStream {
     if !literal_asn1.contains("BEGIN") {
         literal_asn1 = String::from(DUMMY_HEADER) + &literal_asn1 + DUMMY_FOOTER;
     }
-    asnr_compiler::Asnr::compiler()
+    asnr_compiler::Asnr::new()
         .add_asn_literal(&literal_asn1)
         .no_std(true)
         .compile_to_string()
@@ -60,7 +60,7 @@ pub fn asn1_internal_tests(item: TokenStream) -> TokenStream {
     if !literal_asn1.contains("BEGIN") {
         literal_asn1 = String::from(DUMMY_HEADER) + &literal_asn1 + DUMMY_FOOTER;
     }
-    asnr_compiler::Asnr::compiler()
+    asnr_compiler::Asnr::new()
         .add_asn_literal(&literal_asn1)
         .no_std(true)
         .compile_to_string()
