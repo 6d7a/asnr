@@ -1,18 +1,17 @@
 use alloc::{boxed::Box, format, string::String, vec::Vec};
-use asnr_grammar::{constraints::Constraint, types::*};
+use asnr_grammar::{
+    encoding_rules::{per_visible::{PerVisibleAlphabetConstraints, PerVisibleRangeConstraints, per_visible_range_constraints}, bit_length},
+    types::*,
+};
 use bitvec::{bitvec, prelude::Msb0, vec::BitVec, view::BitView};
 use core::fmt::Debug;
 
 use crate::{
-    error::{DecodingError, EncodingError},
+    error::{EncodingError},
     Encode, Encoder, EncoderForIndex, HasOptionalField,
 };
 
-use super::{
-    bit_length,
-    per_visible::{PerVisibleAlphabetConstraints, PerVisibleRangeConstraints},
-    rustify_name, AsBytesDummy, BitOut, Uper,
-};
+use super::{rustify_name, BitOut, Uper};
 
 impl Encoder<u8, BitOut> for Uper {
     fn encode_integer<I>(
@@ -158,11 +157,8 @@ impl Encoder<u8, BitOut> for Uper {
             PerVisibleAlphabetConstraints::default_for(character_string.r#type);
         for c in &character_string.constraints {
             constraints +=
-                c.try_into()
-                    .map_err(|_: DecodingError<AsBytesDummy>| EncodingError {
-                        details: format!("Failed to parse character string constraints"),
-                    })?;
-            PerVisibleAlphabetConstraints::try_new::<AsBytesDummy>(c, character_string.r#type)?
+                c.try_into()?;
+            PerVisibleAlphabetConstraints::try_new(c, character_string.r#type)?
                 .map(|mut p| permitted_alphabet += &mut p);
         }
         permitted_alphabet.finalize();
@@ -211,12 +207,8 @@ impl Encoder<u8, BitOut> for Uper {
             let mut skip_list: Vec<bool> = member_list
                 .iter()
                 .filter_map(|(index, _, opt)| {
-                    (*opt || index >= &index_of_first_ext.unwrap_or(usize::MAX)).then(|| {
-                        (
-                            index,
-                            !encodable.has_optional_field(*index),
-                        )
-                    })
+                    (*opt || index >= &index_of_first_ext.unwrap_or(usize::MAX))
+                        .then(|| (index, !encodable.has_optional_field(*index)))
                 })
                 .map(|(index, not_present)| {
                     if index < &index_of_first_ext.unwrap_or(usize::MAX) {
@@ -496,7 +488,7 @@ impl Encoder<u8, BitOut> for Uper {
             ))
         } else {
             Ok(Box::new(
-                move |encodable,   output| -> Result<BitOut, EncodingError> {
+                move |encodable, output| -> Result<BitOut, EncodingError> {
                     let encodable_length = encodable.len();
                     let encoded_members = encodable
                         .into_iter()
@@ -522,25 +514,6 @@ impl Encoder<u8, BitOut> for Uper {
             output,
         )
     }
-}
-
-fn per_visible_range_constraints(
-    signed: bool,
-    constraint_list: &Vec<Constraint>,
-) -> Result<PerVisibleRangeConstraints, EncodingError> {
-    let mut constraints = if signed {
-        PerVisibleRangeConstraints::default()
-    } else {
-        PerVisibleRangeConstraints::default_unsigned()
-    };
-    for c in constraint_list {
-        constraints += c
-            .try_into()
-            .map_err(|_: DecodingError<AsBytesDummy>| EncodingError {
-                details: format!("Failed to parse range constraints"),
-            })?
-    }
-    Ok(constraints)
 }
 
 fn encode_sized_string(
@@ -617,7 +590,7 @@ fn with_size_length_determinant(
     if let (Some(bit_length), Some(Some(_)), true) = (
         constraints.bit_length(),
         constraints
-            .range_width::<AsBytesDummy>()?
+            .range_width()?
             .map(|w| (w <= 65536).then(|| w)),
         constraints.lies_within(&actual_size)?,
     ) {
@@ -1266,12 +1239,14 @@ mod tests {
 
     #[test]
     fn encodes_sequence_of_with_definite_size() {
-        asn1_internal_tests!(
-            r#"Sequence-of ::= SEQUENCE (SIZE(3)) OF INTEGER(1..3)"#
-        );
+        asn1_internal_tests!(r#"Sequence-of ::= SEQUENCE (SIZE(3)) OF INTEGER(1..3)"#);
         assert_eq!(
             Sequence_of::encode::<Uper>(
-                Sequence_of(vec![Anonymous_Sequence_of(1),Anonymous_Sequence_of(2),Anonymous_Sequence_of(3)]),
+                Sequence_of(vec![
+                    Anonymous_Sequence_of(1),
+                    Anonymous_Sequence_of(2),
+                    Anonymous_Sequence_of(3)
+                ]),
                 bitvec![u8, Msb0;]
             )
             .unwrap(),
@@ -1281,12 +1256,10 @@ mod tests {
 
     #[test]
     fn encodes_sequence_of_with_range_size() {
-        asn1_internal_tests!(
-            r#"Sequence-of ::= SEQUENCE (SIZE(1..2)) OF INTEGER(1..3)"#
-        );
+        asn1_internal_tests!(r#"Sequence-of ::= SEQUENCE (SIZE(1..2)) OF INTEGER(1..3)"#);
         assert_eq!(
             Sequence_of::encode::<Uper>(
-                Sequence_of(vec![Anonymous_Sequence_of(1),Anonymous_Sequence_of(2)]),
+                Sequence_of(vec![Anonymous_Sequence_of(1), Anonymous_Sequence_of(2)]),
                 bitvec![u8, Msb0;]
             )
             .unwrap(),
@@ -1296,12 +1269,14 @@ mod tests {
 
     #[test]
     fn encodes_sequence_of_with_extended_range_size() {
-        asn1_internal_tests!(
-            r#"Sequence-of ::= SEQUENCE (SIZE(1..2,...)) OF INTEGER(1..3)"#
-        );
+        asn1_internal_tests!(r#"Sequence-of ::= SEQUENCE (SIZE(1..2,...)) OF INTEGER(1..3)"#);
         assert_eq!(
             Sequence_of::encode::<Uper>(
-                Sequence_of(vec![Anonymous_Sequence_of(1),Anonymous_Sequence_of(2),Anonymous_Sequence_of(3)]),
+                Sequence_of(vec![
+                    Anonymous_Sequence_of(1),
+                    Anonymous_Sequence_of(2),
+                    Anonymous_Sequence_of(3)
+                ]),
                 bitvec![u8, Msb0;]
             )
             .unwrap(),
@@ -1311,12 +1286,14 @@ mod tests {
 
     #[test]
     fn encodes_sequence_of_with_unrestricted_size() {
-        asn1_internal_tests!(
-            r#"Sequence-of ::= SEQUENCE OF INTEGER(1..3)"#
-        );
+        asn1_internal_tests!(r#"Sequence-of ::= SEQUENCE OF INTEGER(1..3)"#);
         assert_eq!(
             Sequence_of::encode::<Uper>(
-                Sequence_of(vec![Anonymous_Sequence_of(1),Anonymous_Sequence_of(2),Anonymous_Sequence_of(3)]),
+                Sequence_of(vec![
+                    Anonymous_Sequence_of(1),
+                    Anonymous_Sequence_of(2),
+                    Anonymous_Sequence_of(3)
+                ]),
                 bitvec![u8, Msb0;]
             )
             .unwrap(),

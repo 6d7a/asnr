@@ -8,3 +8,7 @@ edition = "2021"
 [dependencies]
 asnr-traits = { path = "../asnr-traits" }
 asnr-grammar-derive = { path = "../asnr-grammar-derive" }
+
+[dependencies.num]
+version = "0.4"
+default-features = false

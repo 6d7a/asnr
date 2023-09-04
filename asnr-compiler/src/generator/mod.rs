@@ -7,7 +7,7 @@ use asnr_grammar::{information_object::*, *};
 
 pub(crate) mod error;
 pub(crate) mod templates;
-use self::{error::GeneratorError, templates::asnr::builder::AsnrGenerator};
+use self::{error::GeneratorError, templates::{asnr::builder::AsnrGenerator, rasn::builder::RasnGenerator}};
 
 pub trait Generator {
     fn generate_choice_value(tld: ToplevelValueDeclaration) -> Result<String, GeneratorError>;
@@ -117,6 +117,52 @@ pub fn generate<'a>(
                 },
             }
         }
-        Framework::Rasn => todo!(),
+        Framework::Rasn =>  match tld {
+            ToplevelDeclaration::Type(t) => match t.r#type {
+                ASN1Type::Null => RasnGenerator::generate_null(t, custom_derive),
+                ASN1Type::Boolean => RasnGenerator::generate_boolean(t, custom_derive),
+                ASN1Type::Integer(_) => RasnGenerator::generate_integer(t, custom_derive),
+                ASN1Type::Enumerated(_) => RasnGenerator::generate_enumerated(t, custom_derive),
+                ASN1Type::BitString(_) => RasnGenerator::generate_bit_string(t, custom_derive),
+                ASN1Type::CharacterString(_) => {
+                    RasnGenerator::character_string_template(t, custom_derive)
+                }
+                // ASN1Type::Sequence(_) => RasnGenerator::generate_sequence(t, custom_derive),
+                // ASN1Type::SequenceOf(_) => {
+                //     RasnGenerator::generate_sequence_of(t, custom_derive)
+                // }
+                // ASN1Type::Choice(_) => RasnGenerator::generate_choice(t, custom_derive),
+                // ASN1Type::ElsewhereDeclaredType(_) => {
+                //     RasnGenerator::generate_typealias(t, custom_derive)
+                // }
+                // ASN1Type::OctetString(_) => {
+                //     RasnGenerator::generate_octet_string(t, custom_derive)
+                // }
+                _ => Ok("".into()),
+            },
+            ToplevelDeclaration::Value(v) => match v.value {
+                ASN1Value::Null => RasnGenerator::generate_null_value(v),
+                ASN1Value::Boolean(_) => todo!(),
+                ASN1Value::Integer(_) => RasnGenerator::generate_integer_value(v),
+                ASN1Value::String(_) => todo!(),
+                ASN1Value::BitString(_) => todo!(),
+                ASN1Value::EnumeratedValue(_) => todo!(),
+                ASN1Value::ElsewhereDeclaredValue(_) => todo!(),
+                ASN1Value::All => todo!(),
+                // ASN1Value::Choice(_, _) => RasnGenerator::generate_choice_value(v),
+                // ASN1Value::Sequence(_) => RasnGenerator::generate_sequence_value(v),
+                ASN1Value::Real(_) => todo!(),
+                _ => Ok("".into())
+            },
+            ToplevelDeclaration::Information(i) => match i.value {
+                // ASN1Information::ObjectClass(_) => {
+                //     RasnGenerator::generate_information_object_class(i)
+                // }
+                // ASN1Information::ObjectSet(_) => {
+                //   generate_information_object_set(i)
+                // }
+                _ => Ok("".into()),
+            },
+        }
     }
 }

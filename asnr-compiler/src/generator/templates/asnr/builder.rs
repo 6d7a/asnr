@@ -422,6 +422,7 @@ fn generate_sequence_of<'a>(
                     comments: " Anonymous SEQUENCE OF member ".into(),
                     name: String::from("Anonymous_") + &name,
                     r#type: n.clone(),
+                    tag: None
                 }),
                 None,
             )?),
@@ -484,6 +485,7 @@ mod tests {
                 ],
                 extensible: None,
             }),
+            tag: None
         };
         println!(
             "{}",
@@ -523,6 +525,7 @@ mod tests {
                     },
                 ]),
             }),
+            tag: None
         };
         println!("{}",  AsnrGenerator::generate_bit_string(bs_tld, None).unwrap())
     }
@@ -557,6 +560,7 @@ mod tests {
                     },
                 ]),
             }),
+            tag: None
         };
         println!("{}",  AsnrGenerator::generate_integer(int_tld, None).unwrap())
     }
@@ -645,6 +649,7 @@ mod tests {
                     constraints: vec![],
                 }],
             }),
+            tag: None
         };
         println!(
             "{}",

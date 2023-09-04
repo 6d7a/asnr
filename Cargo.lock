@@ -48,6 +48,7 @@ version = "0.1.0"
 dependencies = [
  "asnr-grammar-derive",
  "asnr-traits",
+ "num",
 ]
 
 [[package]]

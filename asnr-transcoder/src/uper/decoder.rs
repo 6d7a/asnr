@@ -1,5 +1,10 @@
 use alloc::{boxed::Box, string::String, vec, vec::Vec};
-use asnr_grammar::types::SequenceOrSet;
+use asnr_grammar::{
+    encoding_rules::per_visible::{
+        per_visible_range_constraints, PerVisibleAlphabetConstraints, PerVisibleRangeConstraints,
+    },
+    types::SequenceOrSet,
+};
 use bitvec::{bits, bitvec, field::BitField, prelude::Msb0, vec::BitVec};
 use bitvec_nom::BSlice;
 use nom::{bytes::complete::take, combinator::map, error::Error, AsBytes};
@@ -7,11 +12,10 @@ use num::{FromPrimitive, Integer};
 
 use crate::{
     error::{DecodingError, DecodingErrorType},
-    uper::per_visible::PerVisibleRangeConstraints,
     Decode, DecodeMember, Decoder, DecoderForIndex, IResult,
 };
 
-use super::{per_visible::PerVisibleAlphabetConstraints, AsBytesDummy, BitIn, Uper};
+use super::{BitIn, Uper};
 
 enum LengthDeterminant {
     Content(usize),
@@ -82,16 +86,7 @@ impl<'a> Decoder<'a, BitIn<'a>> for Uper {
     where
         O: num::Integer + num::FromPrimitive + Copy,
     {
-        let mut constraints = PerVisibleRangeConstraints::default();
-        for c in &integer.constraints {
-            constraints += c
-                .try_into()
-                .map_err(|e: DecodingError<[u8; 0]>| DecodingError {
-                    input: None,
-                    details: e.details,
-                    kind: e.kind,
-                })?
-        }
+        let mut constraints = per_visible_range_constraints(true, &integer.constraints)?;
         if constraints.is_extensible() {
             if constraints.bit_length().is_some() {
                 Ok(Box::new(move |input: BitIn<'a>| -> IResult<BitIn<'a>, O> {
@@ -123,13 +118,7 @@ impl<'a> Decoder<'a, BitIn<'a>> for Uper {
     ) -> Result<Box<dyn Fn(BitIn) -> IResult<BitIn, O>>, DecodingError<BitIn<'a>>> {
         let mut constraints = PerVisibleRangeConstraints::from(&enumerated);
         for c in &enumerated.constraints {
-            constraints += c
-                .try_into()
-                .map_err(|e: DecodingError<[u8; 0]>| DecodingError {
-                    input: None,
-                    details: e.details,
-                    kind: e.kind,
-                })?
+            constraints += c.try_into()?
         }
         if constraints.is_extensible() {
             if let Some(bit_length) = constraints.bit_length() {
@@ -167,13 +156,7 @@ impl<'a> Decoder<'a, BitIn<'a>> for Uper {
     ) -> Result<Box<dyn Fn(BitIn<'a>) -> IResult<BitIn<'a>, O>>, DecodingError<BitIn<'a>>> {
         let mut constraints = PerVisibleRangeConstraints::from(&choice);
         for c in &choice.constraints {
-            constraints += c
-                .try_into()
-                .map_err(|e: DecodingError<[u8; 0]>| DecodingError {
-                    input: None,
-                    details: e.details,
-                    kind: e.kind,
-                })?
+            constraints += c.try_into()?
         }
         if constraints.is_extensible() {
             if let Some(bit_length) = constraints.bit_length() {
@@ -227,16 +210,7 @@ impl<'a> Decoder<'a, BitIn<'a>> for Uper {
         bit_string: asnr_grammar::types::BitString,
     ) -> Result<Box<dyn Fn(BitIn<'a>) -> IResult<BitIn<'a>, Vec<bool>>>, DecodingError<BitIn<'a>>>
     {
-        let mut constraints = PerVisibleRangeConstraints::default_unsigned();
-        for c in &bit_string.constraints {
-            constraints += c
-                .try_into()
-                .map_err(|e: DecodingError<AsBytesDummy>| DecodingError {
-                    input: None,
-                    details: e.details,
-                    kind: e.kind,
-                })?
-        }
+        let mut constraints = per_visible_range_constraints(false, &bit_string.constraints)?;
         if constraints.is_extensible() {
             Ok(Box::new(
                 move |input: BitIn<'a>| -> IResult<BitIn<'a>, Vec<bool>> {
@@ -260,13 +234,7 @@ impl<'a> Decoder<'a, BitIn<'a>> for Uper {
         let mut range_constraints = PerVisibleRangeConstraints::default_unsigned();
         let mut permitted_alphabet = PerVisibleAlphabetConstraints::default_for(char_string.r#type);
         for c in &char_string.constraints {
-            range_constraints +=
-                c.try_into()
-                    .map_err(|e: DecodingError<AsBytesDummy>| DecodingError {
-                        input: None,
-                        details: e.details,
-                        kind: e.kind,
-                    })?;
+            range_constraints += c.try_into()?;
             PerVisibleAlphabetConstraints::try_new(c, char_string.r#type)?
                 .map(|mut p| permitted_alphabet += &mut p);
         }
@@ -296,21 +264,13 @@ impl<'a> Decoder<'a, BitIn<'a>> for Uper {
         octet_string: asnr_grammar::types::OctetString,
     ) -> Result<Box<dyn Fn(BitIn<'a>) -> IResult<BitIn<'a>, Vec<u8>>>, DecodingError<BitIn<'a>>>
     {
-        let mut range_constraints = PerVisibleRangeConstraints::default_unsigned();
-        for c in &octet_string.constraints {
-            range_constraints +=
-                c.try_into()
-                    .map_err(|e: DecodingError<AsBytesDummy>| DecodingError {
-                        input: None,
-                        details: e.details,
-                        kind: e.kind,
-                    })?;
-        }
+        let range_constraints =
+            per_visible_range_constraints(false, &octet_string.constraints)?;
         if range_constraints.is_extensible() {
             Ok(Box::new(
                 move |input: BitIn<'a>| -> IResult<BitIn<'a>, Vec<u8>> {
                     let (input, is_extended) = read_bit(input)?;
-                    let (mut input, length_det) =
+                    let (input, length_det) =
                         size_length_det(is_extended, &range_constraints, input)?;
                     bitslice_to_bytes(length_det, input)
                 },
@@ -380,17 +340,7 @@ impl<'a> Decoder<'a, BitIn<'a>> for Uper {
         member_decoder: fn(BitIn<'a>) -> IResult<BitIn<'a>, T>,
     ) -> Result<Box<dyn Fn(BitIn<'a>) -> IResult<BitIn<'a>, Vec<T>> + 'a>, DecodingError<BitIn<'a>>>
     {
-        let mut constraints = PerVisibleRangeConstraints::default();
-        for c in &sequence_of.constraints {
-            constraints += c
-                .try_into()
-                .map_err(|e: DecodingError<[u8; 0]>| DecodingError {
-                    input: None,
-                    details: e.details,
-                    kind: e.kind,
-                })?
-        }
-        constraints.as_unsigned_constraint();
+        let mut constraints = per_visible_range_constraints(false, &sequence_of.constraints)?;
         if constraints.is_extensible() {
             Ok(Box::new(
                 move |input: BitIn<'a>| -> IResult<BitIn<'a>, Vec<T>> {
@@ -552,13 +502,7 @@ fn decode_sized_string<'a>(
     if permitted_alphabet.is_known_multiplier_string() {
         let mut char_vec = vec![];
         while let Ok((new_buffer, i)) = read_int::<usize>(bit_size)(buffer) {
-            char_vec.push(permitted_alphabet.get_char_by_index(i).map_err(
-                |e: DecodingError<[u8; 0]>| DecodingError {
-                    input: None,
-                    details: e.details,
-                    kind: e.kind,
-                },
-            )?);
+            char_vec.push(permitted_alphabet.get_char_by_index(i)?);
             buffer = new_buffer;
         }
         Ok((input, char_vec.into_iter().collect()))

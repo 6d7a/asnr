@@ -10,7 +10,6 @@ use crate::{
 
 mod decoder;
 mod encoder;
-mod per_visible;
 
 pub struct Uper;
 
@@ -31,7 +30,6 @@ impl Uper {
 
 pub type BitIn<'a> = BSlice<'a, u8, Msb0>;
 pub type BitOut = BitVec<u8, Msb0>;
-pub(crate) type AsBytesDummy = [u8; 0];
 
 const RUST_KEYWORDS: [&'static str; 38] = [
     "as", "async", "await", "break", "const", "continue", "crate", "dyn", "else", "enum", "extern",
@@ -39,15 +37,6 @@ const RUST_KEYWORDS: [&'static str; 38] = [
     "ref", "return", "self", "Self", "static", "struct", "super", "trait", "true", "type",
     "unsafe", "use", "where", "while",
 ];
-
-pub(crate) fn bit_length(min: i128, max: i128) -> usize {
-    let number_of_values = max - min + 1;
-    let mut power = 0;
-    while number_of_values > 2_i128.pow(power) {
-        power += 1;
-    }
-    power as usize
-}
 
 pub fn rustify_name(name: &String) -> String {
     let name = name.replace("-", "_");
@@ -62,20 +51,7 @@ pub fn rustify_name(name: &String) -> String {
 mod tests {
     use asnr_compiler_derive::asn1_internal_tests;
 
-    use crate::uper::{bit_length, Uper};
-
-    #[test]
-    fn computes_bit_size() {
-        assert_eq!(bit_length(1, 1), 0);
-        assert_eq!(bit_length(-1, 0), 1);
-        assert_eq!(bit_length(3, 6), 2);
-        assert_eq!(bit_length(4000, 4255), 8);
-        assert_eq!(bit_length(4000, 4256), 9);
-        assert_eq!(bit_length(0, 32000), 15);
-        assert_eq!(bit_length(0, 65538), 17);
-        assert_eq!(bit_length(-1, 127), 8);
-        assert_eq!(bit_length(-900000000, 900000001), 31);
-    }
+    use crate::uper::Uper;
 
     #[test]
     fn encodes_as_decodes_integer() {
@@ -193,16 +169,16 @@ mod tests {
                 .0
         );
         assert_eq!(
-            vec![22,55,33,44],
+            vec![22, 55, 33, 44],
             Uper::decode::<Octet_string_2>(
-                &Uper::encode(Octet_string_2(vec![22,55,33,44])).unwrap()
+                &Uper::encode(Octet_string_2(vec![22, 55, 33, 44])).unwrap()
             )
             .unwrap()
             .0
         );
         assert_eq!(
-            vec![33,77],
-            Uper::decode::<Octet_string_3>(&Uper::encode(Octet_string_3(vec![33,77])).unwrap())
+            vec![33, 77],
+            Uper::decode::<Octet_string_3>(&Uper::encode(Octet_string_3(vec![33, 77])).unwrap())
                 .unwrap()
                 .0
         );
@@ -219,8 +195,8 @@ mod tests {
                 .0
         );
         assert_eq!(
-            vec![33,44],
-            Uper::decode::<Octet_string_5>(&Uper::encode(Octet_string_5(vec![33,44])).unwrap())
+            vec![33, 44],
+            Uper::decode::<Octet_string_5>(&Uper::encode(Octet_string_5(vec![33, 44])).unwrap())
                 .unwrap()
                 .0
         );
@@ -365,12 +341,13 @@ mod tests {
 
         assert_eq!(
             Seq_1 {
-                member1: Member_1(true)  
+                member1: Member_1(true)
             },
             Uper::decode::<Seq_1>(
                 &Uper::encode(Seq_1 {
                     member1: Member_1(true)
-                }).unwrap()
+                })
+                .unwrap()
             )
             .unwrap()
         );
@@ -384,7 +361,8 @@ mod tests {
                 &Uper::encode(Seq_2 {
                     member1: Member_1(true),
                     ext1: None,
-                }).unwrap()
+                })
+                .unwrap()
             )
             .unwrap()
         );
@@ -398,7 +376,8 @@ mod tests {
                 &Uper::encode(Seq_2 {
                     member1: Member_1(true),
                     ext1: Some(Member_2(1)),
-                }).unwrap()
+                })
+                .unwrap()
             )
             .unwrap()
         );
@@ -416,7 +395,8 @@ mod tests {
                     member2: Some(Member_2(1)),
                     member3: None,
                     member4: Some(Member_4(vec![false]))
-                }).unwrap()
+                })
+                .unwrap()
             )
             .unwrap()
         );
@@ -434,7 +414,8 @@ mod tests {
                     member2: Some(Member_2(1)),
                     member3: Some(Member_3(vec![Member_1(true)])),
                     member4: Some(Member_4(vec![false]))
-                }).unwrap()
+                })
+                .unwrap()
             )
             .unwrap()
         );
@@ -452,7 +433,8 @@ mod tests {
                     member2: None,
                     member3: None,
                     member4: None,
-                }).unwrap()
+                })
+                .unwrap()
             )
             .unwrap()
         );
@@ -470,7 +452,8 @@ mod tests {
                     member2: Some(Member_2(1)),
                     member3: None,
                     ext1: Some(Member_4(vec![false]))
-                }).unwrap()
+                })
+                .unwrap()
             )
             .unwrap()
         );
@@ -488,7 +471,8 @@ mod tests {
                     member2: Some(Member_2(1)),
                     member3: Some(Member_3(vec![Member_1(true)])),
                     ext1: Some(Member_4(vec![false]))
-                }).unwrap()
+                })
+                .unwrap()
             )
             .unwrap()
         );
@@ -506,7 +490,8 @@ mod tests {
                     member2: Some(Member_2(1)),
                     member3: Some(Member_3(vec![Member_1(true)])),
                     ext1: None
-                }).unwrap()
+                })
+                .unwrap()
             )
             .unwrap()
         );
@@ -524,7 +509,8 @@ mod tests {
                     member2: None,
                     member3: None,
                     ext1: None,
-                }).unwrap()
+                })
+                .unwrap()
             )
             .unwrap()
         );

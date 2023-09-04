@@ -26,13 +26,13 @@ pub enum DecodingErrorType {
 }
 
 impl<I: AsBytes> DecodingError<I> {
-  pub fn new(details: &str, kind: DecodingErrorType) -> Self {
-    Self {
-      details: details.into(),
-      kind,
-      input: None
+    pub fn new(details: &str, kind: DecodingErrorType) -> Self {
+        Self {
+            details: details.into(),
+            kind,
+            input: None,
+        }
     }
-  }
 }
 
 impl<I: AsBytes> From<GrammarError> for DecodingError<I> {
@@ -126,12 +126,24 @@ pub struct EncodingError {
 
 impl<I: AsBytes> From<DecodingError<I>> for EncodingError {
     fn from(value: DecodingError<I>) -> Self {
-        EncodingError { details: value.details }
+        EncodingError {
+            details: value.details,
+        }
     }
 }
 
 impl From<&str> for EncodingError {
     fn from(value: &str) -> Self {
-        EncodingError { details: value.into() }
+        EncodingError {
+            details: value.into(),
+        }
+    }
+}
+
+impl From<GrammarError> for EncodingError {
+    fn from(value: GrammarError) -> Self {
+        Self {
+            details: value.details,
+        }
     }
 }

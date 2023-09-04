@@ -59,164 +59,103 @@ pub const {name}: {vtype} = {value};
     )
 }
 
-pub fn integer_template(comments: String, name: String, constraints: Option<String>) -> String {
+pub fn integer_template(
+    comments: String,
+    name: String,
+    constraint_annotations: String,
+    tag_annotations: String,
+) -> String {
     format!(
         r#"
 {comments}
-pub type {name} = {}Integer{}
-"#,
-        constraints.as_ref().map_or("", |_| "Constrained"),
-        constraints.unwrap_or_default(),
+#[derive(AsnType, Debug, Clone, Copy, Decode, Encode, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[rasn(delegate{constraint_annotations}{tag_annotations})]
+pub struct {name}(pub Integer);
+"#
     )
 }
 
-// pub fn bit_string_template(
-//     comments: String,
-//     derive: &str,
-//     name: String,
-//     distinguished_values: String,
-//     bitstr_descriptor: String,
-// ) -> String {
-//     format!(
-//         r#"
-// {comments}{derive}
-// pub struct {name}(pub Vec<bool>);{distinguished_values}
+pub fn bit_string_template(
+    comments: String,
+    name: String,
+    constraint_annotations: String,
+    tag_annotations: String,
+) -> String {
+    format!(
+        r#"
+{comments}
+#[derive(AsnType, Debug, Clone, Decode, Encode, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[rasn(delegate{constraint_annotations})]
+pub struct {name}(pub BitString);
+"#
+    )
+}
 
-// impl<'a, I: AsBytes + Debug + 'a> Decode<'a, I> for {name} {{
-//   {DECODE_SIGNATURE}
-//   {{
-//     {name}::decoder::<D>()?(input)
-//   }}
+pub fn char_string_template(
+    comments: String,
+    name: String,
+    constraint_annotations: String,
+    alphabet_annotations: String,
+    tag_annotations: String,
+) -> String {
+    format!(
+        r#"
+{comments}
+#[derive(AsnType, Debug, Clone, Decode, Encode, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[rasn(delegate{constraint_annotations}{alphabet_annotations})]
+pub struct {name}(pub BitString);
+"#
+    )
+}
 
-//   {DECODER_SIGNATURE}
-//   {{
-//     let mut bitstring_decoder = D::decode_bit_string({bitstr_descriptor})?;
-//     Ok(Box::new(move |input| (*bitstring_decoder)(input).map(|(remaining, res)| (remaining, Self(res)))))
-//   }}
-// }}
-// "#,
-//     )
-// }
+pub fn boolean_template(comments: String, name: String, tag_annotations: String) -> String {
+    format!(
+        r#"
+{comments}
+#[derive(AsnType, Debug, Clone, Copy, Decode, Encode, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[rasn(delegate)]
+pub struct {name}(pub Boolean);
+"#
+    )
+}
 
-// pub fn char_string_template(
-//     comments: String,
-//     derive: &str,
-//     name: String,
-//     charstr_descriptor: String,
-// ) -> String {
-//     format!(
-//         r#"
-// {comments}{derive}
-// pub struct {name}(pub String);
+pub fn null_value_template(comments: String, name: String) -> String {
+    format!(
+        r#"{comments}
+pub const {name} = ();
+"#
+    )
+}
 
-// impl<'a, I: AsBytes + Debug + 'a> Decode<'a, I> for {name} {{
-//   {DECODE_SIGNATURE}
-//   {{
-//     {name}::decoder::<D>()?(input)
-//   }}
+pub fn null_template(comments: String, name: String, tag_annotations: String) -> String {
+    format!(
+        r#"
+{comments}
+#[derive(AsnType, Debug, Clone, Copy, Decode, Encode, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[rasn(delegate)]
+pub struct {name}(());
+"#
+    )
+}
 
-//   {DECODER_SIGNATURE}
-//   {{
-//     let mut charstring_decoder = D::decode_character_string({charstr_descriptor})?;
-//     Ok(Box::new(move |input| (*charstring_decoder)(input).map(|(remaining, res)| (remaining, Self(res)))))
-//   }}
-// }}
-// "#,
-//     )
-// }
-
-// pub fn boolean_template(comments: String, derive: &str, name: String) -> String {
-//     format!(
-//         r#"
-// {comments}{derive}
-// pub struct {name}(pub bool);
-
-// impl<'a, I: AsBytes + Debug + 'a> Decode<'a, I> for {name} {{
-//   {DECODE_SIGNATURE}
-//   {{
-//     {name}::decoder::<D>()?(input)
-//   }}
-
-//   {DECODER_SIGNATURE}
-//   {{
-//     Ok(Box::new(|input| D::decode_boolean(input).map(|(remaining, res)| (remaining, Self(res)))))
-//   }}
-// }}
-// "#
-//     )
-// }
-
-// pub fn null_value_template(comments: String, name: String) -> String {
-//     format!(
-//         r#"{comments}
-// pub const {name}: ASN1_NULL = ASN1_NULL;
-// "#
-//     )
-// }
-
-// pub fn null_template(comments: String, derive: &str, name: String) -> String {
-//     format!(
-//         r#"
-// {comments}{derive}
-// pub struct {name};
-
-// impl<'a, I: AsBytes + Debug + 'a> Decode<'a, I> for {name} {{
-//   {DECODE_SIGNATURE}
-//   {{
-//     {name}::decoder::<D>()?(input)
-//   }}
-
-//   {DECODER_SIGNATURE}
-//   {{
-//     Ok(Box::new(|input| D::decode_null(input)))
-//   }}
-// }}
-// "#
-//     )
-// }
-
-// pub fn enumerated_template(
-//     comments: String,
-//     derive: &str,
-//     name: String,
-//     enumerals: String,
-//     unknown_index_case: String,
-//     enumerals_from_int: String,
-//     enum_descriptor: String,
-// ) -> String {
-//     format!(
-//         r#"
-//   {comments}{derive}
-//   pub enum {name} {{
-//     #[default]
-//     {enumerals}
-//   }}
-
-//   impl TryFrom<i128> for {name} {{
-//     type Error = DecodingError<[u8;0]>;
-
-//     fn try_from(v: i128) -> Result<Self, Self::Error> {{
-//       match v {{
-//           {enumerals_from_int}
-//           _ => {unknown_index_case},
-//       }}
-//     }}
-//   }}
-
-//   impl<'a, I: AsBytes + Debug + 'a> Decode<'a, I> for {name} {{
-//     {DECODE_SIGNATURE}
-//     {{
-//       {name}::decoder::<D>()?(input)
-//     }}
-
-//     {DECODER_SIGNATURE}
-//     {{
-//       D::decode_enumerated({enum_descriptor})
-//     }}
-//   }}
-//   "#,
-//     )
-// }
+pub fn enumerated_template(
+    comments: String,
+    name: String,
+    extensible: &str,
+    enum_members: String,
+    tag_annotations: String,
+) -> String {
+    format!(
+        r#"
+{comments}
+#[derive(AsnType, Debug, Clone, Copy, Decode, Encode, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[rasn(enumerated)]{extensible}
+pub enum {name} {{
+    {enum_members}
+}}
+"#
+    )
+}
 
 // pub fn sequence_template(
 //     comments: String,

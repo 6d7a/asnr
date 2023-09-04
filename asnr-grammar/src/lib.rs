@@ -15,6 +15,7 @@ extern crate asnr_grammar_derive;
 use asnr_traits::Declare;
 
 pub mod constraints;
+pub mod encoding_rules;
 pub mod error;
 pub mod information_object;
 pub mod parameterization;
@@ -487,18 +488,34 @@ impl From<(Vec<&str>, &str, &str, ASN1Value)> for ToplevelValueDeclaration {
 #[derive(Debug, Clone, PartialEq)]
 pub struct ToplevelTypeDeclaration {
     pub comments: String,
+    pub tag: Option<AsnTag>,
     pub name: String,
     pub r#type: ASN1Type,
     pub parameterization: Option<Parameterization>,
 }
 
-impl From<(Vec<&str>, &str, Option<Parameterization>, ASN1Type)> for ToplevelTypeDeclaration {
-    fn from(value: (Vec<&str>, &str, Option<Parameterization>, ASN1Type)) -> Self {
+impl
+    From<(
+        Vec<&str>,
+        &str,
+        Option<Parameterization>,
+        (Option<AsnTag>, ASN1Type),
+    )> for ToplevelTypeDeclaration
+{
+    fn from(
+        value: (
+            Vec<&str>,
+            &str,
+            Option<Parameterization>,
+            (Option<AsnTag>, ASN1Type),
+        ),
+    ) -> Self {
         Self {
             comments: value.0.join("\n"),
             name: value.1.into(),
             parameterization: value.2,
-            r#type: value.3,
+            r#type: value.3 .1,
+            tag: value.3 .0,
         }
     }
 }

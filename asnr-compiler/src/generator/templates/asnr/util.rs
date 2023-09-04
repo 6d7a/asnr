@@ -437,6 +437,7 @@ fn declare_inner_sequence_member(
             comments: " Inner type ".into(),
             name: inner_name(&member.name, parent_name),
             r#type: member.r#type.clone(),
+            tag: None
         }),
         None,
     )
@@ -453,6 +454,7 @@ fn declare_inner_choice_option(
             comments: " Inner type ".into(),
             name: inner_name(&option.name, parent_name),
             r#type: option.r#type.clone(),
+            tag: None
         }),
         None,
     )
