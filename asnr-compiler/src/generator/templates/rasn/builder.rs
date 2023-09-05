@@ -12,16 +12,13 @@ use super::{
     template::{
         bit_string_template, boolean_template, char_string_template, enumerated_template,
         integer_template, integer_value_template, null_template, null_value_template,
+        sequence_or_set_template,
     },
     utils::{
-        format_alphabet_annotations, format_constraint_annotations, format_enum_members, format_tag,
+        format_alphabet_annotations, format_enum_members, format_nested_sequence_members,
+        format_range_annotations, format_sequence_or_set_members, format_tag,
     },
 };
-
-pub struct StringifiedNameType {
-    pub name: String,
-    pub r#type: String,
-}
 
 pub struct RasnGenerator;
 
@@ -60,7 +57,7 @@ impl RasnGenerator {
             Ok(integer_template(
                 format_comments(&tld.comments),
                 rustify_name(&tld.name),
-                format_constraint_annotations(true, &int.constraints, false)?,
+                format_range_annotations(true, &int.constraints)?,
                 format_tag(tld.tag.as_ref()),
             ))
         } else {
@@ -80,7 +77,7 @@ impl RasnGenerator {
             Ok(bit_string_template(
                 format_comments(&tld.comments),
                 rustify_name(&tld.name),
-                format_constraint_annotations(true, &bitstr.constraints, true)?,
+                format_range_annotations(true, &bitstr.constraints)?,
                 format_tag(tld.tag.as_ref()),
             ))
         } else {
@@ -100,7 +97,7 @@ impl RasnGenerator {
             Ok(char_string_template(
                 format_comments(&tld.comments),
                 rustify_name(&tld.name),
-                format_constraint_annotations(true, &char_str.constraints, true)?,
+                format_range_annotations(true, &char_str.constraints)?,
                 format_alphabet_annotations(char_str.r#type, &char_str.constraints)?,
                 format_tag(tld.tag.as_ref()),
             ))
@@ -292,35 +289,41 @@ impl RasnGenerator {
     //         }
     //     }
 
-    //     fn generate_sequence<'a>(
-    //         tld: ToplevelTypeDeclaration,
-    //         custom_derive: Option<&'a str>,
-    //     ) -> Result<String, GeneratorError> {
-    //         if let ASN1Type::Sequence(ref seq) = tld.r#type {
-    //             let name = rustify_name(&tld.name);
-    //             let members = extract_sequence_members(&seq.members, &name);
-    //             let (extension_decl, extension_decoder) =
-    //                 format_extensible_sequence(&name, seq.extensible.is_some());
-
-    //             Ok(sequence_template(
-    //                 format_comments(&tld.comments),
-    //                 custom_derive.unwrap_or(DERIVE_DEFAULT),
-    //                 flatten_nested_sequence_members(&seq.members, &name)?.join("\n"),
-    //                 name,
-    //                 format_member_declaration(&members),
-    //                 extension_decl,
-    //                 format_decode_member_body(&members),
-    //                 extension_decoder,
-    //                 seq.declare(),
-    //             ))
-    //         } else {
-    //             Err(GeneratorError::new(
-    //                 Some(ToplevelDeclaration::Type(tld)),
-    //                 "Expected SEQUENCE top-level declaration",
-    //                 GeneratorErrorType::Asn1TypeMismatch,
-    //             ))
-    //         }
-    //     }
+    pub fn generate_sequence_or_set<'a>(
+        tld: ToplevelTypeDeclaration,
+        _custom_derive: Option<&'a str>,
+    ) -> Result<String, GeneratorError> {
+        match tld.r#type {
+            ASN1Type::Sequence(ref seq) | ASN1Type::Set(ref seq) => {
+                let name = rustify_name(&tld.name);
+                let extensible = if seq.extensible.is_some() {
+                    r#"
+                #[non_exhaustive]"#
+                } else {
+                    ""
+                };
+                let set_annotation = if matches!(tld.r#type, ASN1Type::Set(_)) {
+                    "set"
+                } else {
+                    ""
+                };
+                Ok(sequence_or_set_template(
+                    format_comments(&tld.comments),
+                    name.clone(),
+                    extensible,
+                    format_sequence_or_set_members(seq, &name)?,
+                    format_nested_sequence_members(seq, &name)?,
+                    format_tag(tld.tag.as_ref()),
+                    set_annotation.into(),
+                ))
+            }
+            _ => Err(GeneratorError::new(
+                Some(ToplevelDeclaration::Type(tld)),
+                "Expected SEQUENCE top-level declaration",
+                GeneratorErrorType::Asn1TypeMismatch,
+            )),
+        }
+    }
 
     //     fn generate_sequence_of<'a>(
     //         tld: ToplevelTypeDeclaration,

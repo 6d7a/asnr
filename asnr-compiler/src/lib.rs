@@ -41,7 +41,7 @@ use std::{
 };
 
 use asnr_grammar::ToplevelDeclaration;
-use generator::{generate, templates::asnr::template::imports_and_generic_types, Generator};
+use generator::{generate, imports_and_generic_types};
 use parser::asn_spec;
 use validator::Validator;
 
@@ -177,7 +177,7 @@ impl AsnrCompiler {
         &self,
         include_clippy_allows: bool,
     ) -> Result<(String, Vec<Box<dyn Error>>), Box<dyn Error>> {
-        let mut result = imports_and_generic_types(None, self.no_std, include_clippy_allows);
+        let mut result = imports_and_generic_types(&self.framework, None, self.no_std, include_clippy_allows);
         let mut warnings = Vec::<Box<dyn Error>>::new();
         let mut modules: Vec<ToplevelDeclaration> = vec![];
         for src in &self.sources {

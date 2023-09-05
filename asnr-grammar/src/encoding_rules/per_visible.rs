@@ -231,6 +231,7 @@ pub struct PerVisibleRangeConstraints {
     min: Option<i128>,
     max: Option<i128>,
     extensible: bool,
+    is_size_constraint: bool,
 }
 
 impl Default for PerVisibleRangeConstraints {
@@ -239,6 +240,7 @@ impl Default for PerVisibleRangeConstraints {
             min: None,
             max: None,
             extensible: false,
+            is_size_constraint: false,
         }
     }
 }
@@ -249,6 +251,7 @@ impl PerVisibleRangeConstraints {
             min: Some(0),
             max: None,
             extensible: false,
+            is_size_constraint: false,
         }
     }
 
@@ -294,6 +297,10 @@ impl PerVisibleRangeConstraints {
             .transpose()
     }
 
+    pub fn is_size_constraint(&self) -> bool {
+        self.is_size_constraint
+    }
+
     pub fn lies_within<I: num::Integer + ToPrimitive>(
         &self,
         value: &I,
@@ -321,6 +328,7 @@ impl From<&Enumerated> for PerVisibleRangeConstraints {
             min: Some(0),
             max: Some(value.extensible.map_or(value.members.len() - 1, |i| i - 1) as i128),
             extensible: value.extensible.is_some(),
+            is_size_constraint: false,
         }
     }
 }
@@ -331,6 +339,7 @@ impl From<&Choice> for PerVisibleRangeConstraints {
             min: Some(0),
             max: Some(value.extensible.map_or(value.options.len() - 1, |i| i - 1) as i128),
             extensible: value.extensible.is_some(),
+            is_size_constraint: false,
         }
     }
 }
@@ -374,6 +383,7 @@ impl TryFrom<Option<&SubtypeElement>> for PerVisibleRangeConstraints {
                     min: val,
                     max: val,
                     extensible: *extensible,
+                    is_size_constraint: false,
                 })
             }
             Some(SubtypeElement::ValueRange {
@@ -384,11 +394,24 @@ impl TryFrom<Option<&SubtypeElement>> for PerVisibleRangeConstraints {
                 min: min.as_ref().map(|i| i.unwrap_as_integer().ok()).flatten(),
                 max: max.as_ref().map(|i| i.unwrap_as_integer().ok()).flatten(),
                 extensible: *extensible,
+                is_size_constraint: false,
             }),
             Some(SubtypeElement::SizeConstraint(s)) => match &**s {
-                ElementOrSetOperation::Element(e) => Some(e).try_into(),
+                ElementOrSetOperation::Element(e) => <Option<&SubtypeElement> as TryInto<
+                    PerVisibleRangeConstraints,
+                >>::try_into(Some(e))
+                .map(|mut c| {
+                    c.is_size_constraint = true;
+                    c
+                }),
                 ElementOrSetOperation::SetOperation(s) => {
-                    fold_constraint_set(&s, None)?.as_ref().try_into()
+                    <Option<&SubtypeElement> as TryInto<PerVisibleRangeConstraints>>::try_into(
+                        fold_constraint_set(&s, None)?.as_ref(),
+                    )
+                    .map(|mut c| {
+                        c.is_size_constraint = true;
+                        c
+                    })
                 }
             },
             _ => unreachable!(),
@@ -922,7 +945,14 @@ mod tests {
                     .into_iter()
                     .collect(),
                 index_by_character: None,
-                charset_subsets: vec![CharsetSubset::Single('A'), CharsetSubset::Single('B'), CharsetSubset::Single('C'), CharsetSubset::Single('D'), CharsetSubset::Single('E'), CharsetSubset::Single('F')]
+                charset_subsets: vec![
+                    CharsetSubset::Single('A'),
+                    CharsetSubset::Single('B'),
+                    CharsetSubset::Single('C'),
+                    CharsetSubset::Single('D'),
+                    CharsetSubset::Single('E'),
+                    CharsetSubset::Single('F')
+                ]
             }
         );
         assert_eq!(
@@ -942,7 +972,11 @@ mod tests {
                 string_type: CharacterStringType::NumericString,
                 character_by_index: [(0, '1'), (2, '3'), (1, '2')].into_iter().collect(),
                 index_by_character: None,
-                charset_subsets: vec![CharsetSubset::Single('1'), CharsetSubset::Single('3'), CharsetSubset::Single('2')]
+                charset_subsets: vec![
+                    CharsetSubset::Single('1'),
+                    CharsetSubset::Single('3'),
+                    CharsetSubset::Single('2')
+                ]
             }
         )
     }
@@ -969,7 +1003,10 @@ mod tests {
                     .into_iter()
                     .collect(),
                 index_by_character: None,
-                charset_subsets: vec![CharsetSubset::Range { from: Some('A'), to: Some('F') }]
+                charset_subsets: vec![CharsetSubset::Range {
+                    from: Some('A'),
+                    to: Some('F')
+                }]
             }
         );
         assert_eq!(
@@ -992,7 +1029,10 @@ mod tests {
                     .into_iter()
                     .collect(),
                 index_by_character: None,
-                charset_subsets: vec![CharsetSubset::Range { from: Some(' '), to: Some('3') }]
+                charset_subsets: vec![CharsetSubset::Range {
+                    from: Some(' '),
+                    to: Some('3')
+                }]
             }
         )
     }

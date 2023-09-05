@@ -10,7 +10,7 @@ use asnr_grammar::{
 use crate::{
     generator::{
         error::{GeneratorError, GeneratorErrorType},
-        generate,
+        generate, templates::inner_name,
     },
     Framework,
 };
@@ -458,10 +458,6 @@ fn declare_inner_choice_option(
         }),
         None,
     )
-}
-
-fn inner_name(name: &String, parent_name: &String) -> String {
-    format!("{}_{}", parent_name, rustify_name(&name))
 }
 
 pub fn rustify_name(name: &String) -> String {

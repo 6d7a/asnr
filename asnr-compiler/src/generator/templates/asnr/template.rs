@@ -1,6 +1,6 @@
 use super::builder::StringifiedNameType;
 
-pub fn imports_and_generic_types(
+pub fn asnr_imports_and_generic_types(
     derive: Option<&str>,
     no_std: bool,
     include_clippy_allows: bool,

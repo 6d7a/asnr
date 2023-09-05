@@ -7,7 +7,20 @@ use asnr_grammar::{information_object::*, *};
 
 pub(crate) mod error;
 pub(crate) mod templates;
-use self::{error::GeneratorError, templates::{asnr::builder::AsnrGenerator, rasn::builder::RasnGenerator}};
+use self::{
+    error::GeneratorError,
+    templates::{
+        asnr::{builder::AsnrGenerator, template::asnr_imports_and_generic_types},
+        rasn::{builder::RasnGenerator, template::rasn_imports_and_generic_types},
+    },
+};
+
+pub fn imports_and_generic_types(framework: &Framework, custom_derive: Option<&str>, no_std: bool, include_clippy_allows: bool) -> String {
+    match framework {
+        Framework::Asnr => asnr_imports_and_generic_types(custom_derive, no_std, include_clippy_allows),
+        Framework::Rasn => rasn_imports_and_generic_types(),
+    }
+}
 
 pub trait Generator {
     fn generate_choice_value(tld: ToplevelValueDeclaration) -> Result<String, GeneratorError>;
@@ -117,7 +130,7 @@ pub fn generate<'a>(
                 },
             }
         }
-        Framework::Rasn =>  match tld {
+        Framework::Rasn => match tld {
             ToplevelDeclaration::Type(t) => match t.r#type {
                 ASN1Type::Null => RasnGenerator::generate_null(t, custom_derive),
                 ASN1Type::Boolean => RasnGenerator::generate_boolean(t, custom_derive),
@@ -127,7 +140,9 @@ pub fn generate<'a>(
                 ASN1Type::CharacterString(_) => {
                     RasnGenerator::character_string_template(t, custom_derive)
                 }
-                // ASN1Type::Sequence(_) => RasnGenerator::generate_sequence(t, custom_derive),
+                ASN1Type::Sequence(_) | ASN1Type::Set(_) => {
+                    RasnGenerator::generate_sequence_or_set(t, custom_derive)
+                }
                 // ASN1Type::SequenceOf(_) => {
                 //     RasnGenerator::generate_sequence_of(t, custom_derive)
                 // }
@@ -152,7 +167,7 @@ pub fn generate<'a>(
                 // ASN1Value::Choice(_, _) => RasnGenerator::generate_choice_value(v),
                 // ASN1Value::Sequence(_) => RasnGenerator::generate_sequence_value(v),
                 ASN1Value::Real(_) => todo!(),
-                _ => Ok("".into())
+                _ => Ok("".into()),
             },
             ToplevelDeclaration::Information(i) => match i.value {
                 // ASN1Information::ObjectClass(_) => {
@@ -163,6 +178,6 @@ pub fn generate<'a>(
                 // }
                 _ => Ok("".into()),
             },
-        }
+        },
     }
 }

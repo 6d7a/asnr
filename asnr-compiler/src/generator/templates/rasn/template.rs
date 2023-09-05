@@ -1,12 +1,9 @@
 use asnr_grammar::*;
+use nom::bytes::complete::tag;
 
-use super::builder::StringifiedNameType;
+use crate::generator::templates::rasn::utils::join_annotations;
 
-pub const RASN_DERIVES: &'static str =
-    "#[derive(AsnType, Encode, Decode, Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]";
-pub const RASN_EXTENSIBLE: &'static str = "#[non_exhaustive]";
-
-pub fn imports_and_generic_types() -> String {
+pub fn rasn_imports_and_generic_types() -> String {
     format!(
         r#"#![no_std]
 
@@ -65,12 +62,16 @@ pub fn integer_template(
     constraint_annotations: String,
     tag_annotations: String,
 ) -> String {
+    let rasn_annotations: String = join_annotations(vec![
+        "delegate".into(),
+        tag_annotations,
+        constraint_annotations,
+    ]);
     format!(
         r#"
 {comments}
 #[derive(AsnType, Debug, Clone, Copy, Decode, Encode, PartialEq, PartialOrd, Eq, Ord, Hash)]
-#[rasn(delegate{constraint_annotations}{tag_annotations})]
-pub struct {name}(pub Integer);
+{rasn_annotations}pub struct {name}(pub Integer);
 "#
     )
 }
@@ -81,12 +82,16 @@ pub fn bit_string_template(
     constraint_annotations: String,
     tag_annotations: String,
 ) -> String {
+    let rasn_annotations: String = join_annotations(vec![
+        "delegate".into(),
+        tag_annotations,
+        constraint_annotations,
+    ]);
     format!(
         r#"
 {comments}
 #[derive(AsnType, Debug, Clone, Decode, Encode, PartialEq, PartialOrd, Eq, Ord, Hash)]
-#[rasn(delegate{constraint_annotations})]
-pub struct {name}(pub BitString);
+{rasn_annotations}pub struct {name}(pub BitString);
 "#
     )
 }
@@ -98,23 +103,28 @@ pub fn char_string_template(
     alphabet_annotations: String,
     tag_annotations: String,
 ) -> String {
+    let rasn_annotations: String = join_annotations(vec![
+        "delegate".into(),
+        tag_annotations,
+        constraint_annotations,
+        alphabet_annotations,
+    ]);
     format!(
         r#"
 {comments}
 #[derive(AsnType, Debug, Clone, Decode, Encode, PartialEq, PartialOrd, Eq, Ord, Hash)]
-#[rasn(delegate{constraint_annotations}{alphabet_annotations})]
-pub struct {name}(pub BitString);
+{rasn_annotations}pub struct {name}(pub BitString);
 "#
     )
 }
 
 pub fn boolean_template(comments: String, name: String, tag_annotations: String) -> String {
+    let rasn_annotations: String = join_annotations(vec!["delegate".into(), tag_annotations]);
     format!(
         r#"
 {comments}
 #[derive(AsnType, Debug, Clone, Copy, Decode, Encode, PartialEq, PartialOrd, Eq, Ord, Hash)]
-#[rasn(delegate)]
-pub struct {name}(pub Boolean);
+{rasn_annotations}pub struct {name}(pub Boolean);
 "#
     )
 }
@@ -128,12 +138,12 @@ pub const {name} = ();
 }
 
 pub fn null_template(comments: String, name: String, tag_annotations: String) -> String {
+    let rasn_annotations: String = join_annotations(vec!["delegate".into(), tag_annotations]);
     format!(
         r#"
 {comments}
 #[derive(AsnType, Debug, Clone, Copy, Decode, Encode, PartialEq, PartialOrd, Eq, Ord, Hash)]
-#[rasn(delegate)]
-pub struct {name}(());
+{rasn_annotations}pub struct {name}(());
 "#
     )
 }
@@ -145,11 +155,12 @@ pub fn enumerated_template(
     enum_members: String,
     tag_annotations: String,
 ) -> String {
+    let rasn_annotations = join_annotations(vec!["enumerated".into(), tag_annotations]);
     format!(
         r#"
 {comments}
 #[derive(AsnType, Debug, Clone, Copy, Decode, Encode, PartialEq, PartialOrd, Eq, Ord, Hash)]
-#[rasn(enumerated)]{extensible}
+{rasn_annotations}{extensible}
 pub enum {name} {{
     {enum_members}
 }}
@@ -157,55 +168,28 @@ pub enum {name} {{
     )
 }
 
-// pub fn sequence_template(
-//     comments: String,
-//     derive: &str,
-//     inner_members: String,
-//     name: String,
-//     member_declaration: String,
-//     extension_decl: String,
-//     decode_member_body: String,
-//     extension_decoder: String,
-//     seq_descriptor: String,
-// ) -> String {
-//     format!(
-//         r#"
-//   {inner_members}
-
-//   {comments}{derive}
-//   pub struct {name} {{
-//     {member_declaration}{extension_decl}
-//   }}
-
-//   impl<'a, I: AsBytes + Debug + 'a> DecodeMember<'a, I> for {name} {{
-//     fn decode_member_at_index<D>(&mut self, index: usize, input: I) -> Result<I, DecodingError<I>>
-//       where
-//           D: Decoder<'a, I>,
-//           Self: Sized,
-//     {{
-//       let mut input = input;
-//       match index {{
-//         {decode_member_body}
-//         _ => {extension_decoder}
-//       }}
-//       Ok(input)
-//     }}
-//   }}
-
-//   impl<'a, I: AsBytes + Debug + 'a> Decode<'a, I> for {name} {{
-//     {DECODE_SIGNATURE}
-//     {{
-//       {name}::decoder::<D>()?(input)
-//     }}
-
-//     {DECODER_SIGNATURE}
-//     {{
-//       D::decode_sequence({seq_descriptor})
-//     }}
-//   }}
-//   "#
-//     )
-// }
+pub fn sequence_or_set_template(
+    comments: String,
+    name: String,
+    extensible: &str,
+    members: String,
+    nested_members: String,
+    tag_annotations: String,
+    set_annotation: String,
+) -> String {
+    let rasn_annotations = join_annotations(vec![set_annotation, tag_annotations]);
+    format!(
+        r#"
+        {nested_members}
+        {comments}
+        #[derive(AsnType, Debug, Clone, Decode, Encode, PartialEq)]
+        {rasn_annotations}{extensible}
+        pub struct {name} {{
+            {members}
+        }}
+        "#
+    )
+}
 
 // pub fn sequence_of_template(
 //     comments: String,
