@@ -8,11 +8,9 @@ use asnr_grammar::{
     ASN1Type, AsnTag, CharacterStringType, TagClass, ToplevelDeclaration, ToplevelTypeDeclaration,
 };
 
-use crate::generator::{
-    error::GeneratorError,
-    generate,
-    templates::{asnr::util::rustify_name, inner_name},
-    Framework,
+use crate::{
+    generator::{error::GeneratorError, generate, templates::inner_name, Framework},
+    utils::{to_rust_camel_case, to_rust_title_case},
 };
 
 pub fn format_range_annotations(
@@ -20,10 +18,14 @@ pub fn format_range_annotations(
     constraints: &Vec<Constraint>,
 ) -> Result<String, GeneratorError> {
     if constraints.is_empty() {
-        return Ok(String::new())
+        return Ok(String::new());
     }
     let per_constraints = per_visible_range_constraints(signed, constraints)?;
-    let range_prefix = if per_constraints.is_size_constraint() { "size" } else { "value" };
+    let range_prefix = if per_constraints.is_size_constraint() {
+        "size"
+    } else {
+        "value"
+    };
     Ok(
         match (
             per_constraints.min::<i128>(),
@@ -55,7 +57,7 @@ pub fn format_alphabet_annotations(
     constraints: &Vec<Constraint>,
 ) -> Result<String, GeneratorError> {
     if constraints.is_empty() {
-        return Ok(String::new())
+        return Ok(String::new());
     }
     let mut permitted_alphabet = PerVisibleAlphabetConstraints::default_for(string_type);
     for c in constraints {
@@ -88,7 +90,7 @@ pub fn format_enum_members(enumerated: &Enumerated) -> String {
         .members
         .iter()
         .map(|e| {
-            let name = rustify_name(&e.name);
+            let name = to_rust_title_case(&e.name);
             let index = e.index;
             let extension = if index >= first_extension_index.map_or(i128::MAX, |x| x as i128) {
                 r#"#[rasn(extension_addition)]
@@ -153,34 +155,40 @@ fn format_sequence_member(
     parent_name: &String,
     extension_annotation: &str,
 ) -> Result<String, GeneratorError> {
-    let name = rustify_name(&member.name);
+    let name = to_rust_camel_case(&member.name);
     let (mut all_constraints, mut formatted_type_name) = match &member.r#type {
         ASN1Type::Null => (vec![], "()".into()),
         ASN1Type::Boolean => (vec![], "bool".into()),
         ASN1Type::Integer(i) => {
             let per_constraints = per_visible_range_constraints(true, &i.constraints)?;
-            (i.constraints.clone(), int_type_token(
-                per_constraints.min().unwrap_or(i128::MIN),
-                per_constraints.max().unwrap_or(i128::MAX),
+            (
+                i.constraints.clone(),
+                int_type_token(
+                    per_constraints.min().unwrap_or(i128::MIN),
+                    per_constraints.max().unwrap_or(i128::MAX),
+                )
+                .into(),
             )
-            .into())
         }
         ASN1Type::Real(_) => (vec![], "f64".into()),
         ASN1Type::BitString(b) => (b.constraints.clone(), "BitString".into()),
         ASN1Type::OctetString(o) => (o.constraints.clone(), "OctetString".into()),
-        ASN1Type::CharacterString(c) => (c.constraints.clone(), match c.r#type {
-            CharacterStringType::NumericString => "NumericString".into(),
-            CharacterStringType::VisibleString => "VisibleString".into(),
-            CharacterStringType::IA5String => "Ia5String".into(),
-            CharacterStringType::TeletexString => "TeletexString".into(),
-            CharacterStringType::VideotexString => todo!(),
-            CharacterStringType::GraphicString => todo!(),
-            CharacterStringType::GeneralString => "GeneralString".into(),
-            CharacterStringType::UniversalString => todo!(),
-            CharacterStringType::UTF8String => "Utf8String".into(),
-            CharacterStringType::BMPString => "BmpString".into(),
-            CharacterStringType::PrintableString => "PrintableString".into(),
-        }),
+        ASN1Type::CharacterString(c) => (
+            c.constraints.clone(),
+            match c.r#type {
+                CharacterStringType::NumericString => "NumericString".into(),
+                CharacterStringType::VisibleString => "VisibleString".into(),
+                CharacterStringType::IA5String => "Ia5String".into(),
+                CharacterStringType::TeletexString => "TeletexString".into(),
+                CharacterStringType::VideotexString => todo!(),
+                CharacterStringType::GraphicString => todo!(),
+                CharacterStringType::GeneralString => "GeneralString".into(),
+                CharacterStringType::UniversalString => todo!(),
+                CharacterStringType::UTF8String => "Utf8String".into(),
+                CharacterStringType::BMPString => "BmpString".into(),
+                CharacterStringType::PrintableString => "PrintableString".into(),
+            },
+        ),
         ASN1Type::Enumerated(_)
         | ASN1Type::Choice(_)
         | ASN1Type::Sequence(_)

@@ -9,9 +9,9 @@ fn decodes_its_pdu_header() {
     let binary_cam = decode_hex("0202de140ce5c7c0405ab23d82ce2781e9a278274bc633fa54587ca0a27e8302968a9733ff82001a103fe0143980106e0075801158ce0002f03adc08c4c800015781d620469633800abc0edb0239319c0055e075081185900002af03a0c0912c800016781c9e0565640000c3c0e0902dbb19c006de058d810218ce0035f0155c0006c67000df808d5fde662700073c0476fd67319c0058604137d31589c006dc").unwrap();
 
     let result: ItsPduHeader = Uper::decode(&binary_cam).unwrap();
-    assert_eq!(result.messageID.0, 2);
-    assert_eq!(result.protocolVersion.0, 2);
-    assert_eq!(result.stationID.0, 3725855973);
+    assert_eq!(result.message_i_d.0, 2);
+    assert_eq!(result.protocol_version.0, 2);
+    assert_eq!(result.station_i_d.0, 3725855973);
 }
 
 #[test]
@@ -19,16 +19,16 @@ fn decodes_cam_1() {
     let binary_cam: Vec<u8> = decode_hex("0202de140ce5c7c0405ab23d82ce2781e9a278274bc633fa54587ca0a27e8302968a9733ff82001a103fe0143980106e0075801158ce0002f03adc08c4c800015781d620469633800abc0edb0239319c0055e075081185900002af03a0c0912c800016781c9e0565640000c3c0e0902dbb19c006de058d810218ce0035f0155c0006c67000df808d5fde662700073c0476fd67319c0058604137d31589c006dc").unwrap();
 
     let result: CAM = Uper::decode(&binary_cam).unwrap();
-    if let LowFrequencyContainer::basicVehicleContainerLowFrequency(lfct) =
-        result.cam.camParameters.lowFrequencyContainer.unwrap()
+    if let LowFrequencyContainer::BasicVehicleContainerLowFrequency(lfct) =
+        result.cam.cam_parameters.low_frequency_container.unwrap()
     {
         assert_eq!(
             440,
-            lfct.pathHistory
+            lfct.path_history
                 .0
                 .last()
                 .unwrap()
-                .pathDeltaTime
+                .path_delta_time
                 .as_ref()
                 .unwrap()
                 .0
@@ -42,18 +42,18 @@ fn decodes_cam_1() {
 fn decodes_cam_2() {
     let binary_cam: Vec<u8> = decode_hex("02024810c86ee3d800fab1dcc3ae27aef4c204204000345bd0a47014d712b61c1a1003df20003e8894d713b01c1a0fead2a0a6b8a550e0d07e8e").unwrap();
     let result: CAM = Uper::decode(&binary_cam).unwrap();
-    if let HighFrequencyContainer::rsuContainerHighFrequency(rsuhf) =
-        result.cam.camParameters.highFrequencyContainer
+    if let HighFrequencyContainer::RsuContainerHighFrequency(rsuhf) =
+        result.cam.cam_parameters.high_frequency_container
     {
         assert_eq!(
             85880135,
             rsuhf
-                .protectedCommunicationZonesRSU
+                .protected_communication_zones_r_s_u
                 .unwrap()
                 .0
                 .last()
                 .unwrap()
-                .protectedZoneLongitude
+                .protected_zone_longitude
                 .0
         );
     } else {
@@ -75,7 +75,7 @@ fn decodes_other_test_cams() {
         let result: CAM = Uper::decode(&cams[i]).unwrap();
         assert_eq!(
             svc_present[i],
-            result.cam.camParameters.specialVehicleContainer.is_some()
+            result.cam.cam_parameters.special_vehicle_container.is_some()
         );
     }
 }
@@ -85,7 +85,7 @@ fn decodes_cpm() {
     let binary_cpm: Vec<u8> = decode_hex("010ea6c052477a3f700b56402701c4d78162b9eb9c0006ced283a63ed7d00bfeca4cca0ccfffd014c44007b21003e819019032008a03bb83e92f94fd90657ffff5ffffd448fce00ee5004503ddc1f534ca7f6cb2bffffaffffe9c1fe7007728022826ee0fb55653fb4995ffffd7ffff607441003b940114157707d59329fe7fcaffffebffffb42468801dca008a12bb83e25794fe03e57ffff5ffffd2d4fce00ee500450e5dc1f043ca808af2bffffaffffed461e200772802088eee0f9d5653f38b95ffffd7ffff5c23f001b940115a37707bf5f2a0115caffffebffffa35df9c01dca008a35bb83ebc1950088657ffff5ffffd51dfce00ee50045645dc1ef1bca7e8a72bffffaffffed461e2007728022afaee0f822e53feb395ffffd7ffff4c9bf3803b940114337707bbf329f7a5caffffebffffac1ff9c00dca008a42bb83dd5594fc49e57ffff5ffffd4e9fce00ee5004502ddc1f4f7ca7ef6f2bffffaffffea1efe70037280228feee0f86e653f98795ffffd7ffff625861003b9401144d7707c37b29fef1caffffebffffb4586c801dca008a2fbb83e08b950042657ffff5ffffd2abfce00ee5004520ddc1efceca7eb672bf3dfafc2fed0619200372802093aee0f993e53f2d995ffffd7ffff5c23f001b9401049f7707bcf329f722caffafebf31fb6829000dca008a4cbb83e0ff94fc5ae57ffff5ffffd327fce00ee5004129ddc1ef21ca7fab72bffffaffffeb847e0037280208eeee0fa17e53f4b3960477d805ff43c7f001b940104a57707d5172a0167cafffbec03cfa739f800dca008255bb83de5194ff94657ffff5ffffd601fc006e5004518ddc1f16bca7f0af2c1a2faf613ee50b12003728d0").unwrap();
 
     let result: CPM = Uper::decode(&binary_cpm).unwrap();
-    assert_eq!(26, result.cpm.cpmParameters.numberOfPerceivedObjects.0);
+    assert_eq!(26, result.cpm.cpm_parameters.number_of_perceived_objects.0);
 }
 
 #[test]
@@ -96,7 +96,7 @@ fn decodes_denm() {
     println!("{:#?}", &result);
     assert_eq!(
         true,
-        result.denm.alacarte.unwrap().stationaryVehicle.is_none()
+        result.denm.alacarte.unwrap().stationary_vehicle.is_none()
     );
 }
 
@@ -108,7 +108,7 @@ fn decodes_demo_denm() {
     .unwrap();
 
     let result: DENM = Uper::decode(&binary_denm).unwrap();
-    assert_eq!(1, result.denm.situation.unwrap().eventType.causeCode.0)
+    assert_eq!(1, result.denm.situation.unwrap().event_type.cause_code.0)
 }
 
 #[test]
@@ -140,17 +140,17 @@ fn decodes_mapem_1() {
             .0
             .last()
             .unwrap()
-            .laneSet
+            .lane_set
             .0
             .last()
             .unwrap()
-            .connectsTo
+            .connects_to
             .as_ref()
             .unwrap()
             .0
             .last()
             .unwrap()
-            .connectionID
+            .connection_i_d
             .as_ref()
             .unwrap()
             .0
@@ -162,21 +162,21 @@ fn decodes_mapem_2() {
     let binary_mapem: Vec<u8> = decode_hex("0205e6e167b408000005566022a089a21b9bdf61f028200a00022000000657a94805e2bc69403895e21e0628af2f705dc55f429438148290000a4190000810090001100000002bfdabd7915ab517c24520d000069044000404034000440000000aff6b060258f2a983f148210002a4160001800110001100000012bd66c07095e4c202f0af0c502c8000a80008800000015f285f8acaf448edd6000c80008800000016101e02a4b0b9314380").unwrap();
 
     let result: MAPEM = Uper::decode(&binary_mapem).unwrap();
-    if let NodeListXY::nodes(nodes) = result
+    if let NodeListXY::Nodes(nodes) = result
         .map
         .intersections
         .unwrap()
         .0
         .last()
         .unwrap()
-        .laneSet
+        .lane_set
         .0
         .last()
         .unwrap()
-        .nodeList
+        .node_list
         .clone()
     {
-        if let NodeOffsetPointXY::node_XY6(node) = nodes.0.last().unwrap().delta.clone() {
+        if let NodeOffsetPointXY::NodeXY6(node) = nodes.0.last().unwrap().delta.clone() {
             assert_eq!(2588, node.y.0);
         } else {
             panic!("Unexpected node type!")
@@ -255,7 +255,7 @@ fn decodes_srem() {
     let binary_srem: Vec<u8> = decode_hex("02092d4ea63c70c132ae465700100000011020cf800007a780091563f0ec9c4f7de4383a0023f2060251902c00008008e000012de100002b0200002b1e0134899500").unwrap();
 
     let result: SREM = Uper::decode(&binary_srem).unwrap();
-    assert_eq!(4, result.srm.requester.transitSchedule.unwrap().0);
+    assert_eq!(4, result.srm.requester.transit_schedule.unwrap().0);
 }
 
 #[test]
@@ -263,19 +263,19 @@ fn decodes_ivim() {
     let binary_ivim: Vec<u8> = decode_hex("0206001210dc825000000000880558eaad5713d7a64ffffffe11dbba1f08c0e1110140750fe3540748ff1ac0abcff5e2bc307844402fff24112f01294570eaf081600002000408014e").unwrap();
 
     let result: IVIM = Uper::decode(&binary_ivim).unwrap();
-    if let IviContainer::giv(giv) = result.ivi.optional.unwrap().0.last().unwrap() {
-        if let Code::iso14823(code) = giv
+    if let IviContainer::Giv(giv) = result.ivi.optional.unwrap().0.last().unwrap() {
+        if let Code::Iso14823(code) = giv
             .0
             .last()
             .unwrap()
-            .roadSignCodes
+            .road_sign_codes
             .0
             .last()
             .unwrap()
             .code
             .clone()
         {
-            assert_eq!(78, code.pictogramCode.pictogramCategoryCode.serialNumber.0);
+            assert_eq!(78, code.pictogram_code.pictogram_category_code.serial_number.0);
         } else {
             panic!("Unexpected pictogram code!")
         }
@@ -293,9 +293,9 @@ fn decodes_partial_mapem_1() {
         2501,
         result
             .map
-            .firstIntersection
+            .first_intersection
             .unwrap()
-            .partialIntersection
+            .partial_intersection
             .id
             .id
             .0
@@ -311,9 +311,9 @@ fn decodes_partial_mapem_2() {
         21862,
         result
             .map
-            .firstIntersection
+            .first_intersection
             .unwrap()
-            .partialIntersection
+            .partial_intersection
             .id
             .id
             .0
@@ -327,7 +327,7 @@ fn decodes_partial_spatem() {
     let result: PartialSpatem = Uper::decode(&binary_spatem).unwrap();
     assert_eq!(
         2501,
-        result.spat.intersections.partialSpatIntersection.id.id.0
+        result.spat.intersections.partial_spat_intersection.id.id.0
     );
 }
 
@@ -378,19 +378,19 @@ fn encodes_denms_as_decodes() {
 fn encodes_partial_mapems_as_decodes() {
     let partial_mapem = PartialMapem {
         header: ItsPduHeader {
-            protocolVersion: ItsPduHeader_protocolVersion(2),
-            messageID: ItsPduHeader_messageID(5),
-            stationID: StationID(12310),
+            protocol_version: InnerItsPduHeaderProtocolVersion(2),
+            message_i_d: InnerItsPduHeaderMessageID(5),
+            station_i_d: StationID(12310),
         },
         map: PartialMapData {
-            timeStamp: None,
-            msgIssueRevision: MsgCount(0),
-            layerType: None,
-            layerID: None,
-            firstIntersection: Some(FirstIntersection {
-                numberOfIntersections: FirstIntersection_numberOfIntersections(1),
-                partialIntersection: PartialIntersection {
-                    dummyBitmap: PartialIntersection_dummyBitmap(vec![true, true, true, true]),
+            time_stamp: None,
+            msg_issue_revision: MsgCount(0),
+            layer_type: None,
+            layer_i_d: None,
+            first_intersection: Some(FirstIntersection {
+                number_of_intersections: InnerFirstIntersectionNumberOfIntersections(1),
+                partial_intersection: PartialIntersection {
+                    dummy_bitmap: InnerPartialIntersectionDummyBitmap(vec![true, true, true, true]),
                     name: Some(DescriptiveName("MAP_ITS_25\\2501\\2.2".into())),
                     id: IntersectionReferenceID {
                         region: Some(RoadRegulatorID(3)),

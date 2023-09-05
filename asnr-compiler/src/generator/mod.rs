@@ -1,6 +1,6 @@
 //! The `generator` module is responsible for generating rust code that handles
 //! decoding and encoding of the parsed and validated ASN1 data elements.
-//! The `generator` uses string templates for generating rust code.
+//! The `generator` uses string templates for generating rust code. 
 
 use crate::Framework;
 use asnr_grammar::{information_object::*, *};
@@ -37,7 +37,7 @@ pub trait Generator {
         tld: ToplevelTypeDeclaration,
         custom_derive: Option<&'a str>,
     ) -> Result<String, GeneratorError>;
-    fn character_string_template<'a>(
+    fn generate_character_string<'a>(
         tld: ToplevelTypeDeclaration,
         custom_derive: Option<&'a str>,
     ) -> Result<String, GeneratorError>;
@@ -91,7 +91,7 @@ pub fn generate<'a>(
                     ASN1Type::Enumerated(_) => AsnrGenerator::generate_enumerated(t, custom_derive),
                     ASN1Type::BitString(_) => AsnrGenerator::generate_bit_string(t, custom_derive),
                     ASN1Type::CharacterString(_) => {
-                        AsnrGenerator::character_string_template(t, custom_derive)
+                        AsnrGenerator::generate_character_string(t, custom_derive)
                     }
                     ASN1Type::Sequence(_) => AsnrGenerator::generate_sequence(t, custom_derive),
                     ASN1Type::SequenceOf(_) => {
@@ -138,7 +138,7 @@ pub fn generate<'a>(
                 ASN1Type::Enumerated(_) => RasnGenerator::generate_enumerated(t, custom_derive),
                 ASN1Type::BitString(_) => RasnGenerator::generate_bit_string(t, custom_derive),
                 ASN1Type::CharacterString(_) => {
-                    RasnGenerator::character_string_template(t, custom_derive)
+                    RasnGenerator::generate_character_string(t, custom_derive)
                 }
                 ASN1Type::Sequence(_) | ASN1Type::Set(_) => {
                     RasnGenerator::generate_sequence_or_set(t, custom_derive)

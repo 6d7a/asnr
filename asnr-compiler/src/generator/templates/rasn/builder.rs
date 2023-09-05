@@ -3,9 +3,12 @@ use asnr_grammar::{
     ToplevelValueDeclaration, INTEGER,
 };
 
-use crate::generator::{
-    error::{GeneratorError, GeneratorErrorType},
-    templates::asnr::util::{format_comments, rustify_name},
+use crate::{
+    generator::{
+        error::{GeneratorError, GeneratorErrorType},
+        templates::asnr::util::format_comments,
+    },
+    utils::{to_rust_title_case, to_rust_camel_case},
 };
 
 use super::{
@@ -28,14 +31,14 @@ impl RasnGenerator {
             if tld.type_name == INTEGER {
                 Ok(integer_value_template(
                     format_comments(&tld.comments),
-                    rustify_name(&tld.name),
+                    to_rust_camel_case(&tld.name),
                     int_type_token(i, i),
                     i.to_string(),
                 ))
             } else {
                 Ok(integer_value_template(
                     format_comments(&tld.comments),
-                    rustify_name(&tld.name),
+                    to_rust_camel_case(&tld.name),
                     tld.type_name.as_str(),
                     format!("{}({})", tld.type_name, i),
                 ))
@@ -56,7 +59,7 @@ impl RasnGenerator {
         if let ASN1Type::Integer(ref int) = tld.r#type {
             Ok(integer_template(
                 format_comments(&tld.comments),
-                rustify_name(&tld.name),
+                to_rust_title_case(&tld.name),
                 format_range_annotations(true, &int.constraints)?,
                 format_tag(tld.tag.as_ref()),
             ))
@@ -76,7 +79,7 @@ impl RasnGenerator {
         if let ASN1Type::BitString(ref bitstr) = tld.r#type {
             Ok(bit_string_template(
                 format_comments(&tld.comments),
-                rustify_name(&tld.name),
+                to_rust_title_case(&tld.name),
                 format_range_annotations(true, &bitstr.constraints)?,
                 format_tag(tld.tag.as_ref()),
             ))
@@ -89,14 +92,14 @@ impl RasnGenerator {
         }
     }
 
-    pub fn character_string_template<'a>(
+    pub fn generate_character_string<'a>(
         tld: ToplevelTypeDeclaration,
         _custom_derive: Option<&'a str>,
     ) -> Result<String, GeneratorError> {
         if let ASN1Type::CharacterString(ref char_str) = tld.r#type {
             Ok(char_string_template(
                 format_comments(&tld.comments),
-                rustify_name(&tld.name),
+                to_rust_title_case(&tld.name),
                 format_range_annotations(true, &char_str.constraints)?,
                 format_alphabet_annotations(char_str.r#type, &char_str.constraints)?,
                 format_tag(tld.tag.as_ref()),
@@ -117,7 +120,7 @@ impl RasnGenerator {
         if let ASN1Type::Boolean = tld.r#type {
             Ok(boolean_template(
                 format_comments(&tld.comments),
-                rustify_name(&tld.name),
+                to_rust_title_case(&tld.name),
                 format_tag(tld.tag.as_ref()),
             ))
         } else {
@@ -154,7 +157,7 @@ impl RasnGenerator {
         if let ASN1Value::Null = tld.value {
             Ok(null_value_template(
                 format_comments(&tld.comments),
-                rustify_name(&tld.name),
+                to_rust_camel_case(&tld.name),
             ))
         } else {
             Err(GeneratorError::new(
@@ -172,7 +175,7 @@ impl RasnGenerator {
         if let ASN1Type::Null = tld.r#type {
             Ok(null_template(
                 format_comments(&tld.comments),
-                rustify_name(&tld.name),
+                to_rust_title_case(&tld.name),
                 format_tag(tld.tag.as_ref()),
             ))
         } else {
@@ -197,7 +200,7 @@ impl RasnGenerator {
             };
             Ok(enumerated_template(
                 format_comments(&tld.comments),
-                rustify_name(&tld.name),
+                to_rust_title_case(&tld.name),
                 extensible,
                 format_enum_members(enumerated),
                 format_tag(tld.tag.as_ref()),
@@ -295,7 +298,7 @@ impl RasnGenerator {
     ) -> Result<String, GeneratorError> {
         match tld.r#type {
             ASN1Type::Sequence(ref seq) | ASN1Type::Set(ref seq) => {
-                let name = rustify_name(&tld.name);
+                let name = to_rust_title_case(&tld.name);
                 let extensible = if seq.extensible.is_some() {
                     r#"
                 #[non_exhaustive]"#

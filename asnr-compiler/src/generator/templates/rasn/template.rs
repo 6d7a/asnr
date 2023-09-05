@@ -1,6 +1,3 @@
-use asnr_grammar::*;
-use nom::bytes::complete::tag;
-
 use crate::generator::templates::rasn::utils::join_annotations;
 
 pub fn rasn_imports_and_generic_types() -> String {

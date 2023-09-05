@@ -1,8 +1,8 @@
-use crate::generator::templates::asnr::util::rustify_name;
+use crate::utils::to_rust_title_case;
 
 pub(crate) mod asnr;
 pub(crate) mod rasn;
 
 pub fn inner_name(name: &String, parent_name: &String) -> String {
-    format!("{}_{}", parent_name, rustify_name(&name))
+    format!("{}{}", parent_name, to_rust_title_case(&name))
 }

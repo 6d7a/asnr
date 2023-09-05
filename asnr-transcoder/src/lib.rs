@@ -1,9 +1,47 @@
-//! The `asnr-transcoder` library encodes and decodes data elements resulting from compiling
-//! an ASN1 specification with the `asnr-compiler`.
-//!
-//! The transcoder aims to be suitable for `no_std` environments and `wasm-unknown` targets.
-//! For a start, the asnr transcoder will provide support for UPER encoding rules,
-//! but you can inject your own custom transcoder by implementing the `Decoder` and `Encoder` traits.
+//! # ASNR Transcoder
+//! The transcoder crate handles the actual encoding and decoding of data at runtime.
+//! It aims to be suitable for `no_std` environments and `wasm-unknown` targets.
+//! For a start, the asnr transcoder will provide support for UPER encoding rules, 
+//! but transcoding can be easily customized by implementing the crate's `Encoder` and `Decoder` traits.
+//! 
+//! The ASNR transcoder de- and encodes messages by composing functions that handle the
+//! de-/encoding of generic ASN1 types like SEQUENCEs or INTEGERs. In the current implementation,
+//! that choice has led to a lot of boxing and unboxing, but I hope to find a more efficient solution
+//! in the future. The advantage of this design is that authors of custom encoders and decoders have
+//! pretty much all of the information concerning the data element as it's specified in an 
+//! ASN1 specification, including constraints, even comments up to a certain degree. 
+//! 
+//! ## Usage
+//! Let's consider the following ASN1 Sequence:
+//! ```asn1
+//! ExampleSequence ::= SEQUENCE {
+//!   member-1 IA5String (SIZE (1..24)),
+//!   member-2 INTEGER (0..15),
+//!   ...,
+//!   extension BOOLEAN OPTIONAL
+//! }
+//! ```
+//! 
+//! ```rust
+//! # use asnr_compiler_derive::asn1;
+//! # asn1!(r#"ExampleSequence ::= SEQUENCE { member-1 IA5String (SIZE (1..24)), member-2 INTEGER (0..15), ..., extension BOOLEAN OPTIONAL }"#);
+//! use asnr_transcoder::uper::Uper;
+//! /// import your generated ASN1 representations
+//! 
+//! fn decode_example_sequence(binary: &[u8]) -> ExampleSequence {
+//!   Uper::decode(binary).unwrap()
+//! }
+//! 
+//! fn encode_example_sequence() -> Vec<u8> {
+//!   let example_sequence = ExampleSequence {
+//!     // ASN1-built-in types are represented as new types within SEQUENCEs
+//!     member_1: InnerExampleSequenceMember1("Hello, World!".into()),
+//!     member_2: InnerExampleSequenceMember2(8),
+//!     extension: None
+//!   };
+//!   Uper::encode(example_sequence).unwrap()
+//! }
+//! ```
 #![cfg_attr(not(test), no_std)]
 extern crate alloc;
 
@@ -16,6 +54,7 @@ use alloc::{boxed::Box, string::String, vec::Vec};
 use asnr_grammar::{types::*, ASN1Type};
 use core::fmt::Debug;
 use error::{DecodingError, EncodingError};
+
 
 pub type IResult<I, T> = Result<(I, T), DecodingError<I>>;
 

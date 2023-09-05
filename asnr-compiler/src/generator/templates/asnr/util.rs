@@ -10,19 +10,14 @@ use asnr_grammar::{
 use crate::{
     generator::{
         error::{GeneratorError, GeneratorErrorType},
-        generate, templates::inner_name,
+        generate, 
     },
     Framework,
 };
 
-use super::builder::StringifiedNameType;
+use crate::utils::*;
 
-const RUST_KEYWORDS: [&'static str; 38] = [
-    "as", "async", "await", "break", "const", "continue", "crate", "dyn", "else", "enum", "extern",
-    "false", "fn", "for", "if", "impl", "in", "let", "loop", "match", "mod", "move", "mut", "pub",
-    "ref", "return", "self", "Self", "static", "struct", "super", "trait", "true", "type",
-    "unsafe", "use", "where", "while",
-];
+use super::builder::StringifiedNameType;
 
 /// Resolves the custom syntax declared in an information object class' WITH SYNTAX clause
 #[allow(dead_code)]
@@ -163,10 +158,46 @@ pub fn format_enumeral(enumeral: &Enumeral) -> String {
         "/// ".to_owned() + enumeral.description.as_ref().unwrap() + "\n\t"
     } else {
         "".to_owned()
-    }) + &rustify_name(&enumeral.name)
+    }) + &to_rust_title_case(&enumeral.name)
         + " = "
         + &enumeral.index.to_string()
         + ","
+}
+
+/// When formatting identifiers, i.e. type, member, and value names, it can happen
+/// that the formatting results in duplicates. Consider for example an ENUMERATED
+/// with members `member0-1` and `member01`. These member names would be formatted
+/// resulting both in `Member01` and `Member01`. This function resolves the duplicate
+/// identifiers by appending an `Bis`, i.e. producing `Member01` and `Member01Bis`
+pub fn handle_duplicate_enumerals(input: &mut Vec<Enumeral>) {
+    *input = (*input).drain(..).fold(Vec::new(), |mut acc, mut curr| {
+        while let Some(_) = acc
+            .iter()
+            .find(|e| to_rust_title_case(&e.name) == to_rust_title_case(&curr.name))
+        {
+            curr.name.push_str("Bis");
+        }
+        acc.push(curr);
+        acc
+    });
+}
+
+/// When formatting identifiers, i.e. type, member, and value names, it can happen
+/// that the formatting results in duplicates. Consider for example an CHOICE
+/// with members `member0-1` and `member01`. These member names would be formatted
+/// resulting both in `Member01` and `Member01`. This function resolves the duplicate
+/// identifiers by appending an `Bis`, i.e. producing `Member01` and `Member01Bis`
+pub fn handle_duplicate_options(input: &mut Vec<ChoiceOption>) {
+    *input = (*input).drain(..).fold(Vec::new(), |mut acc, mut curr| {
+        while let Some(_) = acc
+            .iter()
+            .find(|e| to_rust_title_case(&e.name) == to_rust_title_case(&curr.name))
+        {
+            curr.name.push_str("Bis");
+        }
+        acc.push(curr);
+        acc
+    });
 }
 
 pub fn format_option_from_int(args: (usize, &StringifiedNameType)) -> String {
@@ -196,12 +227,12 @@ pub fn format_option_encoder_from_int(args: (usize, &StringifiedNameType)) -> St
 }
 
 pub fn format_enumeral_from_int(enumeral: &Enumeral) -> String {
-    let name = &rustify_name(&enumeral.name);
+    let name = &to_rust_title_case(&enumeral.name);
     format!("x if x == Self::{name} as i128 => Ok(Self::{name}),")
 }
 
 pub fn format_distinguished_values(tld: &ToplevelTypeDeclaration) -> String {
-    let name = &rustify_name(&tld.name);
+    let name = &to_rust_title_case(&tld.name);
     match &tld.r#type {
         asnr_grammar::ASN1Type::Integer(i) => match &i.distinguished_values {
             Some(d) => {
@@ -242,13 +273,13 @@ impl {name} {{
 }
 
 pub fn format_distinguished_bit_value(value: &DistinguishedValue) -> String {
-    let name = &rustify_name(&value.name);
+    let name = &to_rust_camel_case(&value.name);
     let i = value.value;
     format!("pub fn is_{name}(&self) -> bool {{ *self.0.get({i}).unwrap_or(&false) }}")
 }
 
 pub fn format_distinguished_int_value(value: &DistinguishedValue) -> String {
-    let name = rustify_name(&value.name);
+    let name = to_rust_camel_case(&value.name);
     let i = value.value;
     format!("pub fn is_{name}(&self) -> bool {{ self.0 as i128 == {i} }}")
 }
@@ -288,9 +319,9 @@ pub fn extract_choice_options(
     options
         .iter()
         .map(|m| {
-            let name = rustify_name(&m.name);
+            let name = to_rust_title_case(&m.name);
             let rtype = match &m.r#type {
-                ASN1Type::ElsewhereDeclaredType(d) => rustify_name(&d.identifier),
+                ASN1Type::ElsewhereDeclaredType(d) => to_rust_title_case(&d.identifier),
                 _ => inner_name(&m.name, parent_name),
             };
             StringifiedNameType {
@@ -318,10 +349,10 @@ pub fn extract_sequence_members(
         .iter()
         .enumerate()
         .map(|(index, m)| {
-            let name = rustify_name(&m.name);
+            let name = to_rust_camel_case(&m.name);
             let mut rtype = match &m.r#type {
-                ASN1Type::ElsewhereDeclaredType(d) => rustify_name(&d.identifier),
-                ASN1Type::InformationObjectFieldReference(_) => "ASN1_OPEN".to_string(),
+                ASN1Type::ElsewhereDeclaredType(d) => to_rust_title_case(&d.identifier),
+                ASN1Type::InformationObjectFieldReference(_) => "Asn1Open".to_string(),
                 _ => inner_name(&m.name, parent_name),
             };
             if m.is_optional || index >= index_of_first_extension.unwrap_or(usize::MAX) {
@@ -338,7 +369,7 @@ pub fn extract_sequence_members(
 pub fn format_member_declaration(members: &Vec<StringifiedNameType>) -> String {
     members
         .iter()
-        .map(|m| format!("pub {}: {},", m.name, m.r#type))
+        .map(|m| format!("pub {}: {},", to_rust_camel_case(&m.name), m.r#type))
         .collect::<Vec<String>>()
         .join("\n  ")
 }
@@ -368,13 +399,13 @@ pub fn format_decode_member_body(members: &Vec<StringifiedNameType>) -> String {
                 format!(
                     "{i} => {{ (input, self.{name}) = {t}::decode::<D>(input).map(|(i, v)| (i, Some(v)))? }},",
                     t = &m.r#type[7..m.r#type.len() - 1],
-                    name = m.name
+                    name = to_rust_camel_case(&m.name)
                 )
             } else {
                 format!(
                     "{i} => {{ (input, self.{name}) = {t}::decode::<D>(input)? }},",
                     t = m.r#type,
-                    name = m.name
+                    name = to_rust_camel_case(&m.name)
                 )
             }
         })
@@ -396,13 +427,13 @@ pub fn format_encoder_member_body(members: &Vec<StringifiedNameType>) -> String 
                         return Ok(output);
                     }}
                 }}),"#,
-                    name = m.name,
+                    name = to_rust_camel_case(&m.name),
                     t = &m.r#type[7..m.r#type.len() - 1],
                 )
             } else {
                 format!(
                     "{i} => Ok(|parent, output| {t}::encode::<E>(parent.{name}.clone(), output)),",
-                    name = m.name,
+                    name = to_rust_camel_case(&m.name),
                     t = m.r#type,
                 )
             }
@@ -417,7 +448,10 @@ pub fn format_has_optional_body(members: &Vec<StringifiedNameType>) -> String {
         .enumerate()
         .map(|(i, m)| {
             if m.r#type.starts_with("Option<") {
-                format!(r#"{i} => self.{name} != None,"#, name = m.name,)
+                format!(
+                    r#"{i} => self.{name} != None,"#,
+                    name = to_rust_camel_case(&m.name),
+                )
             } else {
                 format!("{i} => true,")
             }
@@ -460,13 +494,13 @@ fn declare_inner_choice_option(
     )
 }
 
-pub fn rustify_name(name: &String) -> String {
-    let name = name.replace("-", "_");
-    if RUST_KEYWORDS.contains(&name.as_str()) {
-        String::from("r_") + &name
-    } else {
-        name
+fn inner_name(name: &String, parent_name: &String) -> String {
+    let mut type_name = name.replace("-", "").replace("_", "");
+    let mut name_chars = type_name.chars();
+    if let Some(initial) = name_chars.next() {
+        type_name = initial.to_uppercase().collect::<String>() + name_chars.as_str();
     }
+    format!("Inner{}{}", parent_name, type_name)
 }
 
 #[cfg(test)]
