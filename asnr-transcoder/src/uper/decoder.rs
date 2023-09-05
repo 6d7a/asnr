@@ -5,7 +5,7 @@ use asnr_grammar::{
     },
     types::SequenceOrSet,
 };
-use bitvec::{bits, bitvec, field::BitField, prelude::Msb0, vec::BitVec};
+use bitvec::{bitvec, field::BitField, prelude::Msb0, vec::BitVec};
 use bitvec_nom::BSlice;
 use nom::{bytes::complete::take, combinator::map, error::Error, AsBytes};
 use num::{FromPrimitive, Integer};
@@ -86,7 +86,7 @@ impl<'a> Decoder<'a, BitIn<'a>> for Uper {
     where
         O: num::Integer + num::FromPrimitive + Copy,
     {
-        let mut constraints = per_visible_range_constraints(true, &integer.constraints)?;
+        let constraints = per_visible_range_constraints(true, &integer.constraints)?;
         if constraints.is_extensible() {
             if constraints.bit_length().is_some() {
                 Ok(Box::new(move |input: BitIn<'a>| -> IResult<BitIn<'a>, O> {
@@ -344,7 +344,7 @@ impl<'a> Decoder<'a, BitIn<'a>> for Uper {
         member_decoder: fn(BitIn<'a>) -> IResult<BitIn<'a>, T>,
     ) -> Result<Box<dyn Fn(BitIn<'a>) -> IResult<BitIn<'a>, Vec<T>> + 'a>, DecodingError<BitIn<'a>>>
     {
-        let mut constraints = per_visible_range_constraints(false, &sequence_of.constraints)?;
+        let constraints = per_visible_range_constraints(false, &sequence_of.constraints)?;
         if constraints.is_extensible() {
             Ok(Box::new(
                 move |input: BitIn<'a>| -> IResult<BitIn<'a>, Vec<T>> {

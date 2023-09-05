@@ -1,8 +1,8 @@
 use core::str::FromStr;
 
 use asnr_compiler_derive::asn1;
-use bitvec::{vec::BitVec, view::BitView, prelude::Msb0};
-use num_bigint::BigUint;
+use bitvec::{view::BitView, prelude::Msb0};
+
 use rasn::{prelude::*};
 
 #[derive(AsnType, Debug, Clone, Decode, Encode, PartialEq)]
