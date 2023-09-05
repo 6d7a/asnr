@@ -56,7 +56,7 @@ use core::fmt::Debug;
 use error::{DecodingError, EncodingError};
 
 
-type IResult<I, T> = Result<(I, T), DecodingError<I>>;
+pub type IResult<I, T> = Result<(I, T), DecodingError<I>>;
 
 pub trait Decode<'a, I: AsBytes + Debug + 'a> {
     fn decode<D>(input: I) -> IResult<I, Self>
