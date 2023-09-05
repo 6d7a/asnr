@@ -194,7 +194,9 @@ fn format_sequence_member(
         | ASN1Type::Sequence(_)
         | ASN1Type::SequenceOf(_)
         | ASN1Type::Set(_) => (vec![], inner_name(&member.name, parent_name)),
-        ASN1Type::ElsewhereDeclaredType(e) => (e.constraints.clone(), member.name.clone()),
+        ASN1Type::ElsewhereDeclaredType(e) => {
+            (e.constraints.clone(), to_rust_title_case(&member.name))
+        }
         ASN1Type::InformationObjectFieldReference(_) => (vec![], "ERROR".into()),
     };
     all_constraints.append(&mut member.constraints.clone());
@@ -202,7 +204,10 @@ fn format_sequence_member(
         formatted_type_name = String::from("Option<") + &formatted_type_name + ">";
     }
     let default_annotation = if member.default_value.is_some() {
-        default_method_name(parent_name, &member.name)
+        format!(
+            r#"default = "{}""#,
+            default_method_name(parent_name, &member.name)
+        )
     } else {
         String::new()
     };
@@ -244,7 +249,28 @@ pub fn join_annotations(strings: Vec<String>) -> String {
 }
 
 pub fn default_method_name(parent_name: &String, field_name: &String) -> String {
-    format!("{parent_name}_{field_name}_default")
+    format!("{}_{field_name}_default", to_rust_camel_case(parent_name))
+}
+
+pub fn format_default_methods(
+    members: &Vec<SequenceOrSetMember>,
+    parent_name: &String,
+) -> Result<String, GeneratorError> {
+    let mut output = String::new();
+    for member in members {
+        if let Some(value) = member.default_value.as_ref() {
+            let type_as_string = member.r#type.to_string();
+            let value_as_string =
+                value.value_as_string(Some(&to_rust_title_case(&type_as_string)))?;
+            let method_name = default_method_name(parent_name, &member.name);
+            output.push_str(&format!(r#"fn {method_name}() -> {type_as_string} {{
+                {value_as_string}
+            }}
+            
+            "#))
+        }
+    }
+    Ok(output)
 }
 
 pub fn format_nested_sequence_members(

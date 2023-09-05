@@ -173,6 +173,7 @@ pub fn sequence_or_set_template(
     nested_members: String,
     tag_annotations: String,
     set_annotation: String,
+    default_methods: String,
 ) -> String {
     let rasn_annotations = join_annotations(vec![set_annotation, tag_annotations]);
     format!(
@@ -184,7 +185,8 @@ pub fn sequence_or_set_template(
         pub struct {name} {{
             {members}
         }}
-        "#
+
+        {default_methods}"#
     )
 }
 

@@ -1062,7 +1062,19 @@ impl ASN1Value {
             ASN1Value::Integer(i) => Ok(format!("{}", i)),
             ASN1Value::String(s) => Ok(s.clone()),
             ASN1Value::Real(r) => Ok(format!("{}", r)),
-            ASN1Value::BitString(_) => todo!(),
+            ASN1Value::BitString(b) => {
+                let mut bits = b.iter().fold(String::new(), |mut acc, bit| {
+                    if *bit {
+                        acc.push_str("true,");
+                    } else {
+                        acc.push_str("false,");
+                    }
+                    acc
+                });
+                // remove the last comma
+                bits.pop();
+                Ok(format!("vec![{bits}]"))
+            }
             ASN1Value::EnumeratedValue(e) => Ok(e.clone()),
             ASN1Value::ElsewhereDeclaredValue(e) => Ok(e.clone()),
         }

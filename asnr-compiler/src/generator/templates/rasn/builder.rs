@@ -19,7 +19,7 @@ use super::{
     },
     utils::{
         format_alphabet_annotations, format_enum_members, format_nested_sequence_members,
-        format_range_annotations, format_sequence_or_set_members, format_tag,
+        format_range_annotations, format_sequence_or_set_members, format_tag, format_default_methods,
     },
 };
 
@@ -318,6 +318,7 @@ impl RasnGenerator {
                     format_nested_sequence_members(seq, &name)?,
                     format_tag(tld.tag.as_ref()),
                     set_annotation.into(),
+                    format_default_methods(&seq.members, &name)?
                 ))
             }
             _ => Err(GeneratorError::new(

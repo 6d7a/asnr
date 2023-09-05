@@ -353,6 +353,7 @@ impl AddAssign<PerVisibleRangeConstraints> for PerVisibleRangeConstraints {
             _ => None,
         };
         self.extensible = self.extensible || rhs.extensible;
+        self.is_size_constraint = self.is_size_constraint || rhs.is_size_constraint;
     }
 }
 
