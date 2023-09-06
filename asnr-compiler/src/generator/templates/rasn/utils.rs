@@ -200,7 +200,7 @@ fn format_sequence_member(
         ASN1Type::InformationObjectFieldReference(_) => (vec![], "ERROR".into()),
     };
     all_constraints.append(&mut member.constraints.clone());
-    if member.is_optional {
+    if member.is_optional && member.default_value.is_none() {
         formatted_type_name = String::from("Option<") + &formatted_type_name + ">";
     }
     let default_annotation = if member.default_value.is_some() {
@@ -259,12 +259,15 @@ pub fn format_default_methods(
     let mut output = String::new();
     for member in members {
         if let Some(value) = member.default_value.as_ref() {
-            let type_as_string = member.r#type.to_string();
+            let (type_as_string, map_fn) = match &member.r#type {
+                ASN1Type::BitString(_) => ("BitString".into(), r#".iter().collect()"#.into()),
+                ty => (ty.to_string(), String::new())
+            };
             let value_as_string =
                 value.value_as_string(Some(&to_rust_title_case(&type_as_string)))?;
             let method_name = default_method_name(parent_name, &member.name);
             output.push_str(&format!(r#"fn {method_name}() -> {type_as_string} {{
-                {value_as_string}
+                {value_as_string}{map_fn}
             }}
             
             "#))

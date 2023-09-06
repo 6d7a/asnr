@@ -561,7 +561,7 @@ fn decode_normally_small_number(input: BitIn) -> IResult<BitIn, usize> {
             })
         }
     } else {
-        read_int::<usize>(6)(input)
+        read_int::<usize>(6)(input).map(|(rem ,i)| (rem, i + 1))
     }
 }
 

@@ -676,15 +676,17 @@ where
 
 fn encode_normally_small_number<I>(number: I, mut output: BitOut) -> Result<BitOut, EncodingError>
 where
-    I: num::Integer + num::ToPrimitive + Copy,
+    I: num::Integer + num::ToPrimitive + Copy + Debug,
 {
-    if number.to_u32().unwrap_or(64) > 63 {
+    if number.to_u32().unwrap_or(65) > 64 {
         Err(EncodingError {
             details: "Encoding normally-small numbers larger than 63 is not supported yet!".into(),
         })
     } else {
         output.push(false);
-        encode_constrained_integer(number, 6, output)
+        encode_constrained_integer(number.to_u32().ok_or(EncodingError {
+            details: format!("Could not perform encoding of normally small number {number:?}")
+        })? - 1, 6, output)
     }
 }
 

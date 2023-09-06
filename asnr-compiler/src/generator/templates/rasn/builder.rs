@@ -4,22 +4,24 @@ use asnr_grammar::{
 };
 
 use crate::{
+    Framework,
     generator::{
         error::{GeneratorError, GeneratorErrorType},
-        templates::asnr::util::format_comments,
+        templates::asnr::util::format_comments, generate,
     },
-    utils::{to_rust_title_case, to_rust_camel_case},
+    utils::{to_rust_camel_case, to_rust_title_case},
 };
 
 use super::{
     template::{
         bit_string_template, boolean_template, char_string_template, enumerated_template,
         integer_template, integer_value_template, null_template, null_value_template,
-        sequence_or_set_template,
+        sequence_of_template, sequence_or_set_template,
     },
     utils::{
-        format_alphabet_annotations, format_enum_members, format_nested_sequence_members,
-        format_range_annotations, format_sequence_or_set_members, format_tag, format_default_methods,
+        format_alphabet_annotations, format_default_methods, format_enum_members,
+        format_nested_sequence_members, format_range_annotations, format_sequence_or_set_members,
+        format_tag,
     },
 };
 
@@ -318,7 +320,7 @@ impl RasnGenerator {
                     format_nested_sequence_members(seq, &name)?,
                     format_tag(tld.tag.as_ref()),
                     set_annotation.into(),
-                    format_default_methods(&seq.members, &name)?
+                    format_default_methods(&seq.members, &name)?,
                 ))
             }
             _ => Err(GeneratorError::new(
@@ -329,46 +331,51 @@ impl RasnGenerator {
         }
     }
 
-    //     fn generate_sequence_of<'a>(
-    //         tld: ToplevelTypeDeclaration,
-    //         custom_derive: Option<&'a str>,
-    //     ) -> Result<String, GeneratorError> {
-    //         if let ASN1Type::SequenceOf(ref seq_of) = tld.r#type {
-    //             let name = rustify_name(&tld.name);
-    //             let anonymous_item = match seq_of.r#type.as_ref() {
-    //                 ASN1Type::ElsewhereDeclaredType(_) => None,
-    //                 n => Some(generate(
-    //                     &Framework::Asnr,
-    //                     ToplevelDeclaration::Type(ToplevelTypeDeclaration {
-    //                         parameterization: None,
-    //                         comments: " Anonymous SEQUENCE OF member ".into(),
-    //                         name: String::from("Anonymous_") + &name,
-    //                         r#type: n.clone(),
-    //                     }),
-    //                     None,
-    //                 )?),
-    //             }
-    //             .unwrap_or(String::new());
-    //             let member_type = match seq_of.r#type.as_ref() {
-    //                 ASN1Type::ElsewhereDeclaredType(d) => rustify_name(&d.identifier),
-    //                 _ => String::from("Anonymous_") + &name,
-    //             };
-    //             Ok(sequence_of_template(
-    //                 format_comments(&tld.comments),
-    //                 custom_derive.unwrap_or(DERIVE_DEFAULT),
-    //                 name,
-    //                 anonymous_item,
-    //                 member_type,
-    //                 seq_of.declare(),
-    //             ))
-    //         } else {
-    //             Err(GeneratorError::new(
-    //                 Some(ToplevelDeclaration::Type(tld)),
-    //                 "Expected SEQUENCE OF top-level declaration",
-    //                 GeneratorErrorType::Asn1TypeMismatch,
-    //             ))
-    //         }
-    //     }
+    fn generate_sequence_of<'a>(
+        tld: ToplevelTypeDeclaration,
+        _custom_derive: Option<&'a str>,
+    ) -> Result<String, GeneratorError> {
+        if let ASN1Type::SequenceOf(ref seq_of) = tld.r#type {
+            let name = to_rust_title_case(&tld.name);
+            let anonymous_item = match seq_of.r#type.as_ref() {
+                ASN1Type::ElsewhereDeclaredType(_) => None,
+                n => Some(generate(
+                    &Framework::Asnr,
+                    ToplevelDeclaration::Type(ToplevelTypeDeclaration {
+                        parameterization: None,
+                        comments: " Anonymous SEQUENCE OF member ".into(),
+                        name: String::from("Anonymous") + &name,
+                        r#type: n.clone(),
+                        tag: None,
+                    }),
+                    None,
+                )?),
+            }
+            .ok_or(GeneratorError {
+                details: format!("Could not generate SEQUENCE OF member for {}", tld.name),
+                top_level_declaration: Some(ToplevelDeclaration::Type(tld.clone())),
+                kind: GeneratorErrorType::Asn1TypeMismatch,
+            })?;
+            let member_type = match seq_of.r#type.as_ref() {
+                ASN1Type::ElsewhereDeclaredType(d) => to_rust_title_case(&d.identifier),
+                _ => String::from("Anonymous") + &name,
+            };
+            Ok(sequence_of_template(
+                format_comments(&tld.comments),
+                name,
+                anonymous_item,
+                member_type,
+                format_range_annotations(true, &seq_of.constraints)?,
+                format_tag(tld.tag.as_ref()),
+            ))
+        } else {
+            Err(GeneratorError::new(
+                Some(ToplevelDeclaration::Type(tld)),
+                "Expected SEQUENCE OF top-level declaration",
+                GeneratorErrorType::Asn1TypeMismatch,
+            ))
+        }
+    }
 
     //     fn generate_information_object_set<'a>(
     //         tld: ToplevelInformationDeclaration,

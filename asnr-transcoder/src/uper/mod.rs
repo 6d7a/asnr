@@ -577,4 +577,30 @@ mod tests {
             .unwrap()
         );
     }
+
+    #[test]
+    fn encodes_as_decodes_extended_sequence() {
+        asn1_internal_tests!(
+            r#"TestSequenceAsnr ::= SEQUENCE { 
+            hello OCTET STRING (SIZE(0..8)),
+            ...,
+            world INTEGER(0..8) DEFAULT 8
+          }"#
+        );
+
+        assert_eq!(
+            TestSequenceAsnr {
+                hello: InnerTestSequenceAsnrHello(vec![1,2,3,4]),
+                world: Some(InnerTestSequenceAsnrWorld(4))
+            },
+            Uper::decode::<TestSequenceAsnr>(
+                &Uper::encode(TestSequenceAsnr {
+                    hello: InnerTestSequenceAsnrHello(vec![1,2,3,4]),
+                    world: Some(InnerTestSequenceAsnrWorld(4))
+                })
+                .unwrap()
+            )
+            .unwrap()
+        );
+    }
 }

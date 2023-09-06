@@ -274,7 +274,7 @@ impl From<(Vec<&str>, (&str, ObjectIdentifier, Option<&str>))> for Import {
 #[derive(Debug, Clone, PartialEq)]
 pub struct ModuleReference {
     pub name: String,
-    pub module_identifier: ObjectIdentifier,
+    pub module_identifier: Option<ObjectIdentifier>,
     pub encoding_reference_default: Option<EncodingReferenceDefault>,
     pub tagging_environment: TaggingEnvironment,
     pub extensibility_environment: ExtensibilityEnvironment,
@@ -284,7 +284,7 @@ pub struct ModuleReference {
 impl
     From<(
         &str,
-        ObjectIdentifier,
+        Option<ObjectIdentifier>,
         (
             Option<EncodingReferenceDefault>,
             TaggingEnvironment,
@@ -296,7 +296,7 @@ impl
     fn from(
         value: (
             &str,
-            ObjectIdentifier,
+            Option<ObjectIdentifier>,
             (
                 Option<EncodingReferenceDefault>,
                 TaggingEnvironment,

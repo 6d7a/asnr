@@ -1,3 +1,5 @@
+use asnr_grammar::ASN1Value;
+
 use crate::generator::templates::rasn::utils::join_annotations;
 
 pub fn rasn_imports_and_generic_types() -> String {
@@ -9,21 +11,6 @@ pub fn rasn_imports_and_generic_types() -> String {
         use rasn::prelude::*;"#
     )
 }
-
-// pub fn type_reference_value_template(
-//     comments: String,
-//     name: String,
-//     type_name: String,
-//     value: ASN1Value,
-// ) -> String {
-//     format!(
-//         r#"
-//     {comments}
-//     pub const {name}: {type_name} = {};
-//     "#,
-//         value.to_string()
-//     )
-// }
 
 // pub fn typealias_template(
 //     comments: String,
@@ -190,35 +177,28 @@ pub fn sequence_or_set_template(
     )
 }
 
-// pub fn sequence_of_template(
-//     comments: String,
-//     derive: &str,
-//     name: String,
-//     anonymous_item: String,
-//     member_type: String,
-//     seq_of_descriptor: String,
-// ) -> String {
-//     format!(
-//         r#"{anonymous_item}
-
-// {comments}{derive}
-// pub struct {name}(pub Vec<{member_type}>);
-
-// impl<'a, I: AsBytes + Debug + 'a> Decode<'a, I> for {name} {{
-//   {DECODE_SIGNATURE}
-//   {{
-//     {name}::decoder::<D>()?(input)
-//   }}
-
-//   {DECODER_SIGNATURE}
-//   {{
-//     let mut seq_of_decoder = D::decode_sequence_of({seq_of_descriptor}, {member_type}::decode::<D>)?;
-//     Ok(Box::new(move |input| (*seq_of_decoder)(input).map(|(remaining, res)| (remaining, Self(res)))))
-//   }}
-// }}
-// "#
-//     )
-// }
+pub fn sequence_of_template(
+    comments: String,
+    name: String,
+    anonymous_item: String,
+    member_type: String,
+    constraint_annotations: String,
+    tag_annotations: String,
+) -> String {
+    let rasn_annotations: String = join_annotations(vec![
+        "delegate".into(),
+        tag_annotations,
+        constraint_annotations,
+    ]);
+    format!(
+        r#"
+        {anonymous_item}
+{comments}
+#[derive(AsnType, Debug, Clone, Decode, Encode, PartialEq)]
+{rasn_annotations}pub struct {name}(pub Vec<{member_type}>);
+"#
+    )
+}
 
 // pub fn default_choice(option: &StringifiedNameType) -> String {
 //     format!(

@@ -430,7 +430,11 @@ impl Generator for AsnrGenerator {
                     None,
                 )?),
             }
-            .unwrap_or(String::new());
+            .ok_or(GeneratorError {
+                details: format!("Could not generate SEQUENCE OF member for {}", tld.name),
+                top_level_declaration: Some(ToplevelDeclaration::Type(tld.clone())),
+                kind: GeneratorErrorType::Asn1TypeMismatch,
+            })?;
             let member_type = match seq_of.r#type.as_ref() {
                 ASN1Type::ElsewhereDeclaredType(d) => to_rust_title_case(&d.identifier),
                 _ => String::from("Anonymous") + &name,
