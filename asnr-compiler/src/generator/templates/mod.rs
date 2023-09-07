@@ -1,4 +1,4 @@
-use crate::utils::to_rust_title_case;
+use asnr_grammar::utils::to_rust_title_case;
 
 pub(crate) mod asnr;
 pub(crate) mod rasn;

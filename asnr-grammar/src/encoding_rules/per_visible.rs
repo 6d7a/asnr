@@ -4,7 +4,7 @@ use crate::{
     constraints::{Constraint, ElementOrSetOperation, SetOperation, SetOperator, SubtypeElement},
     error::{GrammarError, GrammarErrorType},
     types::{Choice, Enumerated},
-    ASN1Value, CharacterStringType,
+    ASN1Type, ASN1Value, CharacterStringType,
 };
 use alloc::{collections::BTreeMap, format, string::String, vec, vec::Vec};
 use num::ToPrimitive;
@@ -122,6 +122,22 @@ impl PerVisibleAlphabetConstraints {
                         to: char_set.get(&upper).copied(),
                     }],
                 }))
+            }
+            Some(SubtypeElement::ContainedSubtype {
+                subtype,
+                extensible: _,
+            }) => {
+                if let ASN1Type::CharacterString(c_string) = subtype {
+                    let mut permitted_alphabet =
+                        PerVisibleAlphabetConstraints::default_for(string_type);
+                    for c in &c_string.constraints {
+                        PerVisibleAlphabetConstraints::try_new(c, c_string.r#type)?
+                            .map(|mut p| permitted_alphabet += &mut p);
+                    }
+                    Ok(Some(permitted_alphabet))
+                } else {
+                    Ok(None)
+                }
             }
             _ => Ok(None),
         }
@@ -415,6 +431,13 @@ impl TryFrom<Option<&SubtypeElement>> for PerVisibleRangeConstraints {
                     })
                 }
             },
+            Some(SubtypeElement::ContainedSubtype {
+                subtype,
+                extensible: _,
+            }) => per_visible_range_constraints(
+                matches!(subtype, ASN1Type::Integer(_)),
+                &subtype.constraints(),
+            ),
             _ => unreachable!(),
         }
     }

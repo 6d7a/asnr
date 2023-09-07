@@ -118,6 +118,7 @@ pub fn generate<'a>(
                     ASN1Value::Choice(_, _) => AsnrGenerator::generate_choice_value(v),
                     ASN1Value::Sequence(_) => AsnrGenerator::generate_sequence_value(v),
                     ASN1Value::Real(_) => todo!(),
+                    ASN1Value::ObjectIdentifier(_) => todo!()
                 },
                 ToplevelDeclaration::Information(i) => match i.value {
                     ASN1Information::ObjectClass(_) => {
@@ -143,16 +144,16 @@ pub fn generate<'a>(
                 ASN1Type::Sequence(_) | ASN1Type::Set(_) => {
                     RasnGenerator::generate_sequence_or_set(t, custom_derive)
                 }
-                // ASN1Type::SequenceOf(_) => {
-                //     RasnGenerator::generate_sequence_of(t, custom_derive)
-                // }
-                // ASN1Type::Choice(_) => RasnGenerator::generate_choice(t, custom_derive),
-                // ASN1Type::ElsewhereDeclaredType(_) => {
-                //     RasnGenerator::generate_typealias(t, custom_derive)
-                // }
-                // ASN1Type::OctetString(_) => {
-                //     RasnGenerator::generate_octet_string(t, custom_derive)
-                // }
+                ASN1Type::SequenceOf(_) => {
+                    RasnGenerator::generate_sequence_of(t, custom_derive)
+                }
+                ASN1Type::ElsewhereDeclaredType(_) => {
+                    RasnGenerator::generate_typealias(t, custom_derive)
+                }
+                ASN1Type::Choice(_) => RasnGenerator::generate_choice(t, custom_derive),
+                ASN1Type::OctetString(_) => {
+                    RasnGenerator::generate_octet_string(t, custom_derive)
+                }
                 _ => Ok("".into()),
             },
             ToplevelDeclaration::Value(v) => match v.value {
@@ -167,6 +168,7 @@ pub fn generate<'a>(
                 // ASN1Value::Choice(_, _) => RasnGenerator::generate_choice_value(v),
                 // ASN1Value::Sequence(_) => RasnGenerator::generate_sequence_value(v),
                 ASN1Value::Real(_) => todo!(),
+                ASN1Value::ObjectIdentifier(_) => RasnGenerator::generate_object_identifier_value(v),
                 _ => Ok("".into()),
             },
             ToplevelDeclaration::Information(i) => match i.value {

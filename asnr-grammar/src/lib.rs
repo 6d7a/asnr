@@ -39,7 +39,7 @@ use information_object::{
 };
 use parameterization::Parameterization;
 use types::*;
-use utils::{find_tld_or_enum_value_by_name, int_type_token};
+use utils::*;
 
 // Comment tokens
 pub const BLOCK_COMMENT_START: &'static str = "/*";
@@ -325,7 +325,20 @@ impl From<Vec<ObjectIdentifierArc>> for ObjectIdentifier {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Declare)]
+impl Declare for ObjectIdentifier {
+    fn declare(&self) -> String {
+        format!(
+            "ObjectIdentifier(vec![{}])",
+            self.0
+                .iter()
+                .map(Declare::declare)
+                .collect::<Vec<String>>()
+                .join(",")
+        )
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
 pub struct ObjectIdentifierArc {
     pub name: Option<String>,
     pub number: Option<u128>,
@@ -337,6 +350,16 @@ impl From<u128> for ObjectIdentifierArc {
             name: None,
             number: Some(value),
         }
+    }
+}
+
+impl Declare for ObjectIdentifierArc {
+    fn declare(&self) -> String {
+        format!(
+            "ObjectIdentifierArc {{ name: {:?}.into(), number: {:?} }}",
+            self.name,
+            self.number
+        )
     }
 }
 
@@ -543,6 +566,21 @@ pub enum ASN1Type {
 }
 
 impl ASN1Type {
+    pub fn constraints(&self) -> Vec<Constraint> {
+        match self {
+            ASN1Type::Integer(i) => i.constraints.clone(),
+            ASN1Type::BitString(b) => b.constraints.clone(),
+            ASN1Type::OctetString(o) => o.constraints.clone(),
+            ASN1Type::CharacterString(c) => c.constraints.clone(),
+            ASN1Type::Enumerated(e) => e.constraints.clone(),
+            ASN1Type::Choice(c) => c.constraints.clone(),
+            ASN1Type::Sequence(s) => s.constraints.clone(),
+            ASN1Type::SequenceOf(s) => s.constraints.clone(),
+            ASN1Type::ElsewhereDeclaredType(e) => e.constraints.clone(),
+            _ => vec![],
+        }
+    }
+
     pub fn link_constraint_reference(
         &mut self,
         name: &String,
@@ -897,6 +935,7 @@ pub enum ASN1Value {
     BitString(Vec<bool>),
     EnumeratedValue(String),
     ElsewhereDeclaredValue(String),
+    ObjectIdentifier(ObjectIdentifier),
 }
 
 impl ASN1Value {
@@ -1075,8 +1114,16 @@ impl ASN1Value {
                 bits.pop();
                 Ok(format!("vec![{bits}]"))
             }
-            ASN1Value::EnumeratedValue(e) => Ok(e.clone()),
-            ASN1Value::ElsewhereDeclaredValue(e) => Ok(e.clone()),
+            ASN1Value::EnumeratedValue(e) => Ok(to_rust_camel_case(e)),
+            ASN1Value::ElsewhereDeclaredValue(e) => Ok(to_rust_const_case(e)),
+            ASN1Value::ObjectIdentifier(oid) => Ok(format!(
+                "[{}]",
+                oid.0
+                    .iter()
+                    .filter_map(|arc| arc.number.map(|id| id.to_string()))
+                    .collect::<Vec<String>>()
+                    .join(",")
+            )),
         }
     }
 }
@@ -1117,6 +1164,9 @@ impl asnr_traits::Declare for ASN1Value {
             }
             ASN1Value::ElsewhereDeclaredValue(s) => {
                 format!("ASN1Value::ElsewhereDeclaredValue(\"{}\".into())", s)
+            }
+            ASN1Value::ObjectIdentifier(oid) => {
+                format!("ASN1Value::ObjectIdentifier({})", oid.declare())
             }
         }
     }

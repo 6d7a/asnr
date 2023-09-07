@@ -366,10 +366,10 @@ mod tests {
             ext1 Member-4 OPTIONAL
         }
         
-        Member-1 ::= BOOLEAN
-        Member-2 ::= INTEGER(0..2)
-        Member-3 ::= SEQUENCE OF Member-1
-        Member-4 ::= BIT STRING (SIZE(1))"#
+            Member-1 ::= BOOLEAN
+            Member-2 ::= INTEGER(0..2)
+            Member-3 ::= SEQUENCE OF Member-1
+            Member-4 ::= BIT STRING (SIZE(1))"#
         );
 
         assert_eq!(
@@ -590,12 +590,12 @@ mod tests {
 
         assert_eq!(
             TestSequenceAsnr {
-                hello: InnerTestSequenceAsnrHello(vec![1,2,3,4]),
+                hello: InnerTestSequenceAsnrHello(vec![1, 2, 3, 4]),
                 world: Some(InnerTestSequenceAsnrWorld(4))
             },
             Uper::decode::<TestSequenceAsnr>(
                 &Uper::encode(TestSequenceAsnr {
-                    hello: InnerTestSequenceAsnrHello(vec![1,2,3,4]),
+                    hello: InnerTestSequenceAsnrHello(vec![1, 2, 3, 4]),
                     world: Some(InnerTestSequenceAsnrWorld(4))
                 })
                 .unwrap()

@@ -1,46 +1,66 @@
 use asnr_grammar::{
-    utils::int_type_token, ASN1Type, ASN1Value, ToplevelDeclaration, ToplevelTypeDeclaration,
+    utils::*, ASN1Type, ASN1Value, ToplevelDeclaration, ToplevelTypeDeclaration,
     ToplevelValueDeclaration, INTEGER,
 };
 
 use crate::{
-    Framework,
     generator::{
         error::{GeneratorError, GeneratorErrorType},
-        templates::asnr::util::format_comments, generate,
+        generate,
+        templates::asnr::util::format_comments,
     },
-    utils::{to_rust_camel_case, to_rust_title_case},
+    Framework,
 };
 
 use super::{
     template::{
         bit_string_template, boolean_template, char_string_template, enumerated_template,
         integer_template, integer_value_template, null_template, null_value_template,
-        sequence_of_template, sequence_or_set_template,
+        object_identifier_value_template, sequence_of_template, sequence_or_set_template,
+        typealias_template, choice_template, octet_string_template,
     },
     utils::{
         format_alphabet_annotations, format_default_methods, format_enum_members,
         format_nested_sequence_members, format_range_annotations, format_sequence_or_set_members,
-        format_tag,
+        format_tag, string_type, format_nested_choice_options, format_choice_options,
     },
 };
 
 pub struct RasnGenerator;
 
 impl RasnGenerator {
+    pub fn generate_typealias<'a>(
+        tld: ToplevelTypeDeclaration,
+        _custom_derive: Option<&'a str>,
+    ) -> Result<String, GeneratorError> {
+        if let ASN1Type::ElsewhereDeclaredType(dec) = &tld.r#type {
+            Ok(typealias_template(
+                format_comments(&tld.comments),
+                to_rust_title_case(&tld.name),
+                to_rust_title_case(&dec.identifier),
+            ))
+        } else {
+            Err(GeneratorError::new(
+                Some(ToplevelDeclaration::Type(tld)),
+                "Expected type alias top-level declaration",
+                GeneratorErrorType::Asn1TypeMismatch,
+            ))
+        }
+    }
+
     pub fn generate_integer_value(tld: ToplevelValueDeclaration) -> Result<String, GeneratorError> {
         if let ASN1Value::Integer(i) = tld.value {
             if tld.type_name == INTEGER {
                 Ok(integer_value_template(
                     format_comments(&tld.comments),
-                    to_rust_camel_case(&tld.name),
+                    to_rust_const_case(&tld.name),
                     int_type_token(i, i),
                     i.to_string(),
                 ))
             } else {
                 Ok(integer_value_template(
                     format_comments(&tld.comments),
-                    to_rust_camel_case(&tld.name),
+                    to_rust_const_case(&tld.name),
                     tld.type_name.as_str(),
                     format!("{}({})", tld.type_name, i),
                 ))
@@ -59,11 +79,17 @@ impl RasnGenerator {
         _custom_derive: Option<&'a str>,
     ) -> Result<String, GeneratorError> {
         if let ASN1Type::Integer(ref int) = tld.r#type {
+            let mut int_type = int.type_token();
+            if int_type == "i128" {
+                // rasn only supports integers of up to 64 bits length
+                int_type = "i64".to_owned();
+            }
             Ok(integer_template(
                 format_comments(&tld.comments),
                 to_rust_title_case(&tld.name),
                 format_range_annotations(true, &int.constraints)?,
                 format_tag(tld.tag.as_ref()),
+                int_type
             ))
         } else {
             Err(GeneratorError::new(
@@ -94,6 +120,26 @@ impl RasnGenerator {
         }
     }
 
+    pub fn generate_octet_string<'a>(
+        tld: ToplevelTypeDeclaration,
+        _custom_derive: Option<&'a str>,
+    ) -> Result<String, GeneratorError> {
+        if let ASN1Type::OctetString(ref oct_str) = tld.r#type {
+            Ok(octet_string_template(
+                format_comments(&tld.comments),
+                to_rust_title_case(&tld.name),
+                format_range_annotations(true, &oct_str.constraints)?,
+                format_tag(tld.tag.as_ref()),
+            ))
+        } else {
+            Err(GeneratorError::new(
+                Some(ToplevelDeclaration::Type(tld)),
+                "Expected OCTET STRING top-level declaration",
+                GeneratorErrorType::Asn1TypeMismatch,
+            ))
+        }
+    }
+
     pub fn generate_character_string<'a>(
         tld: ToplevelTypeDeclaration,
         _custom_derive: Option<&'a str>,
@@ -102,7 +148,8 @@ impl RasnGenerator {
             Ok(char_string_template(
                 format_comments(&tld.comments),
                 to_rust_title_case(&tld.name),
-                format_range_annotations(true, &char_str.constraints)?,
+                string_type(&char_str.r#type),
+                format_range_annotations(false, &char_str.constraints)?,
                 format_alphabet_annotations(char_str.r#type, &char_str.constraints)?,
                 format_tag(tld.tag.as_ref()),
             ))
@@ -159,7 +206,7 @@ impl RasnGenerator {
         if let ASN1Value::Null = tld.value {
             Ok(null_value_template(
                 format_comments(&tld.comments),
-                to_rust_camel_case(&tld.name),
+                to_rust_const_case(&tld.name),
             ))
         } else {
             Err(GeneratorError::new(
@@ -216,65 +263,36 @@ impl RasnGenerator {
         }
     }
 
-    //     fn generate_choice<'a>(
-    //         tld: ToplevelTypeDeclaration,
-    //         custom_derive: Option<&'a str>,
-    //     ) -> Result<String, GeneratorError> {
-    //         if let ASN1Type::Choice(ref choice) = tld.r#type {
-    //             let name = rustify_name(&tld.name);
-    //             let inner_options = flatten_nested_choice_options(&choice.options, &name).join("\n");
-    //             let options = extract_choice_options(&choice.options, &name);
-    //             let mut options_declaration = format_option_declaration(&options);
-    //             if choice.extensible.is_some() {
-    //                 options_declaration.push_str("\n\tUnknownChoiceValue(Vec<u8>)");
-    //             }
-    //             let unknown_index_case = if choice.extensible.is_some() {
-    //                 r#"_ => Ok(|input| D::decode_unknown_extension(input).map(|(r, v)|(r, Self::UnknownChoiceValue(v))))"#.to_owned()
-    //             } else {
-    //                 format!(
-    //                     r#"x => Err(
-    //   DecodingError::new(
-    //     &format!("Invalid choice index decoding {name}. Received {{x}}"),
-    //     DecodingErrorType::InvalidChoiceIndex
-    //   )
-    // )"#
-    //                 )
-    //             };
-    //             let default_option = match options.first() {
-    //                 Some(o) => default_choice(o),
-    //                 None => {
-    //                     return Err(GeneratorError {
-    //                         top_level_declaration: Some(ToplevelDeclaration::Type(tld)),
-    //                         details: "Empty CHOICE types are not yet supported!".into(),
-    //                         kind: GeneratorErrorType::EmptyChoiceType,
-    //                     })
-    //                 }
-    //             };
-    //             let options_from_int: String = options
-    //                 .iter()
-    //                 .enumerate()
-    //                 .map(format_option_from_int)
-    //                 .collect::<Vec<String>>()
-    //                 .join("\n\t\t  ");
-    //             Ok(choice_template(
-    //                 format_comments(&tld.comments),
-    //                 custom_derive.unwrap_or("#[derive(Debug, Clone, PartialEq)]"),
-    //                 name,
-    //                 inner_options,
-    //                 default_option,
-    //                 options_declaration,
-    //                 options_from_int,
-    //                 unknown_index_case,
-    //                 choice.declare(),
-    //             ))
-    //         } else {
-    //             Err(GeneratorError::new(
-    //                 Some(ToplevelDeclaration::Type(tld)),
-    //                 "Expected CHOICE top-level declaration",
-    //                 GeneratorErrorType::Asn1TypeMismatch,
-    //             ))
-    //         }
-    //     }
+    pub fn generate_choice<'a>(
+        tld: ToplevelTypeDeclaration,
+        _custom_derive: Option<&'a str>,
+    ) -> Result<String, GeneratorError> {
+        if let ASN1Type::Choice(ref choice) = tld.r#type {
+            let name = to_rust_title_case(&tld.name);
+            let inner_options = format_nested_choice_options(&choice, &name)?;
+            let extensible = if choice.extensible.is_some() {
+                r#"
+                #[non_exhaustive]"#
+            } else {
+                ""
+            };
+
+            Ok(choice_template(
+                format_comments(&tld.comments),
+                name.clone(),
+                extensible,
+                format_choice_options(&choice, &name)?,
+                inner_options,
+                format_tag(tld.tag.as_ref()),
+            ))
+        } else {
+            Err(GeneratorError::new(
+                Some(ToplevelDeclaration::Type(tld)),
+                "Expected CHOICE top-level declaration",
+                GeneratorErrorType::Asn1TypeMismatch,
+            ))
+        }
+    }
 
     //     fn generate_information_object_class<'a>(
     //         tld: ToplevelInformationDeclaration,
@@ -293,6 +311,24 @@ impl RasnGenerator {
     //             ))
     //         }
     //     }
+
+    pub fn generate_object_identifier_value<'a>(
+        tld: ToplevelValueDeclaration,
+    ) -> Result<String, GeneratorError> {
+        if let ASN1Value::ObjectIdentifier(_) = tld.value {
+            Ok(object_identifier_value_template(
+                format_comments(&tld.comments),
+                to_rust_const_case(&tld.name),
+                tld.value.value_as_string(None)?,
+            ))
+        } else {
+            Err(GeneratorError::new(
+                Some(ToplevelDeclaration::Value(tld)),
+                "Expected OBJECT IDENTIFIER top-level declaration",
+                GeneratorErrorType::Asn1TypeMismatch,
+            ))
+        }
+    }
 
     pub fn generate_sequence_or_set<'a>(
         tld: ToplevelTypeDeclaration,
@@ -331,7 +367,7 @@ impl RasnGenerator {
         }
     }
 
-    fn generate_sequence_of<'a>(
+    pub fn generate_sequence_of<'a>(
         tld: ToplevelTypeDeclaration,
         _custom_derive: Option<&'a str>,
     ) -> Result<String, GeneratorError> {
@@ -340,7 +376,7 @@ impl RasnGenerator {
             let anonymous_item = match seq_of.r#type.as_ref() {
                 ASN1Type::ElsewhereDeclaredType(_) => None,
                 n => Some(generate(
-                    &Framework::Asnr,
+                    &Framework::Rasn,
                     ToplevelDeclaration::Type(ToplevelTypeDeclaration {
                         parameterization: None,
                         comments: " Anonymous SEQUENCE OF member ".into(),
@@ -351,11 +387,7 @@ impl RasnGenerator {
                     None,
                 )?),
             }
-            .ok_or(GeneratorError {
-                details: format!("Could not generate SEQUENCE OF member for {}", tld.name),
-                top_level_declaration: Some(ToplevelDeclaration::Type(tld.clone())),
-                kind: GeneratorErrorType::Asn1TypeMismatch,
-            })?;
+            .unwrap_or_default();
             let member_type = match seq_of.r#type.as_ref() {
                 ASN1Type::ElsewhereDeclaredType(d) => to_rust_title_case(&d.identifier),
                 _ => String::from("Anonymous") + &name,

@@ -5,6 +5,7 @@ use asnr_grammar::{
     },
     types::*,
     *,
+    utils::*
 };
 
 use crate::{
@@ -14,8 +15,6 @@ use crate::{
     },
     Framework,
 };
-
-use crate::utils::*;
 
 use super::builder::StringifiedNameType;
 

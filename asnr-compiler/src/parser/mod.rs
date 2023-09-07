@@ -32,6 +32,7 @@ use self::{
     integer::*,
     module_reference::module_reference,
     null::*,
+    object_identifier::*,
     octet_string::*,
     parameterization::parameterization,
     real::*,
@@ -155,11 +156,29 @@ pub fn elsewhere_declared_type<'a>(input: &'a str) -> IResult<&'a str, ASN1Type>
 }
 
 fn top_level_value_declaration<'a>(input: &'a str) -> IResult<&'a str, ToplevelValueDeclaration> {
-    into(tuple((
-        skip_ws(many0(comment)),
-        skip_ws(value_identifier),
-        skip_ws(identifier),
-        preceded(assignment, asn1_value),
+    into(alt((
+        tuple((
+            skip_ws(many0(comment)),
+            skip_ws(value_identifier),
+            skip_ws(alt((
+                // Cover built-in types with spaces
+                tag(OBJECT_IDENTIFIER),
+                tag(OCTET_STRING),
+                tag(BIT_STRING),
+                identifier,
+            ))),
+            preceded(assignment, asn1_value),
+        )),
+        // Cover object identifiers
+        tuple((
+            skip_ws(many0(comment)),
+            skip_ws(value_identifier),
+            skip_ws(tag(OBJECT_IDENTIFIER)),
+            preceded(
+                assignment,
+                map(object_identifier, |oid| ASN1Value::ObjectIdentifier(oid)),
+            ),
+        )),
     )))(input)
 }
 

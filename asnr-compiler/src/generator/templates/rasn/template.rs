@@ -1,4 +1,3 @@
-use asnr_grammar::ASN1Value;
 
 use crate::generator::templates::rasn::utils::join_annotations;
 
@@ -12,20 +11,30 @@ pub fn rasn_imports_and_generic_types() -> String {
     )
 }
 
-// pub fn typealias_template(
-//     comments: String,
-//     derive: &str,
-//     name: String,
-//     alias: String,
-//     descriptor: String,
-// ) -> String {
-//     format!(
-//         r#"
-//     {comments}
-//     pub type {name} = {alias}
-//     "#
-//     )
-// }
+pub fn typealias_template(
+    comments: String,
+    name: String,
+    alias: String,
+) -> String {
+    format!(
+        r#"
+    {comments}
+    pub type {name} = {alias};
+    "#
+    )
+}
+
+pub fn object_identifier_value_template(
+    comments: String,
+    name: String,
+    value: String,
+) -> String {
+    format!(
+        r#"{comments}
+pub const {name}: &'static Oid = &Oid::const_new(&{value});
+"#
+    )
+}
 
 pub fn integer_value_template(
     comments: String,
@@ -45,6 +54,7 @@ pub fn integer_template(
     name: String,
     constraint_annotations: String,
     tag_annotations: String,
+    integer_type: String
 ) -> String {
     let rasn_annotations: String = join_annotations(vec![
         "delegate".into(),
@@ -54,8 +64,8 @@ pub fn integer_template(
     format!(
         r#"
 {comments}
-#[derive(AsnType, Debug, Clone, Copy, Decode, Encode, PartialEq, PartialOrd, Eq, Ord, Hash)]
-{rasn_annotations}pub struct {name}(pub Integer);
+#[derive(AsnType, Debug, Clone, Decode, Encode, PartialEq, PartialOrd, Eq, Ord, Hash)]
+{rasn_annotations}pub struct {name}(pub {integer_type});
 "#
     )
 }
@@ -74,8 +84,28 @@ pub fn bit_string_template(
     format!(
         r#"
 {comments}
-#[derive(AsnType, Debug, Clone, Decode, Encode, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[derive(AsnType, Debug, Clone, Decode, Encode, PartialEq)]
 {rasn_annotations}pub struct {name}(pub BitString);
+"#
+    )
+}
+
+pub fn octet_string_template(
+    comments: String,
+    name: String,
+    constraint_annotations: String,
+    tag_annotations: String,
+) -> String {
+    let rasn_annotations: String = join_annotations(vec![
+        "delegate".into(),
+        tag_annotations,
+        constraint_annotations,
+    ]);
+    format!(
+        r#"
+{comments}
+#[derive(AsnType, Debug, Clone, Decode, Encode, PartialEq)]
+{rasn_annotations}pub struct {name}(pub OctetString);
 "#
     )
 }
@@ -83,6 +113,7 @@ pub fn bit_string_template(
 pub fn char_string_template(
     comments: String,
     name: String,
+    string_type: String,
     constraint_annotations: String,
     alphabet_annotations: String,
     tag_annotations: String,
@@ -96,8 +127,8 @@ pub fn char_string_template(
     format!(
         r#"
 {comments}
-#[derive(AsnType, Debug, Clone, Decode, Encode, PartialEq, PartialOrd, Eq, Ord, Hash)]
-{rasn_annotations}pub struct {name}(pub BitString);
+#[derive(AsnType, Debug, Clone, Decode, Encode, PartialEq)]
+{rasn_annotations}pub struct {name}(pub {string_type});
 "#
     )
 }
@@ -107,8 +138,8 @@ pub fn boolean_template(comments: String, name: String, tag_annotations: String)
     format!(
         r#"
 {comments}
-#[derive(AsnType, Debug, Clone, Copy, Decode, Encode, PartialEq, PartialOrd, Eq, Ord, Hash)]
-{rasn_annotations}pub struct {name}(pub Boolean);
+#[derive(AsnType, Debug, Clone, Copy, Decode, Encode, PartialEq)]
+{rasn_annotations}pub struct {name}(pub bool);
 "#
     )
 }
@@ -126,7 +157,7 @@ pub fn null_template(comments: String, name: String, tag_annotations: String) ->
     format!(
         r#"
 {comments}
-#[derive(AsnType, Debug, Clone, Copy, Decode, Encode, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[derive(AsnType, Debug, Clone, Copy, Decode, Encode, PartialEq)]
 {rasn_annotations}pub struct {name}(());
 "#
     )
@@ -195,67 +226,30 @@ pub fn sequence_of_template(
         {anonymous_item}
 {comments}
 #[derive(AsnType, Debug, Clone, Decode, Encode, PartialEq)]
-{rasn_annotations}pub struct {name}(pub Vec<{member_type}>);
+{rasn_annotations}pub struct {name}(pub SequenceOf<{member_type}>);
 "#
     )
 }
 
-// pub fn default_choice(option: &StringifiedNameType) -> String {
-//     format!(
-//         "Self::{name}({rtype}::default())",
-//         name = option.name,
-//         rtype = option.r#type
-//     )
-// }
-
-// pub fn choice_template(
-//     comments: String,
-//     derive: &str,
-//     name: String,
-//     anonymous_option: String,
-//     default_option: String,
-//     options: String,
-//     options_from_int: String,
-//     unknown_index_case: String,
-//     choice_descriptor: String,
-// ) -> String {
-//     format!(
-//         r#"{anonymous_option}
-
-// {comments}{derive}
-// pub enum {name} {{
-//   {options}
-// }}
-
-// impl<'a, I: AsBytes + Debug + 'a> DecoderForIndex<'a, I> for {name} {{
-//   fn decoder_for_index<D>(v: i128) -> Result<fn(I) -> IResult<I, Self>, DecodingError> where D: Decoder<'a, I>, Self: Sized {{
-//     match v {{
-//         {options_from_int}
-//         {unknown_index_case}
-//     }}
-//   }}
-// }}
-
-// impl Default for {name} {{
-//   fn default() -> Self {{
-//     {default_option}
-//   }}
-// }}
-
-// impl<'a, I: AsBytes + Debug + 'a> Decode<'a, I> for {name} {{
-//   {DECODE_SIGNATURE}
-//   {{
-//     {name}::decoder::<D>()?(input)
-//   }}
-
-//   {DECODER_SIGNATURE}
-//   {{
-//     D::decode_choice({choice_descriptor})
-//   }}
-// }}
-// "#,
-//     )
-// }
+pub fn choice_template(
+    comments: String,
+    name: String,
+    extensible: &str,
+    options: String,
+    nested_options: String,
+    tag_annotations: String,
+) -> String {
+    let rasn_annotations = join_annotations(vec!["choice".into(), tag_annotations]);
+    format!(
+        r#"{nested_options}
+{comments}
+#[derive(AsnType, Debug, Clone, Decode, Encode, PartialEq)]
+{rasn_annotations}{extensible}pub enum {name} {{
+  {options}
+}}
+"#,
+    )
+}
 
 // pub fn information_object_class_template(
 //     comments: String,

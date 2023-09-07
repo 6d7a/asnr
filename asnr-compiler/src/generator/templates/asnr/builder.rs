@@ -4,10 +4,9 @@ use crate::{
         error::{GeneratorError, GeneratorErrorType},
         generate,
     },
-    utils::{to_rust_camel_case, to_rust_title_case},
     Framework,
 };
-use asnr_grammar::{information_object::*, utils::int_type_token, *};
+use asnr_grammar::{utils::*, information_object::*, utils::int_type_token, *};
 use asnr_traits::*;
 
 use super::{template::*, util::*};
@@ -429,12 +428,7 @@ impl Generator for AsnrGenerator {
                     }),
                     None,
                 )?),
-            }
-            .ok_or(GeneratorError {
-                details: format!("Could not generate SEQUENCE OF member for {}", tld.name),
-                top_level_declaration: Some(ToplevelDeclaration::Type(tld.clone())),
-                kind: GeneratorErrorType::Asn1TypeMismatch,
-            })?;
+            }.unwrap_or_default();
             let member_type = match seq_of.r#type.as_ref() {
                 ASN1Type::ElsewhereDeclaredType(d) => to_rust_title_case(&d.identifier),
                 _ => String::from("Anonymous") + &name,
