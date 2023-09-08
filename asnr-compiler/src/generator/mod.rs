@@ -15,10 +15,10 @@ use self::{
     },
 };
 
-pub fn imports_and_generic_types(framework: &Framework, custom_derive: Option<&str>, no_std: bool, include_clippy_allows: bool) -> String {
+pub fn imports_and_generic_types(framework: &Framework, custom_derive: Option<&str>, no_std: bool, include_file_headers: bool) -> String {
     match framework {
-        Framework::Asnr => asnr_imports_and_generic_types(custom_derive, no_std, include_clippy_allows),
-        Framework::Rasn => rasn_imports_and_generic_types(),
+        Framework::Asnr => asnr_imports_and_generic_types(custom_derive, no_std, include_file_headers),
+        Framework::Rasn => rasn_imports_and_generic_types(include_file_headers),
     }
 }
 

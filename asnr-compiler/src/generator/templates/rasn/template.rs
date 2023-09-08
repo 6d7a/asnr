@@ -1,13 +1,19 @@
-
 use crate::generator::templates::rasn::utils::join_annotations;
 
-pub fn rasn_imports_and_generic_types() -> String {
+pub fn rasn_imports_and_generic_types(
+    include_file_headers: bool
+) -> String {
     format!(
-        r#"#![no_std]
+        r#"{}
 
         extern crate alloc;
         
-        use rasn::prelude::*;"#
+        use rasn::prelude::*;"#,
+        if include_file_headers {
+            "#![no_std]"
+        } else {
+            ""
+        }
     )
 }
 
@@ -15,20 +21,24 @@ pub fn typealias_template(
     comments: String,
     name: String,
     alias: String,
+    tag_annotations: String,
+    constraint_annotations: String,
 ) -> String {
+    let rasn_annotations: String = join_annotations(vec![
+        "delegate".into(),
+        tag_annotations,
+        constraint_annotations,
+    ]);
     format!(
         r#"
-    {comments}
-    pub type {name} = {alias};
-    "#
+{comments}
+#[derive(AsnType, Debug, Clone, Decode, Encode, PartialEq)]
+{rasn_annotations}pub struct {name}(pub {alias});
+"#
     )
 }
 
-pub fn object_identifier_value_template(
-    comments: String,
-    name: String,
-    value: String,
-) -> String {
+pub fn object_identifier_value_template(comments: String, name: String, value: String) -> String {
     format!(
         r#"{comments}
 pub const {name}: &'static Oid = &Oid::const_new(&{value});
@@ -54,7 +64,7 @@ pub fn integer_template(
     name: String,
     constraint_annotations: String,
     tag_annotations: String,
-    integer_type: String
+    integer_type: String,
 ) -> String {
     let rasn_annotations: String = join_annotations(vec![
         "delegate".into(),
@@ -133,8 +143,13 @@ pub fn char_string_template(
     )
 }
 
-pub fn boolean_template(comments: String, name: String, tag_annotations: String) -> String {
-    let rasn_annotations: String = join_annotations(vec!["delegate".into(), tag_annotations]);
+pub fn boolean_template(
+    comments: String,
+    name: String,
+    tag_annotations: String,
+) -> String {
+    let rasn_annotations: String =
+        join_annotations(vec!["delegate".into(), tag_annotations]);
     format!(
         r#"
 {comments}
@@ -152,8 +167,13 @@ pub const {name} = ();
     )
 }
 
-pub fn null_template(comments: String, name: String, tag_annotations: String) -> String {
-    let rasn_annotations: String = join_annotations(vec!["delegate".into(), tag_annotations]);
+pub fn null_template(
+    comments: String,
+    name: String,
+    tag_annotations: String,
+) -> String {
+    let rasn_annotations: String =
+        join_annotations(vec!["delegate".into(), tag_annotations]);
     format!(
         r#"
 {comments}
@@ -199,8 +219,7 @@ pub fn sequence_or_set_template(
         {nested_members}
         {comments}
         #[derive(AsnType, Debug, Clone, Decode, Encode, PartialEq)]
-        {rasn_annotations}{extensible}
-        pub struct {name} {{
+        {rasn_annotations}{extensible}pub struct {name} {{
             {members}
         }}
 

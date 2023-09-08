@@ -53,18 +53,6 @@ asn1! {
     }
   "#
 }
-
-// or
-
-asn1_no_std! {
-  r#"
-    ServiceSpecificPermissions ::= CHOICE {
-      opaque    OCTET STRING (SIZE(0..MAX)),
-      ...,
-      extension BOOLEAN DEFAULT TRUE
-    }
-  "#
-}
 ```
 
 # ASNR Transcoder

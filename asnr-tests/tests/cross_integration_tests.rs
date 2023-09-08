@@ -1,6 +1,4 @@
-use core::str::FromStr;
-
-use asnr_compiler_derive::asn1;
+use asnr_compiler_derive::{asn1};
 use bitvec::{prelude::Msb0, view::BitView};
 
 use rasn::prelude::*;
@@ -60,4 +58,16 @@ fn encodes_octet_sequence() {
     let re_decoded = TestSequenceRasn::decode(&mut decoder).unwrap();
     assert_eq!(re_decoded.hello.to_vec(), vec![1,2,3,4]);
     assert_eq!(re_decoded.world, 64); // This is a rasn bug
+}
+
+#[test]
+fn xtest() {
+    asn1!(r#"Test-Schema DEFINITIONS AUTOMATIC TAGS ::=
+
+    BEGIN
+    
+    Ext3 ::= INTEGER(2113664..270549119,...)
+    
+    END
+    "#);
 }

@@ -68,14 +68,18 @@ pub struct AsnrMissingParams {
 
 impl Default for AsnrMissingParams {
     fn default() -> Self {
-        Self { no_std: false, framework: Framework::Asnr }
+        Self {
+            no_std: false,
+            framework: Framework::Asnr,
+        }
     }
 }
 
 #[derive(Debug, PartialEq, Default)]
 pub enum Framework {
-  #[default] Asnr,
-  Rasn
+    #[default]
+    Asnr,
+    Rasn,
 }
 
 /// Typestate representing compiler that is ready to compile
@@ -477,13 +481,16 @@ impl Asnr<AsnrCompileReady> {
     /// * _Ok_  - tuple containing the stringified Rust representation of the ASN1 spec as well as a vector of warnings raised during the compilation
     /// * _Err_ - Unrecoverable error, no rust representations were generated
     pub fn compile_to_string(self) -> Result<(String, Vec<Box<dyn Error>>), Box<dyn Error>> {
-        internal_compile(&Asnr {
-            state: AsnrSourcesSet {
-                sources: self.state.sources,
-                no_std: self.state.no_std,
-                framework: self.state.framework,
+        internal_compile(
+            &Asnr {
+                state: AsnrSourcesSet {
+                    sources: self.state.sources,
+                    no_std: self.state.no_std,
+                    framework: self.state.framework,
+                },
             },
-        }, false)
+            false,
+        )
     }
 
     /// Runs the ASNR compiler command.
@@ -510,9 +517,14 @@ impl Asnr<AsnrCompileReady> {
 
 fn internal_compile(
     asnr: &Asnr<AsnrSourcesSet>,
-    include_clippy_allows: bool,
+    include_file_headers: bool,
 ) -> Result<(String, Vec<Box<dyn Error>>), Box<dyn Error>> {
-    let mut result = imports_and_generic_types(&asnr.state.framework, None, asnr.state.no_std, include_clippy_allows);
+    let mut result = imports_and_generic_types(
+        &asnr.state.framework,
+        None,
+        asnr.state.no_std,
+        include_file_headers,
+    );
     let mut warnings = Vec::<Box<dyn Error>>::new();
     let mut modules: Vec<ToplevelDeclaration> = vec![];
     for src in &asnr.state.sources {
@@ -523,7 +535,12 @@ fn internal_compile(
         modules.append(
             &mut asn_spec(&stringified_src)?
                 .into_iter()
-                .flat_map(|(_, tld)| tld)
+                .flat_map(|(header, tlds)| {
+                    tlds.into_iter().map(move |mut tld| {
+                        tld.apply_tagging_environment(&header.tagging_environment);
+                        tld
+                    })
+                })
                 .collect(),
         );
     }
@@ -610,10 +627,10 @@ mod tests {
                 .framework(crate::Framework::Rasn)
                 // .add_asn_by_path(PathBuf::from("test_asn1/AddGrpC.asn"))
                 // .add_asn_by_path(PathBuf::from("test_asn1/ETSI-ITS-CDD.asn"))
-                .add_asn_by_path(PathBuf::from("test_asn1/v2x.asn"))
+                // .add_asn_by_path(PathBuf::from("test_asn1/v2x.asn"))
                 //.add_asn_by_path(PathBuf::from("test_asn1/REGION.asn"))
-                //.add_asn_by_path(PathBuf::from("test_asn1/kerberos.asn"))
-                // .add_asn_by_path(PathBuf::from("test_asn1/denm_2_0.asn"))
+                .add_asn_by_path(PathBuf::from("test_asn1/kerberos.asn"))
+                //.add_asn_by_path(PathBuf::from("test_asn1/denm_2_0.asn"))
                 // .add_asn_by_path(PathBuf::from(
                 //     "test_asn1/CPM-OriginatingStationContainers.asn"
                 // ))

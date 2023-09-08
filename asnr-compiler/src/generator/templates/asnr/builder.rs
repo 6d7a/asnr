@@ -24,14 +24,14 @@ impl Generator for AsnrGenerator {
             if tld.type_name == INTEGER {
                 Ok(integer_value_template(
                     format_comments(&tld.comments),
-                    to_rust_camel_case(&tld.name),
+                    to_rust_snake_case(&tld.name),
                     int_type_token(i, i),
                     i.to_string(),
                 ))
             } else {
                 Ok(integer_value_template(
                     format_comments(&tld.comments),
-                    to_rust_camel_case(&tld.name),
+                    to_rust_snake_case(&tld.name),
                     tld.type_name.as_str(),
                     format!("{}({})", tld.type_name, i),
                 ))
@@ -172,7 +172,7 @@ impl Generator for AsnrGenerator {
         if let ASN1Value::Null = tld.value {
             Ok(null_value_template(
                 format_comments(&tld.comments),
-                to_rust_camel_case(&tld.name),
+                to_rust_snake_case(&tld.name),
             ))
         } else {
             Err(GeneratorError::new(
@@ -258,10 +258,10 @@ impl Generator for AsnrGenerator {
 
     fn generate_choice_value(tld: ToplevelValueDeclaration) -> Result<String, GeneratorError> {
         if let ASN1Value::Choice(id, val) = tld.value {
-            let type_name = to_rust_camel_case(&tld.type_name);
+            let type_name = to_rust_snake_case(&tld.type_name);
             Ok(choice_value_template(
                 format_comments(&tld.comments),
-                to_rust_camel_case(&tld.name),
+                to_rust_snake_case(&tld.name),
                 &type_name,
                 id,
                 val.value_as_string(Some(&type_name))?,
@@ -363,10 +363,10 @@ impl Generator for AsnrGenerator {
 
     fn generate_sequence_value(tld: ToplevelValueDeclaration) -> Result<String, GeneratorError> {
         if let ASN1Value::Sequence(_) = tld.value {
-            let type_name = to_rust_camel_case(&tld.type_name);
+            let type_name = to_rust_snake_case(&tld.type_name);
             Ok(sequence_value_template(
                 format_comments(&tld.comments),
-                to_rust_camel_case(&tld.name),
+                to_rust_snake_case(&tld.name),
                 &type_name,
                 tld.value.value_as_string(Some(&type_name))?,
             ))

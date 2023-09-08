@@ -241,15 +241,15 @@ impl From<&str> for EncodingReferenceDefault {
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum TaggingEnvironment {
-    AUTOMATIC,
-    IMPLICIT,
-    EXPLICIT,
+    Automatic,
+    Implicit,
+    Explicit,
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum ExtensibilityEnvironment {
-    IMPLIED,
-    EXPLICIT,
+    Implied,
+    Explicit,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -357,8 +357,7 @@ impl Declare for ObjectIdentifierArc {
     fn declare(&self) -> String {
         format!(
             "ObjectIdentifierArc {{ name: {:?}.into(), number: {:?} }}",
-            self.name,
-            self.number
+            self.name, self.number
         )
     }
 }
@@ -389,6 +388,40 @@ pub enum ToplevelDeclaration {
 }
 
 impl ToplevelDeclaration {
+    pub fn apply_tagging_environment(&mut self, environment: &TaggingEnvironment) {
+        match (environment, self) {
+            (env, ToplevelDeclaration::Type(ty)) => {
+                ty.tag = ty.tag.as_ref().map(|t| AsnTag {
+                    environment: env.clone(),
+                    tag_class: t.tag_class,
+                    id: t.id,
+                });
+                match &mut ty.r#type {
+                    ASN1Type::Sequence(s) | ASN1Type::Set(s) => {
+                        s.members.iter_mut().for_each(|m| {
+                            m.tag = m.tag.as_ref().map(|t| AsnTag {
+                                environment: env.clone(),
+                                tag_class: t.tag_class,
+                                id: t.id,
+                            });
+                        })
+                    }
+                    ASN1Type::Choice(c) => {
+                        c.options.iter_mut().for_each(|o| {
+                            o.tag = o.tag.as_ref().map(|t| AsnTag {
+                                environment: env.clone(),
+                                tag_class: t.tag_class,
+                                id: t.id,
+                            });
+                        })
+                    }
+                    _ => (),
+                }
+            }
+            _ => (),
+        }
+    }
+
     pub fn name(&self) -> &String {
         match self {
             ToplevelDeclaration::Information(i) => &i.name,
@@ -1114,7 +1147,7 @@ impl ASN1Value {
                 bits.pop();
                 Ok(format!("vec![{bits}]"))
             }
-            ASN1Value::EnumeratedValue(e) => Ok(to_rust_camel_case(e)),
+            ASN1Value::EnumeratedValue(e) => Ok(to_rust_snake_case(e)),
             ASN1Value::ElsewhereDeclaredValue(e) => Ok(to_rust_const_case(e)),
             ASN1Value::ObjectIdentifier(oid) => Ok(format!(
                 "[{}]",
@@ -1205,7 +1238,7 @@ impl asnr_traits::Declare for DeclarationElsewhere {
 }
 
 /// Tag classes
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub enum TagClass {
     Universal,
     Application,
@@ -1216,6 +1249,7 @@ pub enum TagClass {
 /// Representation of a tag
 #[derive(Debug, Clone, PartialEq)]
 pub struct AsnTag {
+    pub environment: TaggingEnvironment,
     pub tag_class: TagClass,
     pub id: u64,
 }
@@ -1223,8 +1257,8 @@ pub struct AsnTag {
 impl asnr_traits::Declare for AsnTag {
     fn declare(&self) -> String {
         format!(
-            "AsnTag {{ tag_class: TagClass::{:?}, id: {} }}",
-            self.tag_class, self.id
+            "AsnTag {{ tag_class: TagClass::{:?}, id: {}, environment: Explicitness::{:?} }}",
+            self.tag_class, self.id, self.environment
         )
     }
 }
@@ -1240,6 +1274,7 @@ impl From<(Option<&str>, u64)> for AsnTag {
         AsnTag {
             tag_class,
             id: value.1,
+            environment: TaggingEnvironment::Automatic,
         }
     }
 }

@@ -5,7 +5,7 @@ use asnr_grammar::{
     },
     types::{ ChoiceOption, Enumerated, SequenceOrSet, SequenceOrSetMember, Choice},
     utils::*,
-    ASN1Type, AsnTag, CharacterStringType, TagClass, ToplevelDeclaration, ToplevelTypeDeclaration,
+    ASN1Type, AsnTag, CharacterStringType, TagClass, ToplevelDeclaration, ToplevelTypeDeclaration, TaggingEnvironment,
 };
 
 use crate::generator::{error::GeneratorError, generate, templates::inner_name, Framework};
@@ -120,8 +120,13 @@ pub fn format_tag(tag: Option<&AsnTag>) -> String {
             TagClass::Private => "private, ",
             TagClass::ContextSpecific => "context, ",
         };
+        let (exp_pre, exp_post) = if tag.environment == TaggingEnvironment::Explicit {
+            ("explicit(",")")
+        } else {
+            ("","")
+        };
         let id = tag.id;
-        format!("tag({class}{id})")
+        format!("tag({exp_pre}{class}{id}{exp_post})")
     } else {
         String::from("")
     }
@@ -160,7 +165,7 @@ fn format_sequence_member(
     parent_name: &String,
     extension_annotation: &str,
 ) -> Result<String, GeneratorError> {
-    let name = to_rust_camel_case(&member.name);
+    let name = to_rust_snake_case(&member.name);
     let (mut all_constraints, mut formatted_type_name) = match &member.r#type {
         ASN1Type::Null => (vec![], "()".into()),
         ASN1Type::Boolean => (vec![], "bool".into()),
@@ -339,8 +344,8 @@ pub fn join_annotations(strings: Vec<String>) -> String {
 pub fn default_method_name(parent_name: &String, field_name: &String) -> String {
     format!(
         "{}_{}_default",
-        to_rust_camel_case(parent_name),
-        to_rust_camel_case(field_name)
+        to_rust_snake_case(parent_name),
+        to_rust_snake_case(field_name)
     )
 }
 

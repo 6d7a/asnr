@@ -61,6 +61,7 @@ dependencies = [
  "asnr-compiler",
  "asnr-grammar",
  "proc-macro2",
+ "syn 2.0.18",
 ]
 
 [[package]]
@@ -96,6 +97,7 @@ dependencies = [
  "criterion",
  "num-bigint",
  "rasn",
+ "rasn-kerberos",
 ]
 
 [[package]]
@@ -731,6 +733,15 @@ dependencies = [
  "rayon",
  "syn 1.0.109",
  "uuid",
+]
+
+[[package]]
+name = "rasn-kerberos"
+version = "0.9.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a7b45deb1e595b089de7885b0ef269bd43c1b27d1280949ae1518ef42236a199"
+dependencies = [
+ "rasn",
 ]
 
 [[package]]

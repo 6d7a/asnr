@@ -14,15 +14,15 @@ use crate::{
 
 use super::{
     template::{
-        bit_string_template, boolean_template, char_string_template, enumerated_template,
-        integer_template, integer_value_template, null_template, null_value_template,
-        object_identifier_value_template, sequence_of_template, sequence_or_set_template,
-        typealias_template, choice_template, octet_string_template,
+        bit_string_template, boolean_template, char_string_template, choice_template,
+        enumerated_template, integer_template, integer_value_template, null_template,
+        null_value_template, object_identifier_value_template, octet_string_template,
+        sequence_of_template, sequence_or_set_template, typealias_template,
     },
     utils::{
-        format_alphabet_annotations, format_default_methods, format_enum_members,
-        format_nested_sequence_members, format_range_annotations, format_sequence_or_set_members,
-        format_tag, string_type, format_nested_choice_options, format_choice_options,
+        format_alphabet_annotations, format_choice_options, format_default_methods,
+        format_enum_members, format_nested_choice_options, format_nested_sequence_members,
+        format_range_annotations, format_sequence_or_set_members, format_tag, string_type,
     },
 };
 
@@ -38,6 +38,8 @@ impl RasnGenerator {
                 format_comments(&tld.comments),
                 to_rust_title_case(&tld.name),
                 to_rust_title_case(&dec.identifier),
+                format_tag(tld.tag.as_ref()),
+                format_range_annotations(true, &dec.constraints)?,
             ))
         } else {
             Err(GeneratorError::new(
@@ -89,7 +91,7 @@ impl RasnGenerator {
                 to_rust_title_case(&tld.name),
                 format_range_annotations(true, &int.constraints)?,
                 format_tag(tld.tag.as_ref()),
-                int_type
+                int_type,
             ))
         } else {
             Err(GeneratorError::new(
