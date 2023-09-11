@@ -8,11 +8,6 @@
 //! (inner type constraints are such an example).
 #![no_std]
 extern crate alloc;
-extern crate asnr_traits;
-#[macro_use]
-extern crate asnr_grammar_derive;
-
-use asnr_traits::Declare;
 
 pub mod constraints;
 pub mod encoding_rules;
@@ -325,19 +320,6 @@ impl From<Vec<ObjectIdentifierArc>> for ObjectIdentifier {
     }
 }
 
-impl Declare for ObjectIdentifier {
-    fn declare(&self) -> String {
-        format!(
-            "ObjectIdentifier(vec![{}])",
-            self.0
-                .iter()
-                .map(Declare::declare)
-                .collect::<Vec<String>>()
-                .join(",")
-        )
-    }
-}
-
 #[derive(Debug, Clone, PartialEq)]
 pub struct ObjectIdentifierArc {
     pub name: Option<String>,
@@ -350,15 +332,6 @@ impl From<u128> for ObjectIdentifierArc {
             name: None,
             number: Some(value),
         }
-    }
-}
-
-impl Declare for ObjectIdentifierArc {
-    fn declare(&self) -> String {
-        format!(
-            "ObjectIdentifierArc {{ name: {:?}.into(), number: {:?} }}",
-            self.name, self.number
-        )
     }
 }
 
@@ -486,7 +459,7 @@ impl ToplevelDeclaration {
     ///   intercontinental SEQUENCE (SIZE(0..fifteen)) OF Intercontinental
     /// }
     /// ```
-    pub fn has_constraint_reference(&self) -> bool {
+    pub fn has_value_reference(&self) -> bool {
         match self {
             ToplevelDeclaration::Type(t) => t.r#type.contains_constraint_reference(),
             // TODO: Cover constraint references in other types of top-level declarations
@@ -928,32 +901,6 @@ impl From<&str> for CharacterStringType {
     }
 }
 
-impl asnr_traits::Declare for ASN1Type {
-    fn declare(&self) -> String {
-        match self {
-            ASN1Type::Null => "ASN1Type::Null".into(),
-            ASN1Type::Boolean => "ASN1Type::Boolean".into(),
-            ASN1Type::Integer(i) => format!("ASN1Type::Integer({})", i.declare()),
-            ASN1Type::Real(r) => format!("ASN1Type::Real({})", r.declare()),
-            ASN1Type::BitString(b) => format!("ASN1Type::BitString({})", b.declare()),
-            ASN1Type::OctetString(o) => format!("ASN1Type::OctetString({})", o.declare()),
-            ASN1Type::CharacterString(o) => format!("ASN1Type::CharacterString({})", o.declare()),
-            ASN1Type::Enumerated(e) => format!("ASN1Type::Enumerated({})", e.declare()),
-            ASN1Type::SequenceOf(s) => format!("ASN1Type::SequenceOf({})", s.declare()),
-            ASN1Type::Sequence(s) => format!("ASN1Type::Sequence({})", s.declare()),
-            ASN1Type::Set(s) => format!("ASN1Type::Set({})", s.declare()),
-            ASN1Type::Choice(c) => format!("ASN1Type::Choice({})", c.declare()),
-            ASN1Type::ElsewhereDeclaredType(els) => {
-                format!("ASN1Type::ElsewhereDeclaredType({})", els.declare())
-            }
-            ASN1Type::InformationObjectFieldReference(iofr) => format!(
-                "ASN1Type::InformationObjectFieldReference({})",
-                iofr.declare()
-            ),
-        }
-    }
-}
-
 /// The possible types of an ASN1 value.
 #[derive(Debug, Clone, PartialEq)]
 pub enum ASN1Value {
@@ -1161,49 +1108,6 @@ impl ASN1Value {
     }
 }
 
-impl asnr_traits::Declare for ASN1Value {
-    fn declare(&self) -> String {
-        match self {
-            ASN1Value::All => String::from("ASN1Value::All"),
-            ASN1Value::Null => String::from("ASN1Value::Null"),
-            ASN1Value::Real(r) => format!("ASN1Value::Real({})", r),
-            ASN1Value::Boolean(b) => format!("ASN1Value::Boolean({})", b),
-            ASN1Value::Integer(i) => format!("ASN1Value::Integer({})", i),
-            ASN1Value::String(s) => format!("ASN1Value::String(\"{}\".into())", s),
-            ASN1Value::Choice(i, v) => format!("ASN1Value::Choice({i}, Box::new({}))", v.declare()),
-            ASN1Value::Sequence(fields) => format!(
-                "ASN1Value::Sequence(vec![{}])",
-                fields
-                    .iter()
-                    .map(|(id, val)| format!("({id}, Box::new({}))", val.declare()))
-                    .collect::<Vec<String>>()
-                    .join(", ")
-            ),
-            ASN1Value::BitString(s) => format!(
-                "ASN1Value::BitString(vec![{}])",
-                s.iter()
-                    .map(|b| {
-                        if *b {
-                            String::from("true")
-                        } else {
-                            String::from("false")
-                        }
-                    })
-                    .collect::<Vec<String>>()
-                    .join(", ")
-            ),
-            ASN1Value::EnumeratedValue(s) => {
-                format!("ASN1Value::EnumeratedValue(\"{}\".into())", s)
-            }
-            ASN1Value::ElsewhereDeclaredValue(s) => {
-                format!("ASN1Value::ElsewhereDeclaredValue(\"{}\".into())", s)
-            }
-            ASN1Value::ObjectIdentifier(oid) => {
-                format!("ASN1Value::ObjectIdentifier({})", oid.declare())
-            }
-        }
-    }
-}
 
 /// Intermediate placeholder for a type declared in
 /// some other part of the ASN1 specification that is
@@ -1220,20 +1124,6 @@ impl From<(&str, Option<Vec<Constraint>>)> for DeclarationElsewhere {
             identifier: value.0.into(),
             constraints: value.1.unwrap_or(vec![]),
         }
-    }
-}
-
-impl asnr_traits::Declare for DeclarationElsewhere {
-    fn declare(&self) -> String {
-        format!(
-            "DeclarationElsewhere {{ identifier: \"{}\".into(), constraints: vec![{}] }}",
-            self.identifier,
-            self.constraints
-                .iter()
-                .map(|c| c.declare())
-                .collect::<Vec<String>>()
-                .join(", ")
-        )
     }
 }
 
@@ -1254,14 +1144,6 @@ pub struct AsnTag {
     pub id: u64,
 }
 
-impl asnr_traits::Declare for AsnTag {
-    fn declare(&self) -> String {
-        format!(
-            "AsnTag {{ tag_class: TagClass::{:?}, id: {}, environment: Explicitness::{:?} }}",
-            self.tag_class, self.id, self.environment
-        )
-    }
-}
 
 impl From<(Option<&str>, u64)> for AsnTag {
     fn from(value: (Option<&str>, u64)) -> Self {

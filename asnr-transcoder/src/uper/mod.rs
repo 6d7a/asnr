@@ -38,15 +38,6 @@ const RUST_KEYWORDS: [&'static str; 38] = [
     "unsafe", "use", "where", "while",
 ];
 
-pub(crate) fn bit_length(min: i128, max: i128) -> usize {
-    let number_of_values = max - min + 1;
-    let mut power = 0;
-    while number_of_values > 2_i128.pow(power) {
-        power += 1;
-    }
-    power as usize
-}
-
 pub fn to_rust_camel_case(input: &String) -> String {
     let mut input = input.replace("-", "_");
     let input = input.drain(..).fold(String::new(), |mut acc, c| {

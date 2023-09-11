@@ -82,7 +82,7 @@ pub const ENCODER_SIGNATURE: &str = r#"fn encoder<E>() -> Result<Box<dyn Fn(Self
         E: Encoder<T, O>,
         Self: Sized,"#;
 
-pub fn type_reference_value_template(
+pub fn _type_reference_value_template(
     comments: String,
     name: String,
     type_name: String,
@@ -707,7 +707,7 @@ pub trait {name} {{
     )
 }
 
-pub fn information_object_template(
+pub fn _information_object_template(
     comments: String,
     derive: &str,
     inner_members: String,
@@ -763,7 +763,7 @@ impl<'a, I: AsBytes + Debug + 'a> Decode<'a, I> for {name} {{
     )
 }
 
-pub fn information_object_set_template(
+pub fn _information_object_set_template(
     comments: String,
     name: String,
     options: String,

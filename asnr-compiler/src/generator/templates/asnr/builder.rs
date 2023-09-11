@@ -7,9 +7,8 @@ use crate::{
     Framework,
 };
 use asnr_grammar::{utils::*, information_object::*, utils::int_type_token, *};
-use asnr_traits::*;
 
-use super::{template::*, util::*};
+use super::{template::*, util::*, declarations::Declare};
 
 pub struct StringifiedNameType {
     pub name: String,

@@ -49,7 +49,6 @@ name = "asnr-compiler"
 version = "0.1.0"
 dependencies = [
  "asnr-grammar",
- "asnr-traits",
  "nom",
  "num",
 ]
@@ -68,19 +67,7 @@ dependencies = [
 name = "asnr-grammar"
 version = "0.1.0"
 dependencies = [
- "asnr-grammar-derive",
- "asnr-traits",
  "num",
-]
-
-[[package]]
-name = "asnr-grammar-derive"
-version = "0.1.0"
-dependencies = [
- "asnr-traits",
- "proc-macro2",
- "quote",
- "syn 2.0.18",
 ]
 
 [[package]]
@@ -99,10 +86,6 @@ dependencies = [
  "rasn",
  "rasn-kerberos",
 ]
-
-[[package]]
-name = "asnr-traits"
-version = "0.1.0"
 
 [[package]]
 name = "asnr-transcoder"

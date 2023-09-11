@@ -55,7 +55,6 @@ use asnr_grammar::{types::*, ASN1Type};
 use core::fmt::Debug;
 use error::{DecodingError, EncodingError};
 
-
 pub type IResult<I, T> = Result<(I, T), DecodingError<I>>;
 
 pub trait Decode<'a, I: AsBytes + Debug + 'a> {

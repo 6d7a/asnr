@@ -1,9 +1,9 @@
-use alloc::{borrow::ToOwned, boxed::Box, format, string::String, vec, vec::Vec, collections::BTreeMap};
+use alloc::{boxed::Box, format, string::String, vec, vec::Vec, collections::BTreeMap};
 
 use crate::{
     error::{GrammarError, GrammarErrorType},
     information_object::{InformationObjectFields, ObjectSet},
-    ASN1Type, ASN1Value, Declare, ToplevelDeclaration,
+    ASN1Type, ASN1Value, ToplevelDeclaration,
 };
 
 #[derive(Debug, PartialEq)]
@@ -71,50 +71,12 @@ impl Constraint {
     }
 }
 
-impl asnr_traits::Declare for Constraint {
-    fn declare(&self) -> String {
-        match self {
-            Constraint::SubtypeConstraint(r) => {
-                format!("Constraint::SubtypeConstraint({})", r.declare())
-            }
-            Constraint::TableConstraint(t) => {
-                format!("Constraint::TableConstraint({})", t.declare())
-            }
-            Constraint::Parameter(params) => {
-                format!(
-                    "Constraint::Parameter(vec![{}])",
-                    params
-                        .iter()
-                        .map(|p| p.declare())
-                        .collect::<Vec<String>>()
-                        .join(",")
-                )
-            }
-        }
-    }
-}
-
 #[derive(Debug, Clone, PartialEq)]
 pub enum Parameter {
     ValueParameter(ASN1Value),
     TypeParameter(ASN1Type),
     InformationObjectParameter(InformationObjectFields),
     ObjectSetParameter(ObjectSet),
-}
-
-impl Declare for Parameter {
-    fn declare(&self) -> String {
-        match self {
-            Parameter::ValueParameter(v) => format!("Parameter::ValueParameter({})", v.declare()),
-            Parameter::TypeParameter(t) => format!("Parameter::TypeParameter({})", t.declare()),
-            Parameter::InformationObjectParameter(i) => {
-                format!("Parameter::InformationObjectParameter({})", i.declare())
-            }
-            Parameter::ObjectSetParameter(i) => {
-                format!("Parameter::ObjectSetParameter({})", i.declare())
-            }
-        }
-    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -157,21 +119,6 @@ impl
     }
 }
 
-impl asnr_traits::Declare for CompositeConstraint {
-    fn declare(&self) -> String {
-        format!(
-            "CompositeConstraint {{ extensible: {}, base_constraint: {}, operation: vec![{}] }}",
-            self.extensible,
-            self.base_constraint.declare(),
-            self.operation
-                .iter()
-                .map(|(op, c)| format!("(SetOperation::{:?}, {})", op, c.declare()))
-                .collect::<Vec<String>>()
-                .join(", ")
-        )
-    }
-}
-
 #[derive(Debug, Clone, PartialEq)]
 pub enum ComponentPresence {
     Absent,
@@ -187,20 +134,6 @@ pub struct InnerTypeConstraint {
     pub constraints: Vec<ConstrainedComponent>,
 }
 
-impl asnr_traits::Declare for InnerTypeConstraint {
-    fn declare(&self) -> String {
-        format!(
-            "InnerTypeConstraint {{ is_partial: {}, constraints: vec![{}] }}",
-            self.is_partial,
-            self.constraints
-                .iter()
-                .map(|c| c.declare())
-                .collect::<Vec<String>>()
-                .join(", ")
-        )
-    }
-}
-
 /// Representation of a single component within a component constraint
 /// in ASN1 specifications
 #[derive(Debug, Clone, PartialEq)]
@@ -210,21 +143,6 @@ pub struct ConstrainedComponent {
     pub presence: ComponentPresence,
 }
 
-impl asnr_traits::Declare for ConstrainedComponent {
-    fn declare(&self) -> String {
-        format!(
-          "ConstrainedComponent {{ identifier: \"{}\".into(), constraints: vec![{}], presence: ComponentPresence::{:?} }}",
-          self.identifier,
-          self.constraints
-              .iter()
-              .map(|c| c.declare())
-              .collect::<Vec<String>>()
-              .join(", "),
-          self.presence
-      )
-    }
-}
-
 /// Representation of a range constraint used for subtyping
 /// in ASN1 specifications
 #[derive(Debug, Clone, PartialEq)]
@@ -232,25 +150,6 @@ pub struct ValueConstraint {
     pub min_value: Option<ASN1Value>,
     pub max_value: Option<ASN1Value>,
     pub extensible: bool,
-}
-
-impl asnr_traits::Declare for ValueConstraint {
-    fn declare(&self) -> String {
-        format!(
-            "ValueConstraint {{ min_value: {}, max_value: {}, extensible: {} }}",
-            self.min_value
-                .as_ref()
-                .map_or("None".to_owned(), |m| "Some(".to_owned()
-                    + &m.declare()
-                    + ")"),
-            self.max_value
-                .as_ref()
-                .map_or("None".to_owned(), |m| "Some(".to_owned()
-                    + &m.declare()
-                    + ")"),
-            self.extensible
-        )
-    }
 }
 
 impl<'a> From<ASN1Value> for ValueConstraint {
@@ -302,20 +201,6 @@ pub struct TableConstraint {
     pub linked_fields: Vec<RelationalConstraint>,
 }
 
-impl asnr_traits::Declare for TableConstraint {
-    fn declare(&self) -> String {
-        format!(
-            "TableConstraint {{ object_set: {}, linked_fields: vec![{}] }}",
-            self.object_set.declare(),
-            self.linked_fields
-                .iter()
-                .map(|v| v.declare())
-                .collect::<Vec<String>>()
-                .join(", "),
-        )
-    }
-}
-
 impl From<(ObjectSet, Option<Vec<RelationalConstraint>>)> for TableConstraint {
     fn from(value: (ObjectSet, Option<Vec<RelationalConstraint>>)) -> Self {
         Self {
@@ -327,7 +212,7 @@ impl From<(ObjectSet, Option<Vec<RelationalConstraint>>)> for TableConstraint {
 
 /// Representation of a table's relational constraint
 /// _See: ITU-T X.682 (02/2021) 10.7_
-#[derive(Debug, Clone, PartialEq, Declare)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct RelationalConstraint {
     pub field_name: String,
     /// The level is null if the field is in the outermost object set of the declaration.
@@ -487,59 +372,6 @@ impl
     }
 }
 
-impl Declare for SubtypeElement {
-    fn declare(&self) -> String {
-        match self {
-            SubtypeElement::SingleValue { value, extensible } => {
-                format!(
-                    "SubtypeElement::SingleValue {{ value: {}, extensible: {extensible} }}",
-                    value.declare()
-                )
-            }
-            SubtypeElement::PermittedAlphabet(permitted) => {
-                format!(
-                    "SubtypeElement::PermittedAlphabet(Box::new({}))",
-                    permitted.declare()
-                )
-            }
-            SubtypeElement::ContainedSubtype {
-                subtype,
-                extensible,
-            } => {
-                format!(
-                    "SubtypeElement::ContainedSubtype {{ subtype: {}, extensible: {extensible} }}",
-                    subtype.declare()
-                )
-            }
-            SubtypeElement::ValueRange {
-                min,
-                max,
-                extensible,
-            } => {
-                format!(
-                    "SubtypeElement::ValueRange {{ min: {}, max: {}, extensible: {extensible} }}",
-                    min.as_ref()
-                        .map_or("None".to_owned(), |m| format!("Some({})", m.declare())),
-                    max.as_ref()
-                        .map_or("None".to_owned(), |m| format!("Some({})", m.declare())),
-                )
-            }
-            SubtypeElement::SizeConstraint(i) => {
-                format!("SubtypeElement::SizeConstraint(Box::new({}))", i.declare())
-            }
-            SubtypeElement::TypeConstraint(t) => {
-                format!("SubtypeElement::TypeConstraint({})", t.declare())
-            }
-            SubtypeElement::SingleTypeConstraint(s) => {
-                format!("SubtypeElement::SingleTypeConstraint({})", s.declare())
-            }
-            SubtypeElement::MultipleTypeConstraints(m) => {
-                format!("SubtypeElement::MultipleTypeConstraints({})", m.declare())
-            }
-        }
-    }
-}
-
 #[derive(Debug, Clone, PartialEq)]
 pub struct ElementSet {
     pub set: ElementOrSetOperation,
@@ -552,16 +384,6 @@ impl From<(ElementOrSetOperation, Option<ExtensionMarker>)> for ElementSet {
             set: value.0,
             extensible: value.1.is_some(),
         }
-    }
-}
-
-impl Declare for ElementSet {
-    fn declare(&self) -> String {
-        format!(
-            "ElementSet {{ set: {}, extensible: {} }}",
-            self.set.declare(),
-            self.extensible
-        )
     }
 }
 
@@ -597,19 +419,6 @@ impl ElementOrSetOperation {
     }
 }
 
-impl Declare for ElementOrSetOperation {
-    fn declare(&self) -> String {
-        match self {
-            ElementOrSetOperation::Element(e) => {
-                format!("ElementOrSetOperation::Element({})", e.declare())
-            }
-            ElementOrSetOperation::SetOperation(x) => {
-                format!("ElementOrSetOperation::SetOperation({})", x.declare())
-            }
-        }
-    }
-}
-
 #[derive(Debug, Clone, PartialEq)]
 pub struct SetOperation {
     pub base: SubtypeElement, //TODO: Handle exclusions
@@ -624,16 +433,5 @@ impl From<(SubtypeElement, SetOperator, ElementOrSetOperation)> for SetOperation
             operator: value.1,
             operant: Box::new(value.2),
         }
-    }
-}
-
-impl Declare for SetOperation {
-    fn declare(&self) -> String {
-        format!(
-            "SetOperation {{ base: {}, operator: SetOperator::{:?}, operant: Box::new({}) }}",
-            self.base.declare(),
-            self.operator,
-            self.operant.declare()
-        )
     }
 }

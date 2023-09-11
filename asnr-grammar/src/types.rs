@@ -1,6 +1,6 @@
 use core::fmt::Debug;
 
-use alloc::{borrow::ToOwned, boxed::Box, string::ToString, vec};
+use alloc::{borrow::ToOwned, boxed::Box, vec};
 
 use crate::{constraints::*, *};
 
@@ -39,26 +39,6 @@ impl Integer {
     }
 }
 
-impl asnr_traits::Declare for Integer {
-    fn declare(&self) -> String {
-        format!(
-            "Integer {{ constraints: vec![{}], distinguished_values: {} }}",
-            self.constraints
-                .iter()
-                .map(|c| c.declare())
-                .collect::<Vec<String>>()
-                .join(", "),
-            self.distinguished_values
-                .as_ref()
-                .map_or("None".to_owned(), |c| "Some(vec![".to_owned()
-                    + &c.iter()
-                        .map(|dv| dv.declare())
-                        .collect::<Vec<String>>()
-                        .join(",")
-                    + "])"),
-        )
-    }
-}
 
 impl Default for Integer {
     fn default() -> Self {
@@ -129,19 +109,6 @@ pub struct Real {
     pub constraints: Vec<Constraint>,
 }
 
-impl asnr_traits::Declare for Real {
-    fn declare(&self) -> String {
-        format!(
-            "Real {{ constraints: vec![{}] }}",
-            self.constraints
-                .iter()
-                .map(|c| c.declare())
-                .collect::<Vec<String>>()
-                .join(", "),
-        )
-    }
-}
-
 impl From<Option<Vec<Constraint>>> for Real {
     fn from(value: Option<Vec<Constraint>>) -> Self {
         Self {
@@ -165,20 +132,6 @@ impl From<Option<Vec<Constraint>>> for OctetString {
     }
 }
 
-impl asnr_traits::Declare for OctetString {
-    fn declare(&self) -> String {
-        format!(
-            "OctetString {{ constraints: vec![{}] }}",
-            self.constraints
-                .iter()
-                .map(|c| c.declare())
-                .collect::<Vec<String>>()
-                .join(", "),
-        )
-    }
-}
-
-
 /// Representation of an ASN1 BIT STRING data element
 /// with corresponding constraints and distinguished values
 /// defining the individual bits
@@ -194,27 +147,6 @@ impl From<(Option<Vec<DistinguishedValue>>, Option<Vec<Constraint>>)> for BitStr
             constraints: value.1.unwrap_or(vec![]),
             distinguished_values: value.0,
         }
-    }
-}
-
-impl asnr_traits::Declare for BitString {
-    fn declare(&self) -> String {
-        format!(
-            "BitString {{ constraints: vec![{}], distinguished_values: {} }}",
-            self.constraints
-                .iter()
-                .map(|c| c.declare())
-                .collect::<Vec<String>>()
-                .join(", "),
-            self.distinguished_values
-                .as_ref()
-                .map_or("None".to_owned(), |c| "Some(vec![".to_owned()
-                    + &c.iter()
-                        .map(|dv| dv.declare())
-                        .collect::<Vec<String>>()
-                        .join(",")
-                    + "])"),
-        )
     }
 }
 
@@ -236,40 +168,12 @@ impl From<(&str, Option<Vec<Constraint>>)> for CharacterString {
     }
 }
 
-impl asnr_traits::Declare for CharacterString {
-    fn declare(&self) -> String {
-        format!(
-            "CharacterString {{ constraints: vec![{}], r#type: CharacterStringType::{:?} }}",
-            self.constraints
-                .iter()
-                .map(|c| c.declare())
-                .collect::<Vec<String>>()
-                .join(", "),
-            self.r#type
-        )
-    }
-}
-
 /// Representation of an ASN1 SEQUENCE OF data element
 /// with corresponding constraints and element type info
 #[derive(Debug, Clone, PartialEq)]
 pub struct SequenceOf {
     pub constraints: Vec<Constraint>,
     pub r#type: Box<ASN1Type>,
-}
-
-impl asnr_traits::Declare for SequenceOf {
-    fn declare(&self) -> String {
-        format!(
-            "SequenceOf {{ constraints: vec![{}], r#type: {} }}",
-            self.constraints
-                .iter()
-                .map(|c| c.declare())
-                .collect::<Vec<String>>()
-                .join(", "),
-            String::from("Box::new(") + &self.r#type.declare() + ")",
-        )
-    }
 }
 
 impl From<(Option<Vec<Constraint>>, ASN1Type)> for SequenceOf {
@@ -320,27 +224,6 @@ impl
     }
 }
 
-impl asnr_traits::Declare for SequenceOrSet {
-    fn declare(&self) -> String {
-        format!(
-            "SequenceOrSet {{ constraints: vec![{}], extensible: {}, members: vec![{}] }}",
-            self.constraints
-                .iter()
-                .map(|c| c.declare())
-                .collect::<Vec<String>>()
-                .join(", "),
-            self.extensible
-                .as_ref()
-                .map_or("None".to_owned(), |d| format!("Some({})", d)),
-            self.members
-                .iter()
-                .map(|m| m.declare())
-                .collect::<Vec<String>>()
-                .join(",")
-        )
-    }
-}
-
 /// Representation of an single ASN1 SEQUENCE member
 #[derive(Debug, Clone, PartialEq)]
 pub struct SequenceOrSetMember {
@@ -383,28 +266,6 @@ impl
     }
 }
 
-impl asnr_traits::Declare for SequenceOrSetMember {
-    fn declare(&self) -> String {
-        format!(
-          "SequenceOrSetMember {{ name: \"{}\".into(), tag: {}, is_optional: {}, r#type: {}, default_value: {}, constraints: vec![{}] }}",
-          self.name,
-          self.tag.as_ref().map_or(String::from("None"), |t| {
-            String::from("Some(") + &t.declare() + ")"
-          }),
-          self.is_optional,
-          self.r#type.declare(),
-          self.default_value.as_ref().map_or("None".to_string(), |d| "Some(".to_owned()
-          + &d.declare()
-          + ")"),
-          self.constraints
-          .iter()
-          .map(|c| c.declare())
-          .collect::<Vec<String>>()
-          .join(", "),
-      )
-    }
-}
-
 /// Representation of an ASN1 CHOICE data element
 /// with corresponding members and extension information
 #[derive(Debug, Clone, PartialEq)]
@@ -438,27 +299,6 @@ impl
     }
 }
 
-impl asnr_traits::Declare for Choice {
-    fn declare(&self) -> String {
-        format!(
-            "Choice {{ extensible: {}, options: vec![{}], constraints: vec![{}] }}",
-            self.extensible
-                .as_ref()
-                .map_or("None".to_owned(), |d| format!("Some({})", d)),
-            self.options
-                .iter()
-                .map(|m| m.declare())
-                .collect::<Vec<String>>()
-                .join(","),
-            self.constraints
-                .iter()
-                .map(|c| c.declare())
-                .collect::<Vec<String>>()
-                .join(", "),
-        )
-    }
-}
-
 /// Representation of an single ASN1 CHOICE option
 #[derive(Debug, Clone, PartialEq)]
 pub struct ChoiceOption {
@@ -479,24 +319,6 @@ impl From<(&str, Option<AsnTag>, ASN1Type, Option<Vec<Constraint>>)> for ChoiceO
     }
 }
 
-impl asnr_traits::Declare for ChoiceOption {
-    fn declare(&self) -> String {
-        format!(
-            "ChoiceOption {{ name: \"{}\".into(), tag: {}, r#type: {}, constraints: vec![{}] }}",
-            self.name,
-            self.tag.as_ref().map_or(String::from("None"), |t| {
-                String::from("Some(") + &t.declare() + ")"
-            }),
-            self.r#type.declare(),
-            self.constraints
-                .iter()
-                .map(|c| c.declare())
-                .collect::<Vec<String>>()
-                .join(", "),
-        )
-    }
-}
-
 /// Representation of an ASN1 ENUMERATED data element
 /// with corresponding enumerals and extension information
 #[derive(Debug, Clone, PartialEq)]
@@ -504,27 +326,6 @@ pub struct Enumerated {
     pub members: Vec<Enumeral>,
     pub extensible: Option<usize>,
     pub constraints: Vec<Constraint>,
-}
-
-impl asnr_traits::Declare for Enumerated {
-    fn declare(&self) -> String {
-        format!(
-            "Enumerated {{ members: vec![{}], extensible: {}, constraints: vec![{}] }}",
-            self.members
-                .iter()
-                .map(|m| m.declare())
-                .collect::<Vec<String>>()
-                .join(","),
-            self.extensible
-                .as_ref()
-                .map_or("None".to_owned(), |d| format!("Some({})", d)),
-            self.constraints
-                .iter()
-                .map(|c| c.declare())
-                .collect::<Vec<String>>()
-                .join(", "),
-        )
-    }
 }
 
 impl
@@ -560,36 +361,12 @@ pub struct Enumeral {
     pub index: i128,
 }
 
-impl asnr_traits::Declare for Enumeral {
-    fn declare(&self) -> String {
-        format!(
-            "Enumeral {{ name: \"{}\".into(), description: {}, index: {} }}",
-            self.name,
-            self.description
-                .as_ref()
-                .map_or("None".to_owned(), |d| "Some(\"".to_owned()
-                    + d
-                    + "\".into())"),
-            self.index
-        )
-    }
-}
-
 /// Representation of a ASN1 distinguished value,
 /// as seen in some INTEGER and BIT STRING declarations
 #[derive(Debug, Clone, PartialEq)]
 pub struct DistinguishedValue {
     pub name: String,
     pub value: i128,
-}
-
-impl asnr_traits::Declare for DistinguishedValue {
-    fn declare(&self) -> String {
-        format!(
-            "DistinguishedValue {{ name: \"{}\".into(), value: {} }}",
-            self.name, self.value
-        )
-    }
 }
 
 impl From<(&str, i128)> for DistinguishedValue {

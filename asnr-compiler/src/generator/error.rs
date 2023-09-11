@@ -27,8 +27,6 @@ pub enum GeneratorErrorType {
     MissingCustomSyntax,
     SyntaxMismatch,
     MissingClassKey,
-    MissingClassLink,
-    Unsupported,
     Unidentified
 }
 

@@ -85,7 +85,15 @@ impl Validator {
         self
             .tlds
             .get(key)
-            .map(|t| t.has_constraint_reference())
+            .map(|t| t.has_value_reference())
+            .unwrap_or(false)
+    }
+
+    fn has_default_value_reference(&mut self, key: &String) -> bool {
+        self
+            .tlds
+            .get(key)
+            .map(|t| t.has_value_reference())
             .unwrap_or(false)
     }
 

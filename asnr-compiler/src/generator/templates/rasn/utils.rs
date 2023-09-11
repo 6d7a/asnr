@@ -260,7 +260,7 @@ fn format_choice_option(
     extension_annotation: &str,
 ) -> Result<String, GeneratorError> {
     let name = to_rust_title_case(&member.name);
-    let (mut all_constraints, mut formatted_type_name) = match &member.r#type {
+    let (mut all_constraints, formatted_type_name) = match &member.r#type {
         ASN1Type::Null => (vec![], "()".into()),
         ASN1Type::Boolean => (vec![], "bool".into()),
         ASN1Type::Integer(i) => {
@@ -359,6 +359,7 @@ pub fn format_default_methods(
             let (type_as_string, value_as_string) = match &member.r#type {
                 ASN1Type::BitString(_) => ("BitString".into(), format!("{}.iter().collect()", value.value_as_string(None)?)),
                 ASN1Type::ElsewhereDeclaredType(_) => {
+                    let ty = member.r#type.clone();
                     let stringified_type = member.r#type.to_string();
                     (stringified_type.clone(), format!("{stringified_type}({})", value.value_as_string(None)?))
                 }
