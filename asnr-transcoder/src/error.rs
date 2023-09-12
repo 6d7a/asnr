@@ -135,3 +135,11 @@ impl From<&str> for EncodingError {
         EncodingError { details: value.into() }
     }
 }
+
+impl From<GrammarError> for EncodingError {
+    fn from(value: GrammarError) -> Self {
+        Self {
+            details: value.details
+        }
+    }
+}

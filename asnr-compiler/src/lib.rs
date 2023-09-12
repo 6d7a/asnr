@@ -38,7 +38,6 @@
 mod generator;
 mod parser;
 mod validator;
-pub(crate) mod utils;
 
 use std::{
     env::{self},
@@ -51,7 +50,7 @@ use std::{
 };
 
 use asnr_grammar::ToplevelDeclaration;
-use generator::{generate, template::imports_and_generic_types};
+use generator::{generate, imports_and_generic_types};
 use parser::asn_spec;
 use validator::Validator;
 
@@ -64,12 +63,23 @@ pub struct Asnr<S: AsnrState> {
 /// Typestate representing compiler with missing parameters
 pub struct AsnrMissingParams {
     no_std: bool,
+    framework: Framework,
 }
 
 impl Default for AsnrMissingParams {
     fn default() -> Self {
-        Self { no_std: false }
+        Self {
+            no_std: false,
+            framework: Framework::Asnr,
+        }
     }
+}
+
+#[derive(Debug, PartialEq, Default)]
+pub enum Framework {
+    #[default]
+    Asnr,
+    Rasn,
 }
 
 /// Typestate representing compiler that is ready to compile
@@ -77,18 +87,21 @@ pub struct AsnrCompileReady {
     sources: Vec<AsnSource>,
     output_path: PathBuf,
     no_std: bool,
+    framework: Framework,
 }
 
 /// Typestate representing compiler that has the output path set, but is missing ASN1 sources
 pub struct AsnrOutputSet {
     output_path: PathBuf,
     no_std: bool,
+    framework: Framework,
 }
 
 /// Typestate representing compiler that knows about ASN1 sources, but doesn't have an output path set
 pub struct AsnrSourcesSet {
     sources: Vec<AsnSource>,
     no_std: bool,
+    framework: Framework,
 }
 
 /// State of the Asnr compiler
@@ -119,6 +132,7 @@ impl Asnr<AsnrMissingParams> {
             state: AsnrSourcesSet {
                 sources: vec![AsnSource::Path(path_to_source.into())],
                 no_std: self.state.no_std,
+                framework: self.state.framework,
             },
         }
     }
@@ -129,6 +143,21 @@ impl Asnr<AsnrMissingParams> {
         Self {
             state: AsnrMissingParams {
                 no_std: is_supporting,
+                framework: self.state.framework,
+            },
+        }
+    }
+
+    /// Select the framework used to represent the ASN1 data elements in Rust.
+    /// The ASNR compiler can generate code for two frameworks:
+    /// 1. the `asnr-transcoder` crate, that supports UPER only
+    /// 2. the `rasn` crate, that supports BER, CER, DER, UPER, and PER
+    /// * `framework` - which framework the ASNR compiler should generate code for
+    pub fn framework(self, framework: Framework) -> Self {
+        Self {
+            state: AsnrMissingParams {
+                no_std: self.state.no_std,
+                framework,
             },
         }
     }
@@ -145,6 +174,7 @@ impl Asnr<AsnrMissingParams> {
                     .map(|p| AsnSource::Path(p.into()))
                     .collect(),
                 no_std: self.state.no_std,
+                framework: self.state.framework,
             },
         }
     }
@@ -160,6 +190,7 @@ impl Asnr<AsnrMissingParams> {
             state: AsnrSourcesSet {
                 sources: vec![AsnSource::Literal(literal.into())],
                 no_std: self.state.no_std,
+                framework: self.state.framework,
             },
         }
     }
@@ -176,6 +207,7 @@ impl Asnr<AsnrMissingParams> {
             state: AsnrOutputSet {
                 output_path: path,
                 no_std: self.state.no_std,
+                framework: self.state.framework,
             },
         }
     }
@@ -190,6 +222,7 @@ impl Asnr<AsnrOutputSet> {
                 sources: vec![AsnSource::Path(path_to_source.into())],
                 no_std: self.state.no_std,
                 output_path: self.state.output_path,
+                framework: self.state.framework,
             },
         }
     }
@@ -201,6 +234,22 @@ impl Asnr<AsnrOutputSet> {
             state: AsnrOutputSet {
                 output_path: self.state.output_path,
                 no_std: is_supporting,
+                framework: self.state.framework,
+            },
+        }
+    }
+
+    /// Select the framework used to represent the ASN1 data elements in Rust.
+    /// The ASNR compiler can generate code for two frameworks:
+    /// 1. the `asnr-transcoder` crate, that supports UPER only
+    /// 2. the `rasn` crate, that supports BER, CER, DER, UPER, and PER
+    /// * `framework` - which framework the ASNR compiler should generate code for
+    pub fn framework(self, framework: Framework) -> Self {
+        Self {
+            state: AsnrOutputSet {
+                no_std: self.state.no_std,
+                output_path: self.state.output_path,
+                framework,
             },
         }
     }
@@ -218,6 +267,7 @@ impl Asnr<AsnrOutputSet> {
                     .collect(),
                 no_std: self.state.no_std,
                 output_path: self.state.output_path,
+                framework: self.state.framework,
             },
         }
     }
@@ -234,6 +284,7 @@ impl Asnr<AsnrOutputSet> {
                 sources: vec![AsnSource::Literal(literal.into())],
                 no_std: self.state.no_std,
                 output_path: self.state.output_path,
+                framework: self.state.framework,
             },
         }
     }
@@ -249,6 +300,7 @@ impl Asnr<AsnrSourcesSet> {
             state: AsnrSourcesSet {
                 sources,
                 no_std: self.state.no_std,
+                framework: self.state.framework,
             },
         }
     }
@@ -260,6 +312,22 @@ impl Asnr<AsnrSourcesSet> {
             state: AsnrSourcesSet {
                 sources: self.state.sources,
                 no_std: is_supporting,
+                framework: self.state.framework,
+            },
+        }
+    }
+
+    /// Select the framework used to represent the ASN1 data elements in Rust.
+    /// The ASNR compiler can generate code for two frameworks:
+    /// 1. the `asnr-transcoder` crate, that supports UPER only
+    /// 2. the `rasn` crate, that supports BER, CER, DER, UPER, and PER
+    /// * `framework` - which framework the ASNR compiler should generate code for
+    pub fn framework(self, framework: Framework) -> Self {
+        Self {
+            state: AsnrSourcesSet {
+                no_std: self.state.no_std,
+                sources: self.state.sources,
+                framework,
             },
         }
     }
@@ -276,6 +344,7 @@ impl Asnr<AsnrSourcesSet> {
             state: AsnrSourcesSet {
                 sources,
                 no_std: self.state.no_std,
+                framework: self.state.framework,
             },
         }
     }
@@ -293,6 +362,7 @@ impl Asnr<AsnrSourcesSet> {
             state: AsnrSourcesSet {
                 sources,
                 no_std: self.state.no_std,
+                framework: self.state.framework,
             },
         }
     }
@@ -310,6 +380,7 @@ impl Asnr<AsnrSourcesSet> {
                 sources: self.state.sources,
                 output_path: path,
                 no_std: self.state.no_std,
+                framework: self.state.framework,
             },
         }
     }
@@ -334,6 +405,7 @@ impl Asnr<AsnrCompileReady> {
                 output_path: self.state.output_path,
                 sources,
                 no_std: self.state.no_std,
+                framework: self.state.framework,
             },
         }
     }
@@ -346,6 +418,23 @@ impl Asnr<AsnrCompileReady> {
                 output_path: self.state.output_path,
                 sources: self.state.sources,
                 no_std: is_supporting,
+                framework: self.state.framework,
+            },
+        }
+    }
+
+    /// Select the framework used to represent the ASN1 data elements in Rust.
+    /// The ASNR compiler can generate code for two frameworks:
+    /// 1. the `asnr-transcoder` crate, that supports UPER only
+    /// 2. the `rasn` crate, that supports BER, CER, DER, UPER, and PER
+    /// * `framework` - which framework the ASNR compiler should generate code for
+    pub fn framework(self, framework: Framework) -> Self {
+        Self {
+            state: AsnrCompileReady {
+                no_std: self.state.no_std,
+                sources: self.state.sources,
+                output_path: self.state.output_path,
+                framework,
             },
         }
     }
@@ -363,6 +452,7 @@ impl Asnr<AsnrCompileReady> {
                 sources,
                 output_path: self.state.output_path,
                 no_std: self.state.no_std,
+                framework: self.state.framework,
             },
         }
     }
@@ -381,6 +471,7 @@ impl Asnr<AsnrCompileReady> {
                 output_path: self.state.output_path,
                 sources,
                 no_std: self.state.no_std,
+                framework: self.state.framework,
             },
         }
     }
@@ -390,12 +481,16 @@ impl Asnr<AsnrCompileReady> {
     /// * _Ok_  - tuple containing the stringified Rust representation of the ASN1 spec as well as a vector of warnings raised during the compilation
     /// * _Err_ - Unrecoverable error, no rust representations were generated
     pub fn compile_to_string(self) -> Result<(String, Vec<Box<dyn Error>>), Box<dyn Error>> {
-        internal_compile(&Asnr {
-            state: AsnrSourcesSet {
-                sources: self.state.sources,
-                no_std: self.state.no_std,
+        internal_compile(
+            &Asnr {
+                state: AsnrSourcesSet {
+                    sources: self.state.sources,
+                    no_std: self.state.no_std,
+                    framework: self.state.framework,
+                },
             },
-        }, false)
+            false,
+        )
     }
 
     /// Runs the ASNR compiler command.
@@ -408,6 +503,7 @@ impl Asnr<AsnrCompileReady> {
                 state: AsnrSourcesSet {
                     sources: self.state.sources,
                     no_std: self.state.no_std,
+                    framework: self.state.framework,
                 },
             },
             true,
@@ -421,9 +517,14 @@ impl Asnr<AsnrCompileReady> {
 
 fn internal_compile(
     asnr: &Asnr<AsnrSourcesSet>,
-    include_clippy_allows: bool,
+    include_file_headers: bool,
 ) -> Result<(String, Vec<Box<dyn Error>>), Box<dyn Error>> {
-    let mut result = imports_and_generic_types(None, asnr.state.no_std, include_clippy_allows);
+    let mut result = imports_and_generic_types(
+        &asnr.state.framework,
+        None,
+        asnr.state.no_std,
+        include_file_headers,
+    );
     let mut warnings = Vec::<Box<dyn Error>>::new();
     let mut modules: Vec<ToplevelDeclaration> = vec![];
     for src in &asnr.state.sources {
@@ -434,7 +535,12 @@ fn internal_compile(
         modules.append(
             &mut asn_spec(&stringified_src)?
                 .into_iter()
-                .flat_map(|(_, tld)| tld)
+                .flat_map(|(header, tlds)| {
+                    tlds.into_iter().map(move |mut tld| {
+                        tld.apply_tagging_environment(&header.tagging_environment);
+                        tld
+                    })
+                })
                 .collect(),
         );
     }
@@ -442,7 +548,7 @@ fn internal_compile(
     let (generated, mut generator_errors) = valid_tlds.into_iter().fold(
         (String::new(), Vec::<Box<dyn Error>>::new()),
         |(mut rust, mut errors), tld| {
-            match generate(tld, None) {
+            match generate(&asnr.state.framework, tld, None) {
                 Ok(r) => {
                     rust = rust + &r + "\n";
                 }
@@ -517,11 +623,14 @@ mod tests {
         println!(
             "{:#?}",
             Asnr::new()
-                .no_std(true)
+                .no_std(false)
+                .framework(crate::Framework::Rasn)
                 // .add_asn_by_path(PathBuf::from("test_asn1/AddGrpC.asn"))
                 // .add_asn_by_path(PathBuf::from("test_asn1/ETSI-ITS-CDD.asn"))
-                .add_asn_by_path(PathBuf::from("test_asn1/v2x.asn"))
-                // .add_asn_by_path(PathBuf::from("test_asn1/denm_2_0.asn"))
+                // .add_asn_by_path(PathBuf::from("test_asn1/v2x.asn"))
+                //.add_asn_by_path(PathBuf::from("test_asn1/REGION.asn"))
+                .add_asn_by_path(PathBuf::from("test_asn1/kerberos.asn"))
+                //.add_asn_by_path(PathBuf::from("test_asn1/denm_2_0.asn"))
                 // .add_asn_by_path(PathBuf::from(
                 //     "test_asn1/CPM-OriginatingStationContainers.asn"
                 // ))
@@ -531,7 +640,7 @@ mod tests {
                 //     "test_asn1/CPM-SensorInformationContainer.asn"
                 // ))
                 // .add_asn_by_path(PathBuf::from("test_asn1/CPM-PDU-Descriptions.asn"))
-                .set_output_path(PathBuf::from("../asnr-transcoder/src/generated.rs"))
+                .set_output_path(PathBuf::from("../asnr-tests/tests/generated.rs"))
                 .compile()
                 .unwrap()
         )

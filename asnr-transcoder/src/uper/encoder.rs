@@ -1,18 +1,20 @@
 use alloc::{boxed::Box, format, string::String, vec::Vec};
-use asnr_grammar::{constraints::Constraint, types::*};
+use asnr_grammar::{
+    encoding_rules::{
+        bit_length,
+        per_visible::{
+            per_visible_range_constraints, PerVisibleAlphabetConstraints,
+            PerVisibleRangeConstraints,
+        },
+    },
+    types::*,
+};
 use bitvec::{bitvec, prelude::Msb0, vec::BitVec, view::BitView};
 use core::fmt::Debug;
 
-use crate::{
-    error::{DecodingError, EncodingError},
-    Encode, Encoder, EncoderForIndex, HasOptionalField,
-};
+use crate::{error::EncodingError, Encode, Encoder, EncoderForIndex, HasOptionalField};
 
-use super::{
-    bit_length,
-    per_visible::{PerVisibleAlphabetConstraints, PerVisibleRangeConstraints},
-    to_rust_title_case, AsBytesDummy, BitOut, Uper, to_rust_camel_case,
-};
+use super::{to_rust_camel_case, to_rust_title_case, BitOut, Uper};
 
 impl Encoder<u8, BitOut> for Uper {
     fn encode_integer<I>(
@@ -157,12 +159,8 @@ impl Encoder<u8, BitOut> for Uper {
         let mut permitted_alphabet =
             PerVisibleAlphabetConstraints::default_for(character_string.r#type);
         for c in &character_string.constraints {
-            constraints +=
-                c.try_into()
-                    .map_err(|_: DecodingError<AsBytesDummy>| EncodingError {
-                        details: format!("Failed to parse character string constraints"),
-                    })?;
-            PerVisibleAlphabetConstraints::try_new::<AsBytesDummy>(c, character_string.r#type)?
+            constraints += c.try_into()?;
+            PerVisibleAlphabetConstraints::try_new(c, character_string.r#type)?
                 .map(|mut p| permitted_alphabet += &mut p);
         }
         permitted_alphabet.finalize();
@@ -520,25 +518,6 @@ impl Encoder<u8, BitOut> for Uper {
     }
 }
 
-fn per_visible_range_constraints(
-    signed: bool,
-    constraint_list: &Vec<Constraint>,
-) -> Result<PerVisibleRangeConstraints, EncodingError> {
-    let mut constraints = if signed {
-        PerVisibleRangeConstraints::default()
-    } else {
-        PerVisibleRangeConstraints::default_unsigned()
-    };
-    for c in constraint_list {
-        constraints += c
-            .try_into()
-            .map_err(|_: DecodingError<AsBytesDummy>| EncodingError {
-                details: format!("Failed to parse range constraints"),
-            })?
-    }
-    Ok(constraints)
-}
-
 fn encode_sized_string(
     permitted_alphabet: &PerVisibleAlphabetConstraints,
     string: &str,
@@ -612,9 +591,7 @@ fn with_size_length_determinant(
 ) -> Result<BitOut, EncodingError> {
     if let (Some(bit_length), Some(Some(_)), true) = (
         constraints.bit_length(),
-        constraints
-            .range_width::<AsBytesDummy>()?
-            .map(|w| (w <= 65536).then(|| w)),
+        constraints.range_width()?.map(|w| (w <= 65536).then(|| w)),
         constraints.lies_within(&actual_size)?,
     ) {
         let mut output = encode_constrained_integer(
@@ -699,15 +676,21 @@ where
 
 fn encode_normally_small_number<I>(number: I, mut output: BitOut) -> Result<BitOut, EncodingError>
 where
-    I: num::Integer + num::ToPrimitive + Copy,
+    I: num::Integer + num::ToPrimitive + Copy + Debug,
 {
-    if number.to_u32().unwrap_or(64) > 63 {
+    if number.to_u32().unwrap_or(65) > 64 {
         Err(EncodingError {
             details: "Encoding normally-small numbers larger than 63 is not supported yet!".into(),
         })
     } else {
         output.push(false);
-        encode_constrained_integer(number, 6, output)
+        encode_constrained_integer(
+            number.to_u32().ok_or(EncodingError {
+                details: format!("Could not perform encoding of normally small number {number:?}"),
+            })? - 1,
+            6,
+            output,
+        )
     }
 }
 
@@ -757,7 +740,7 @@ mod tests {
         encoder::{align, encode_constrained_integer, pad},
         Uper,
     };
-    use asnr_compiler_derive::asn1_internal_tests;
+    use asnr_compiler_derive::asn1;
     use bitvec::{bitvec, prelude::Msb0};
 
     #[test]
@@ -802,7 +785,7 @@ mod tests {
 
     #[test]
     fn encodes_simple_constrained_integer() {
-        asn1_internal_tests!("TestInteger ::= INTEGER(3..6)");
+        asn1!("TestInteger ::= INTEGER(3..6)",Framework::Asnr,crate);
         assert_eq!(
             TestInteger::encode::<Uper>(TestInteger(3), bitvec![u8, Msb0;]).unwrap(),
             bitvec![u8, Msb0; 0,0]
@@ -816,7 +799,7 @@ mod tests {
 
     #[test]
     fn encodes_semi_constrained_integer() {
-        asn1_internal_tests!("TestInteger ::= INTEGER(-1..MAX)");
+        asn1!("TestInteger ::= INTEGER(-1..MAX)",Framework::Asnr,crate);
         assert_eq!(
             TestInteger::encode::<Uper>(TestInteger(3), bitvec![u8, Msb0;]).unwrap(),
             bitvec![u8, Msb0; 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0, 0]
@@ -834,7 +817,7 @@ mod tests {
 
     #[test]
     fn encodes_unconstrained_integer() {
-        asn1_internal_tests!("TestInteger ::= INTEGER");
+        asn1!("TestInteger ::= INTEGER",Framework::Asnr,crate);
         assert_eq!(
             TestInteger::encode::<Uper>(TestInteger(4096), bitvec![u8, Msb0;]).unwrap(),
             bitvec![u8, Msb0; 0,0,0,0,0,0,1,0, 0,0,0,1,0,0,0,0, 0,0,0,0,0,0,0,0]
@@ -843,7 +826,7 @@ mod tests {
 
     #[test]
     fn encodes_downwards_unconstrained_integer() {
-        asn1_internal_tests!("TestInteger ::= INTEGER(MIN..65535)");
+        asn1!("TestInteger ::= INTEGER(MIN..65535)",Framework::Asnr,crate);
         assert_eq!(
             TestInteger::encode::<Uper>(TestInteger(127), bitvec![u8, Msb0;]).unwrap(),
             bitvec![u8, Msb0; 0,0,0,0,0,0,0,1, 0,1,1,1,1,1,1,1]
@@ -860,7 +843,7 @@ mod tests {
 
     #[test]
     fn encodes_extended_integer() {
-        asn1_internal_tests!("TestInteger ::= INTEGER (3..6, ...)");
+        asn1!("TestInteger ::= INTEGER (3..6, ...)",Framework::Asnr,crate);
         assert_eq!(
             TestInteger::encode::<Uper>(TestInteger(4), bitvec![u8, Msb0;]).unwrap(),
             bitvec![u8, Msb0; 0, 0,1]
@@ -877,7 +860,7 @@ mod tests {
 
     #[test]
     fn encodes_boolean() {
-        asn1_internal_tests!("TestBool ::= BOOLEAN");
+        asn1!("TestBool ::= BOOLEAN",Framework::Asnr,crate);
         assert_eq!(
             TestBool::encode::<Uper>(TestBool(true), bitvec![u8, Msb0;]).unwrap(),
             bitvec![u8, Msb0; 1]
@@ -890,7 +873,7 @@ mod tests {
 
     #[test]
     fn encodes_null() {
-        asn1_internal_tests!("TestNull ::= NULL");
+        asn1!("TestNull ::= NULL",Framework::Asnr,crate);
         assert_eq!(
             TestNull::encode::<Uper>(TestNull, bitvec![u8, Msb0;]).unwrap(),
             bitvec![u8, Msb0;]
@@ -899,7 +882,7 @@ mod tests {
 
     #[test]
     fn encodes_fixed_size_bit_string() {
-        asn1_internal_tests!("TestBitString ::= BIT STRING (3)");
+        asn1!("TestBitString ::= BIT STRING (3)",Framework::Asnr,crate);
         assert_eq!(
             TestBitString::encode::<Uper>(
                 TestBitString(vec![true, false, true]),
@@ -912,7 +895,7 @@ mod tests {
 
     #[test]
     fn encodes_constrained_bit_string() {
-        asn1_internal_tests!("TestBitString ::= BIT STRING (3..4)");
+        asn1!("TestBitString ::= BIT STRING (3..4)",Framework::Asnr,crate);
         assert_eq!(
             TestBitString::encode::<Uper>(
                 TestBitString(vec![false, false, true]),
@@ -938,7 +921,7 @@ mod tests {
 
     #[test]
     fn encodes_semi_constrained_bit_string() {
-        asn1_internal_tests!("TestBitString ::= BIT STRING (3..MAX)");
+        asn1!("TestBitString ::= BIT STRING (3..MAX)",Framework::Asnr,crate);
         assert_eq!(
             TestBitString::encode::<Uper>(
                 TestBitString(vec![false, false, true]),
@@ -956,7 +939,7 @@ mod tests {
 
     #[test]
     fn encodes_unconstrained_bit_string() {
-        asn1_internal_tests!("TestBitString ::= BIT STRING");
+        asn1!("TestBitString ::= BIT STRING",Framework::Asnr,crate);
         assert_eq!(
             TestBitString::encode::<Uper>(TestBitString(vec![]), bitvec![u8, Msb0;]).unwrap(),
             bitvec![u8, Msb0; 0,0,0,0,0,0,0,0]
@@ -965,7 +948,7 @@ mod tests {
 
     #[test]
     fn encodes_extended_fixed_size_bit_string() {
-        asn1_internal_tests!("TestBitString ::= BIT STRING (3,...)");
+        asn1!("TestBitString ::= BIT STRING (3,...)",Framework::Asnr,crate);
         assert_eq!(
             TestBitString::encode::<Uper>(TestBitString(vec![]), bitvec![u8, Msb0;]).unwrap(),
             bitvec![u8, Msb0; 1,0,0,0,0,0,0,0,0]
@@ -974,7 +957,7 @@ mod tests {
 
     #[test]
     fn encodes_extended_constrained_bit_string() {
-        asn1_internal_tests!("TestBitString ::= BIT STRING (3..4,...)");
+        asn1!("TestBitString ::= BIT STRING (3..4,...)",Framework::Asnr,crate);
         assert_eq!(
             TestBitString::encode::<Uper>(
                 TestBitString(vec![false, false, true, true, true]),
@@ -995,7 +978,7 @@ mod tests {
 
     #[test]
     fn encodes_extended_semi_constrained_bit_string() {
-        asn1_internal_tests!("TestBitString ::= BIT STRING (3..MAX,...)");
+        asn1!("TestBitString ::= BIT STRING (3..MAX,...)",Framework::Asnr,crate);
         assert_eq!(
             TestBitString::encode::<Uper>(
                 TestBitString(vec![false, false, true]),
@@ -1013,8 +996,10 @@ mod tests {
 
     #[test]
     fn encodes_constrained_character_string_with_permitted_alphabet() {
-        asn1_internal_tests!(
-            r#"TestString ::= BMPString (SIZE(1..4) INTERSECTION FROM("te" | "s"))"#
+        asn1!(
+            r#"TestString ::= BMPString (SIZE(1..4) INTERSECTION FROM("te" | "s"))"#,
+            Framework::Asnr,
+            crate
         );
         assert_eq!(
             TestString::encode::<Uper>(TestString("test".into()), bitvec![u8, Msb0;]).unwrap(),
@@ -1024,7 +1009,9 @@ mod tests {
 
     #[test]
     fn encodes_unconstrained_variable_size_character_string() {
-        asn1_internal_tests!(r#"TestString ::= GraphicString"#);
+        asn1!(r#"TestString ::= GraphicString"#,
+            Framework::Asnr,
+            crate);
         assert_eq!(
             TestString::encode::<Uper>(TestString("🦀".into()), bitvec![u8, Msb0;]).unwrap(),
             bitvec![u8, Msb0;
@@ -1036,7 +1023,9 @@ mod tests {
 
     #[test]
     fn encodes_constrained_extensible_character_string_with_permitted_alphabet() {
-        asn1_internal_tests!(r#"TestString ::= NumericString (SIZE(1..4,...))"#);
+        asn1!(r#"TestString ::= NumericString (SIZE(1..4,...))"#,
+            Framework::Asnr,
+            crate);
         assert_eq!(
             TestString::encode::<Uper>(TestString("040234".into()), bitvec![u8, Msb0;]).unwrap(),
             bitvec![u8, Msb0;
@@ -1064,7 +1053,9 @@ mod tests {
 
     #[test]
     fn encodes_simple_enumerated() {
-        asn1_internal_tests!(r#"TestEnum ::= ENUMERATED {m1, m2, m3}"#);
+        asn1!(r#"TestEnum ::= ENUMERATED {m1, m2, m3}"#,
+            Framework::Asnr,
+            crate);
         assert_eq!(
             TestEnum::encode::<Uper>(TestEnum::M1, bitvec![u8, Msb0;]).unwrap(),
             bitvec![u8, Msb0; 0,0]
@@ -1081,7 +1072,9 @@ mod tests {
 
     #[test]
     fn encodes_indexed_enumerated() {
-        asn1_internal_tests!(r#"TestEnum ::= ENUMERATED {m1( -8), m2(0), m3(-20)}"#);
+        asn1!(r#"TestEnum ::= ENUMERATED {m1( -8), m2(0), m3(-20)}"#,
+            Framework::Asnr,
+            crate);
         assert_eq!(
             TestEnum::encode::<Uper>(TestEnum::M1, bitvec![u8, Msb0;]).unwrap(),
             bitvec![u8, Msb0; 0,1]
@@ -1098,12 +1091,14 @@ mod tests {
 
     #[test]
     fn encodes_extended_enumerated() {
-        asn1_internal_tests!(
+        asn1!(
             r#"HashAlgorithm ::= ENUMERATED { 
                 sha256,
                 ...,
                 sha384
-              }"#
+              }"#,
+            Framework::Asnr,
+            crate
         );
         assert_eq!(
             HashAlgorithm::encode::<Uper>(HashAlgorithm::Sha256, bitvec![u8, Msb0;]).unwrap(),
@@ -1117,11 +1112,13 @@ mod tests {
 
     #[test]
     fn encodes_empty_extended_enumerated() {
-        asn1_internal_tests!(
+        asn1!(
             r#"InitiallyEmpty ::= ENUMERATED { 
                 ...,
                 now
-              }"#
+              }"#,
+            Framework::Asnr,
+            crate
         );
         assert_eq!(
             InitiallyEmpty::encode::<Uper>(InitiallyEmpty::Now, bitvec![u8, Msb0;]).unwrap(),
@@ -1131,11 +1128,13 @@ mod tests {
 
     #[test]
     fn encodes_simple_choice() {
-        asn1_internal_tests!(
+        asn1!(
             r#"VarLengthNumber ::= CHOICE {
               content INTEGER(0..127),
               extension BOOLEAN
-              }"#
+              }"#,
+            Framework::Asnr,
+            crate
         );
         assert_eq!(
             VarLengthNumber::encode::<Uper>(
@@ -1157,12 +1156,14 @@ mod tests {
 
     #[test]
     fn encodes_extended_choice() {
-        asn1_internal_tests!(
+        asn1!(
             r#"SymmetricEncryptionKey ::= CHOICE {
               aes128Ccm OCTET STRING(SIZE(1)),
               ...
               none NULL
-             }"#
+             }"#,
+            Framework::Asnr,
+            crate
         );
         assert_eq!(
             SymmetricEncryptionKey::encode::<Uper>(
@@ -1186,13 +1187,15 @@ mod tests {
 
     #[test]
     fn encodes_extension_group_sequence() {
-        asn1_internal_tests!(
+        asn1!(
             r#"ExtendedSequence ::= SEQUENCE {item-code INTEGER (0..254),
             ...,
             test-ext BOOLEAN OPTIONAL,
             [[ alternate-item-code INTEGER (0..254),
                 and-another BOOLEAN DEFAULT TRUE
-             ]] }"#
+             ]] }"#,
+            Framework::Asnr,
+            crate
         );
         assert_eq!(
             ExtendedSequence::encode::<Uper>(
@@ -1230,13 +1233,15 @@ mod tests {
 
     #[test]
     fn encodes_omitted_extension_group_sequence() {
-        asn1_internal_tests!(
+        asn1!(
             r#"ExtendedSequence ::= SEQUENCE {item-code INTEGER (0..254),
             ...,
             test-ext BOOLEAN OPTIONAL,
             [[ alternate-item-code INTEGER (0..254),
                 and-another BOOLEAN DEFAULT TRUE
-             ]] }"#
+             ]] }"#,
+            Framework::Asnr,
+            crate
         );
         assert_eq!(
             ExtendedSequence::encode::<Uper>(
@@ -1262,7 +1267,9 @@ mod tests {
 
     #[test]
     fn encodes_sequence_of_with_definite_size() {
-        asn1_internal_tests!(r#"Test-Sequence-of ::= SEQUENCE (SIZE(3)) OF INTEGER(1..3)"#);
+        asn1!(r#"Test-Sequence-of ::= SEQUENCE (SIZE(3)) OF INTEGER(1..3)"#,
+            Framework::Asnr,
+            crate);
         assert_eq!(
             TestSequenceOf::encode::<Uper>(
                 TestSequenceOf(vec![
@@ -1279,7 +1286,9 @@ mod tests {
 
     #[test]
     fn encodes_sequence_of_with_range_size() {
-        asn1_internal_tests!(r#"Test-Sequence-of ::= SEQUENCE (SIZE(1..2)) OF INTEGER(1..3)"#);
+        asn1!(r#"Test-Sequence-of ::= SEQUENCE (SIZE(1..2)) OF INTEGER(1..3)"#,
+            Framework::Asnr,
+            crate);
         assert_eq!(
             TestSequenceOf::encode::<Uper>(
                 TestSequenceOf(vec![AnonymousTestSequenceOf(1), AnonymousTestSequenceOf(2)]),
@@ -1292,7 +1301,9 @@ mod tests {
 
     #[test]
     fn encodes_sequence_of_with_extended_range_size() {
-        asn1_internal_tests!(r#"Test-Sequence-of ::= SEQUENCE (SIZE(1..2,...)) OF INTEGER(1..3)"#);
+        asn1!(r#"Test-Sequence-of ::= SEQUENCE (SIZE(1..2,...)) OF INTEGER(1..3)"#,
+            Framework::Asnr,
+            crate);
         assert_eq!(
             TestSequenceOf::encode::<Uper>(
                 TestSequenceOf(vec![
@@ -1309,7 +1320,9 @@ mod tests {
 
     #[test]
     fn encodes_sequence_of_with_unrestricted_size() {
-        asn1_internal_tests!(r#"Test-Sequence-of ::= SEQUENCE OF INTEGER(1..3)"#);
+        asn1!(r#"Test-Sequence-of ::= SEQUENCE OF INTEGER(1..3)"#,
+            Framework::Asnr,
+            crate);
         assert_eq!(
             TestSequenceOf::encode::<Uper>(
                 TestSequenceOf(vec![

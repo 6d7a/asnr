@@ -21,7 +21,7 @@ use super::{
 pub fn module_reference<'a>(input: &'a str) -> IResult<&'a str, ModuleReference> {
     skip_ws_and_comments(into(tuple((
         identifier,
-        skip_ws(object_identifier),
+        opt(skip_ws(object_identifier)),
         skip_ws_and_comments(delimited(
             tag(DEFINITIONS),
             environments,
@@ -75,18 +75,18 @@ fn environments<'a>(
             map(
                 alt((tag(AUTOMATIC), tag(IMPLICIT), tag(EXPLICIT))),
                 |m| match m {
-                    AUTOMATIC => TaggingEnvironment::AUTOMATIC,
-                    IMPLICIT => TaggingEnvironment::IMPLICIT,
-                    _ => TaggingEnvironment::EXPLICIT,
+                    AUTOMATIC => TaggingEnvironment::Automatic,
+                    IMPLICIT => TaggingEnvironment::Implicit,
+                    _ => TaggingEnvironment::Explicit,
                 },
             ),
             skip_ws(tag(TAGS)),
         )),
         skip_ws_and_comments(map(opt(tag(EXTENSIBILITY_IMPLIED)), |m| {
             if m.is_some() {
-                ExtensibilityEnvironment::IMPLIED
+                ExtensibilityEnvironment::Implied
             } else {
-                ExtensibilityEnvironment::EXPLICIT
+                ExtensibilityEnvironment::Explicit
             }
         })),
     ))(input)
@@ -108,7 +108,7 @@ mod tests {
     
     BEGIN
     "#).unwrap().1,
-    ModuleReference {name:"ETSI-ITS-CDD".into(),module_identifier:ObjectIdentifier(vec![ObjectIdentifierArc{name:Some("itu-t".into()),number:Some(0)},ObjectIdentifierArc{name:Some("identified-organization".into()),number:Some(4)},ObjectIdentifierArc{name:Some("etsi".into()),number:Some(0)},ObjectIdentifierArc{name:Some("itsDomain".into()),number:Some(5)},ObjectIdentifierArc{name:Some("wg1".into()),number:Some(1)},ObjectIdentifierArc{name:None,number:Some(102894)},ObjectIdentifierArc{name:Some("cdd".into()),number:Some(2)},ObjectIdentifierArc{name:Some("major-version-3".into()),number:Some(3)},ObjectIdentifierArc{name:Some("minor-version-1".into()),number:Some(1)}]),encoding_reference_default:None,tagging_environment:asnr_grammar::TaggingEnvironment::AUTOMATIC,extensibility_environment:asnr_grammar::ExtensibilityEnvironment::EXPLICIT, imports: vec![] }
+    ModuleReference {name:"ETSI-ITS-CDD".into(),module_identifier:Some(ObjectIdentifier(vec![ObjectIdentifierArc{name:Some("itu-t".into()),number:Some(0)},ObjectIdentifierArc{name:Some("identified-organization".into()),number:Some(4)},ObjectIdentifierArc{name:Some("etsi".into()),number:Some(0)},ObjectIdentifierArc{name:Some("itsDomain".into()),number:Some(5)},ObjectIdentifierArc{name:Some("wg1".into()),number:Some(1)},ObjectIdentifierArc{name:None,number:Some(102894)},ObjectIdentifierArc{name:Some("cdd".into()),number:Some(2)},ObjectIdentifierArc{name:Some("major-version-3".into()),number:Some(3)},ObjectIdentifierArc{name:Some("minor-version-1".into()),number:Some(1)}])),encoding_reference_default:None,tagging_environment:asnr_grammar::TaggingEnvironment::Automatic,extensibility_environment:asnr_grammar::ExtensibilityEnvironment::Explicit, imports: vec![] }
   )
     }
 
@@ -130,6 +130,6 @@ mod tests {
         FROM CPM-OriginatingStationContainers {itu-t (0) identified-organization (4) etsi (0) itsDomain (5) wg1 (1) ts (103324) originatingStationContainers (2) major-version-1 (1) minor-version-1(1)}
         WITH SUCCESSORS;        
     "#).unwrap().1,
-    ModuleReference { name: "CPM-PDU-Descriptions".into(), module_identifier: ObjectIdentifier(vec![ObjectIdentifierArc { name: Some("itu-t".into()), number: Some(0) }, ObjectIdentifierArc { name: Some("identified-organization".into()), number: Some(4) }, ObjectIdentifierArc { name: Some("etsi".into()), number: Some(0) }, ObjectIdentifierArc { name: Some("itsDomain".into()), number: Some(5) }, ObjectIdentifierArc { name: Some("wg1".into()), number: Some(1) }, ObjectIdentifierArc { name: Some("ts".into()), number: Some(103324) }, ObjectIdentifierArc { name: Some("cpm".into()), number: Some(1) }, ObjectIdentifierArc { name: Some("major-version-1".into()), number: Some(1) }, ObjectIdentifierArc { name: Some("minor-version-1".into()), number: Some(1) }]), encoding_reference_default: None, tagging_environment: TaggingEnvironment::AUTOMATIC, extensibility_environment: ExtensibilityEnvironment::EXPLICIT, imports: vec![Import { types: vec!["ItsPduHeader".into(), "MessageRateHz".into(), "MessageSegmentationInfo".into(), "OrdinalNumber1B".into(), "ReferencePosition".into(), "StationType".into(), "TimestampIts".into()], origin_name: "ETSI-ITS-CDD".into(), origin_identifier: ObjectIdentifier(vec![ObjectIdentifierArc { name: Some("itu-t".into()), number: Some(0) }, ObjectIdentifierArc { name: Some("identified-organization".into()), number: Some(4) }, ObjectIdentifierArc { name: Some("etsi".into()), number: Some(0) }, ObjectIdentifierArc { name: Some("itsDomain".into()), number: Some(5) }, ObjectIdentifierArc { name: Some("wg1".into()), number: Some(1) }, ObjectIdentifierArc { name: Some("ts".into()), number: Some(102894) }, ObjectIdentifierArc { name: Some("cdd".into()), number: Some(2) }, ObjectIdentifierArc { name: Some("major-version-3".into()), number: Some(3) }, ObjectIdentifierArc { name: Some("minor-version-1".into()), number: Some(1) }]), with_successors: true }, Import { types: vec!["OriginatingRsuContainer".into(), "OriginatingVehicleContainer".into()], origin_name: "CPM-OriginatingStationContainers".into(), origin_identifier: ObjectIdentifier(vec![ObjectIdentifierArc { name: Some("itu-t".into()), number: Some(0) }, ObjectIdentifierArc { name: Some("identified-organization".into()), number: Some(4) }, ObjectIdentifierArc { name: Some("etsi".into()), number: Some(0) }, ObjectIdentifierArc { name: Some("itsDomain".into()), number: Some(5) }, ObjectIdentifierArc { name: Some("wg1".into()), number: Some(1) }, ObjectIdentifierArc { name: Some("ts".into()), number: Some(103324) }, ObjectIdentifierArc { name: Some("originatingStationContainers".into()), number: Some(2) }, ObjectIdentifierArc { name: Some("major-version-1".into()), number: Some(1) }, ObjectIdentifierArc { name: Some("minor-version-1".into()), number: Some(1) }]), with_successors: true }] })
+    ModuleReference { name: "CPM-PDU-Descriptions".into(), module_identifier: Some(ObjectIdentifier(vec![ObjectIdentifierArc { name: Some("itu-t".into()), number: Some(0) }, ObjectIdentifierArc { name: Some("identified-organization".into()), number: Some(4) }, ObjectIdentifierArc { name: Some("etsi".into()), number: Some(0) }, ObjectIdentifierArc { name: Some("itsDomain".into()), number: Some(5) }, ObjectIdentifierArc { name: Some("wg1".into()), number: Some(1) }, ObjectIdentifierArc { name: Some("ts".into()), number: Some(103324) }, ObjectIdentifierArc { name: Some("cpm".into()), number: Some(1) }, ObjectIdentifierArc { name: Some("major-version-1".into()), number: Some(1) }, ObjectIdentifierArc { name: Some("minor-version-1".into()), number: Some(1) }])), encoding_reference_default: None, tagging_environment: TaggingEnvironment::Automatic, extensibility_environment: ExtensibilityEnvironment::Explicit, imports: vec![Import { types: vec!["ItsPduHeader".into(), "MessageRateHz".into(), "MessageSegmentationInfo".into(), "OrdinalNumber1B".into(), "ReferencePosition".into(), "StationType".into(), "TimestampIts".into()], origin_name: "ETSI-ITS-CDD".into(), origin_identifier: ObjectIdentifier(vec![ObjectIdentifierArc { name: Some("itu-t".into()), number: Some(0) }, ObjectIdentifierArc { name: Some("identified-organization".into()), number: Some(4) }, ObjectIdentifierArc { name: Some("etsi".into()), number: Some(0) }, ObjectIdentifierArc { name: Some("itsDomain".into()), number: Some(5) }, ObjectIdentifierArc { name: Some("wg1".into()), number: Some(1) }, ObjectIdentifierArc { name: Some("ts".into()), number: Some(102894) }, ObjectIdentifierArc { name: Some("cdd".into()), number: Some(2) }, ObjectIdentifierArc { name: Some("major-version-3".into()), number: Some(3) }, ObjectIdentifierArc { name: Some("minor-version-1".into()), number: Some(1) }]), with_successors: true }, Import { types: vec!["OriginatingRsuContainer".into(), "OriginatingVehicleContainer".into()], origin_name: "CPM-OriginatingStationContainers".into(), origin_identifier: ObjectIdentifier(vec![ObjectIdentifierArc { name: Some("itu-t".into()), number: Some(0) }, ObjectIdentifierArc { name: Some("identified-organization".into()), number: Some(4) }, ObjectIdentifierArc { name: Some("etsi".into()), number: Some(0) }, ObjectIdentifierArc { name: Some("itsDomain".into()), number: Some(5) }, ObjectIdentifierArc { name: Some("wg1".into()), number: Some(1) }, ObjectIdentifierArc { name: Some("ts".into()), number: Some(103324) }, ObjectIdentifierArc { name: Some("originatingStationContainers".into()), number: Some(2) }, ObjectIdentifierArc { name: Some("major-version-1".into()), number: Some(1) }, ObjectIdentifierArc { name: Some("minor-version-1".into()), number: Some(1) }]), with_successors: true }] })
     }
 }

@@ -28,6 +28,7 @@ pub enum GeneratorErrorType {
     SyntaxMismatch,
     MissingClassKey,
     MissingClassLink,
+    Unsupported,
     Unidentified
 }
 

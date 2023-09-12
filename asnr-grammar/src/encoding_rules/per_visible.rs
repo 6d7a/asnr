@@ -1,21 +1,27 @@
 use core::ops::AddAssign;
 
-use alloc::{collections::BTreeMap, format, string::String, vec::Vec};
-use asnr_grammar::{
+use crate::{
     constraints::{Constraint, ElementOrSetOperation, SetOperation, SetOperator, SubtypeElement},
     error::{GrammarError, GrammarErrorType},
     types::{Choice, Enumerated},
-    ASN1Value, CharacterStringType,
+    ASN1Type, ASN1Value, CharacterStringType,
 };
-use nom::AsBytes;
+use alloc::{collections::BTreeMap, format, string::String, vec, vec::Vec};
 use num::ToPrimitive;
 
-use crate::error::{DecodingError, EncodingError};
-
-use super::{bit_length, AsBytesDummy};
+use super::bit_length;
 
 trait PerVisible {
     fn per_visible(&self) -> bool;
+}
+
+#[derive(Debug, PartialEq)]
+pub enum CharsetSubset {
+    Single(char),
+    Range {
+        from: Option<char>,
+        to: Option<char>,
+    },
 }
 
 #[derive(Debug, PartialEq)]
@@ -23,13 +29,14 @@ pub struct PerVisibleAlphabetConstraints {
     string_type: CharacterStringType,
     character_by_index: BTreeMap<usize, char>,
     index_by_character: Option<BTreeMap<char, usize>>,
+    charset_subsets: Vec<CharsetSubset>,
 }
 
 impl PerVisibleAlphabetConstraints {
-    pub fn try_new<I: AsBytes>(
+    pub fn try_new(
         constraint: &Constraint,
         string_type: CharacterStringType,
-    ) -> Result<Option<Self>, DecodingError<I>> {
+    ) -> Result<Option<Self>, GrammarError> {
         match constraint {
             Constraint::SubtypeConstraint(c) => match &c.set {
                 ElementOrSetOperation::Element(e) => Self::from_subtype_elem(Some(e), string_type),
@@ -42,10 +49,10 @@ impl PerVisibleAlphabetConstraints {
         }
     }
 
-    fn from_subtype_elem<I: AsBytes>(
+    fn from_subtype_elem(
         element: Option<&SubtypeElement>,
         string_type: CharacterStringType,
-    ) -> Result<Option<Self>, DecodingError<I>> {
+    ) -> Result<Option<Self>, GrammarError> {
         match element {
             None => Ok(None),
             Some(SubtypeElement::PermittedAlphabet(elem_or_set)) => match &**elem_or_set {
@@ -58,6 +65,7 @@ impl PerVisibleAlphabetConstraints {
             Some(SubtypeElement::SingleValue { value, extensible }) => match (value, extensible) {
                 (ASN1Value::String(s), false) => {
                     let mut char_subset = s
+                        .clone()
                         .chars()
                         .map(|c| find_char_index(&string_type.character_set(), c).map(|i| (i, c)))
                         .collect::<Result<Vec<(usize, char)>, _>>()?;
@@ -70,6 +78,7 @@ impl PerVisibleAlphabetConstraints {
                             .enumerate()
                             .collect(),
                         index_by_character: None,
+                        charset_subsets: s.chars().map(CharsetSubset::Single).collect(),
                     }))
                 }
                 _ => Ok(None),
@@ -108,7 +117,27 @@ impl PerVisibleAlphabetConstraints {
                         .enumerate()
                         .collect(),
                     index_by_character: None,
+                    charset_subsets: vec![CharsetSubset::Range {
+                        from: char_set.get(&lower).copied(),
+                        to: char_set.get(&upper).copied(),
+                    }],
                 }))
+            }
+            Some(SubtypeElement::ContainedSubtype {
+                subtype,
+                extensible: _,
+            }) => {
+                if let ASN1Type::CharacterString(c_string) = subtype {
+                    let mut permitted_alphabet =
+                        PerVisibleAlphabetConstraints::default_for(string_type);
+                    for c in &c_string.constraints {
+                        PerVisibleAlphabetConstraints::try_new(c, c_string.r#type)?
+                            .map(|mut p| permitted_alphabet += &mut p);
+                    }
+                    Ok(Some(permitted_alphabet))
+                } else {
+                    Ok(None)
+                }
             }
             _ => Ok(None),
         }
@@ -121,6 +150,10 @@ impl PerVisibleAlphabetConstraints {
         } else {
             8
         }
+    }
+
+    pub fn charset_subsets(&self) -> &Vec<CharsetSubset> {
+        &self.charset_subsets
     }
 
     pub fn is_known_multiplier_string(&self) -> bool {
@@ -142,25 +175,21 @@ impl PerVisibleAlphabetConstraints {
         )
     }
 
-    pub fn get_char_by_index(&self, index: usize) -> Result<&char, DecodingError<AsBytesDummy>> {
-        self.character_by_index.get(&index).ok_or(DecodingError {
+    pub fn get_char_by_index(&self, index: usize) -> Result<&char, GrammarError> {
+        self.character_by_index.get(&index).ok_or(GrammarError {
             details: format!(
                 "No character at index {index} of character set {:?}",
                 self.character_by_index
             ),
-            kind: crate::error::DecodingErrorType::GenericParsingError,
-            input: None,
+            kind: crate::error::GrammarErrorType::PerVisibleConstraintError,
         })
     }
 
-    pub fn index_by_character_map(
-        &self,
-    ) -> Result<&BTreeMap<char, usize>, DecodingError<AsBytesDummy>> {
+    pub fn index_by_character_map(&self) -> Result<&BTreeMap<char, usize>, GrammarError> {
         if self.index_by_character.is_none() {
-            return Err(DecodingError {
+            return Err(GrammarError {
                 details: format!("PerVisibleAlphabetConstraints have  to be finalized!"),
-                input: None,
-                kind: crate::error::DecodingErrorType::ConstraintError,
+                kind: crate::error::GrammarErrorType::PerVisibleConstraintError,
             });
         }
         Ok(&self.index_by_character.as_ref().unwrap())
@@ -171,6 +200,7 @@ impl PerVisibleAlphabetConstraints {
             character_by_index: BTreeMap::new(),
             string_type,
             index_by_character: None,
+            charset_subsets: vec![],
         }
     }
 
@@ -179,24 +209,22 @@ impl PerVisibleAlphabetConstraints {
             character_by_index: self.string_type.character_set(),
             string_type: self.string_type,
             index_by_character: None,
+            charset_subsets: vec![],
         };
         s.finalize();
         s
     }
 }
 
-fn find_string_index<I: AsBytes>(
+fn find_string_index(
     value: &String,
     char_set: &BTreeMap<usize, char>,
-) -> Result<usize, DecodingError<I>> {
+) -> Result<usize, GrammarError> {
     let as_char = value.chars().next().unwrap();
     find_char_index(char_set, as_char)
 }
 
-fn find_char_index<I: AsBytes>(
-    char_set: &BTreeMap<usize, char>,
-    as_char: char,
-) -> Result<usize, DecodingError<I>> {
+fn find_char_index(char_set: &BTreeMap<usize, char>, as_char: char) -> Result<usize, GrammarError> {
     char_set
         .iter()
         .find_map(|(i, c)| (as_char == *c).then(|| *i))
@@ -219,6 +247,7 @@ pub struct PerVisibleRangeConstraints {
     min: Option<i128>,
     max: Option<i128>,
     extensible: bool,
+    is_size_constraint: bool,
 }
 
 impl Default for PerVisibleRangeConstraints {
@@ -227,6 +256,7 @@ impl Default for PerVisibleRangeConstraints {
             min: None,
             max: None,
             extensible: false,
+            is_size_constraint: false,
         }
     }
 }
@@ -237,6 +267,7 @@ impl PerVisibleRangeConstraints {
             min: Some(0),
             max: None,
             extensible: false,
+            is_size_constraint: false,
         }
     }
 
@@ -254,6 +285,10 @@ impl PerVisibleRangeConstraints {
         self.min.map(|m| I::from_i128(m)).flatten()
     }
 
+    pub fn max<I: num::Integer + num::FromPrimitive>(&self) -> Option<I> {
+        self.max.map(|m| I::from_i128(m)).flatten()
+    }
+
     pub fn offset_from_min<
         I: num::Integer + num::FromPrimitive + num::ToPrimitive + Copy,
         V: num::Integer + num::ToPrimitive,
@@ -266,43 +301,40 @@ impl PerVisibleRangeConstraints {
         I::from_i128(value_as_i128 - min)
     }
 
-    pub fn range_width<I: AsBytes>(&self) -> Result<Option<usize>, DecodingError<I>> {
+    pub fn range_width(&self) -> Result<Option<usize>, GrammarError> {
         self.min
             .zip(self.max)
             .map(|(min, max)| {
-                (max - min).try_into().map_err(|err| DecodingError {
+                (max - min).try_into().map_err(|err| GrammarError {
                     details: format!("Error computing constraint range width: {:?}", err),
-                    input: None,
-                    kind: crate::error::DecodingErrorType::GenericParsingError,
+                    kind: crate::error::GrammarErrorType::PerVisibleConstraintError,
                 })
             })
             .transpose()
     }
 
+    pub fn is_size_constraint(&self) -> bool {
+        self.is_size_constraint
+    }
+
     pub fn lies_within<I: num::Integer + ToPrimitive>(
         &self,
         value: &I,
-    ) -> Result<bool, EncodingError> {
-        let as_i128 = value.to_i128().ok_or(EncodingError {
+    ) -> Result<bool, GrammarError> {
+        let as_i128 = value.to_i128().ok_or(GrammarError {
             details: "Failed to convert integer to u128!".into(),
+            kind: GrammarErrorType::PerVisibleConstraintError,
         })?;
         let lies_within =
             self.min.map_or(true, |m| as_i128 >= m) && self.max.map_or(true, |m| as_i128 <= m);
         if !lies_within && !self.is_extensible() {
-            Err(EncodingError {
+            Err(GrammarError {
                 details: "Provided value that violates non-extensible constraints!".into(),
+                kind: GrammarErrorType::PerVisibleConstraintError,
             })
         } else {
             Ok(lies_within)
         }
-    }
-
-    pub fn as_unsigned_constraint(&mut self) {
-        *self += PerVisibleRangeConstraints {
-            min: Some(0),
-            max: None,
-            extensible: self.is_extensible(),
-        };
     }
 }
 
@@ -312,6 +344,7 @@ impl From<&Enumerated> for PerVisibleRangeConstraints {
             min: Some(0),
             max: Some(value.extensible.map_or(value.members.len() - 1, |i| i - 1) as i128),
             extensible: value.extensible.is_some(),
+            is_size_constraint: false,
         }
     }
 }
@@ -322,6 +355,7 @@ impl From<&Choice> for PerVisibleRangeConstraints {
             min: Some(0),
             max: Some(value.extensible.map_or(value.options.len() - 1, |i| i - 1) as i128),
             extensible: value.extensible.is_some(),
+            is_size_constraint: false,
         }
     }
 }
@@ -335,15 +369,14 @@ impl AddAssign<PerVisibleRangeConstraints> for PerVisibleRangeConstraints {
             _ => None,
         };
         self.extensible = self.extensible || rhs.extensible;
+        self.is_size_constraint = self.is_size_constraint || rhs.is_size_constraint;
     }
 }
 
 impl TryFrom<&Constraint> for PerVisibleRangeConstraints {
-    type Error = DecodingError<AsBytesDummy>;
+    type Error = GrammarError;
 
-    fn try_from(
-        value: &Constraint,
-    ) -> Result<PerVisibleRangeConstraints, DecodingError<AsBytesDummy>> {
+    fn try_from(value: &Constraint) -> Result<PerVisibleRangeConstraints, Self::Error> {
         match value {
             Constraint::SubtypeConstraint(c) => match &c.set {
                 ElementOrSetOperation::Element(e) => Some(e).try_into(),
@@ -357,10 +390,8 @@ impl TryFrom<&Constraint> for PerVisibleRangeConstraints {
 }
 
 impl TryFrom<Option<&SubtypeElement>> for PerVisibleRangeConstraints {
-    type Error = DecodingError<AsBytesDummy>;
-    fn try_from(
-        value: Option<&SubtypeElement>,
-    ) -> Result<PerVisibleRangeConstraints, DecodingError<AsBytesDummy>> {
+    type Error = GrammarError;
+    fn try_from(value: Option<&SubtypeElement>) -> Result<PerVisibleRangeConstraints, Self::Error> {
         match value {
             Some(SubtypeElement::PermittedAlphabet(_)) | None => Ok(Self::default()),
             Some(SubtypeElement::SingleValue { value, extensible }) => {
@@ -369,6 +400,7 @@ impl TryFrom<Option<&SubtypeElement>> for PerVisibleRangeConstraints {
                     min: val,
                     max: val,
                     extensible: *extensible,
+                    is_size_constraint: false,
                 })
             }
             Some(SubtypeElement::ValueRange {
@@ -379,13 +411,33 @@ impl TryFrom<Option<&SubtypeElement>> for PerVisibleRangeConstraints {
                 min: min.as_ref().map(|i| i.unwrap_as_integer().ok()).flatten(),
                 max: max.as_ref().map(|i| i.unwrap_as_integer().ok()).flatten(),
                 extensible: *extensible,
+                is_size_constraint: false,
             }),
             Some(SubtypeElement::SizeConstraint(s)) => match &**s {
-                ElementOrSetOperation::Element(e) => Some(e).try_into(),
+                ElementOrSetOperation::Element(e) => <Option<&SubtypeElement> as TryInto<
+                    PerVisibleRangeConstraints,
+                >>::try_into(Some(e))
+                .map(|mut c| {
+                    c.is_size_constraint = true;
+                    c
+                }),
                 ElementOrSetOperation::SetOperation(s) => {
-                    fold_constraint_set(&s, None)?.as_ref().try_into()
+                    <Option<&SubtypeElement> as TryInto<PerVisibleRangeConstraints>>::try_into(
+                        fold_constraint_set(&s, None)?.as_ref(),
+                    )
+                    .map(|mut c| {
+                        c.is_size_constraint = true;
+                        c
+                    })
                 }
             },
+            Some(SubtypeElement::ContainedSubtype {
+                subtype,
+                extensible: _,
+            }) => per_visible_range_constraints(
+                matches!(subtype, ASN1Type::Integer(_)),
+                &subtype.constraints(),
+            ),
             _ => unreachable!(),
         }
     }
@@ -434,6 +486,21 @@ impl PerVisible for SubtypeElement {
     }
 }
 
+pub fn per_visible_range_constraints(
+    signed: bool,
+    constraint_list: &Vec<Constraint>,
+) -> Result<PerVisibleRangeConstraints, GrammarError> {
+    let mut constraints = if signed {
+        PerVisibleRangeConstraints::default()
+    } else {
+        PerVisibleRangeConstraints::default_unsigned()
+    };
+    for c in constraint_list {
+        constraints += c.try_into()?
+    }
+    Ok(constraints)
+}
+
 /// 10.3.21	If a constraint that is PER-visible is part of an INTERSECTION construction,
 /// then the resulting constraint is PER-visible, and consists of the INTERSECTION of
 /// all PER-visible parts (with the non-PER-visible parts ignored).  
@@ -441,10 +508,10 @@ impl PerVisible for SubtypeElement {
 /// then the resulting constraint is not PER-visible.  
 /// If a constraint has an EXCEPT clause, the EXCEPT and the following value set is completely ignored,
 /// whether the value set following the EXCEPT is PER-visible or not.
-fn fold_constraint_set<I: AsBytes>(
+fn fold_constraint_set(
     set: &SetOperation,
     char_set: Option<&BTreeMap<usize, char>>,
-) -> Result<Option<SubtypeElement>, DecodingError<I>> {
+) -> Result<Option<SubtypeElement>, GrammarError> {
     let folded_operant = match &*set.operant {
         ElementOrSetOperation::Element(e) => e.per_visible().then(|| e.clone()),
         ElementOrSetOperation::SetOperation(s) => fold_constraint_set(s, char_set)?,
@@ -731,14 +798,14 @@ fn fold_constraint_set<I: AsBytes>(
     }
 }
 
-fn intersect_single_and_range<I: AsBytes>(
+fn intersect_single_and_range(
     value: &ASN1Value,
     min: Option<&ASN1Value>,
     max: Option<&ASN1Value>,
     x1: bool,
     x2: bool,
     char_set: Option<&BTreeMap<usize, char>>,
-) -> Result<Option<SubtypeElement>, DecodingError<I>> {
+) -> Result<Option<SubtypeElement>, GrammarError> {
     match (value, min, max, x1 || x2, char_set) {
         (ASN1Value::Integer(_), _, Some(ASN1Value::String(_)), _, Some(_))
         | (ASN1Value::Integer(_), Some(ASN1Value::String(_)), _, _, Some(_)) => {
@@ -813,14 +880,14 @@ fn intersect_single_and_range<I: AsBytes>(
     }
 }
 
-fn union_single_and_range<I: AsBytes>(
+fn union_single_and_range(
     v: &ASN1Value,
     min: Option<&ASN1Value>,
     char_set: Option<&BTreeMap<usize, char>>,
     max: Option<&ASN1Value>,
     x1: bool,
     x2: bool,
-) -> Result<Option<SubtypeElement>, DecodingError<I>> {
+) -> Result<Option<SubtypeElement>, GrammarError> {
     match (v, min, max, x1 || x2, char_set) {
         (ASN1Value::Integer(_), _, Some(ASN1Value::String(_)), _, _)
         | (ASN1Value::Integer(_), Some(ASN1Value::String(_)), _, _, _)
@@ -877,21 +944,18 @@ fn compare_optional_asn1values(
 
 #[cfg(test)]
 mod tests {
-    use asnr_grammar::{constraints::*, *};
+    use crate::{constraints::*, *};
 
-    use crate::uper::{
-        per_visible::{fold_constraint_set, PerVisibleAlphabetConstraints},
-        AsBytesDummy,
-    };
+    use super::*;
 
     #[test]
     fn initializes_per_visible_alphabet_from_single_value() {
         assert_eq!(
-            PerVisibleAlphabetConstraints::try_new::<AsBytesDummy>(
+            PerVisibleAlphabetConstraints::try_new(
                 &Constraint::SubtypeConstraint(ElementSet {
                     extensible: false,
                     set: ElementOrSetOperation::Element(SubtypeElement::SingleValue {
-                        value: asnr_grammar::ASN1Value::String("ABCDEF".to_owned()),
+                        value: ASN1Value::String("ABCDEF".to_owned()),
                         extensible: false
                     })
                 }),
@@ -904,15 +968,23 @@ mod tests {
                 character_by_index: [(0, 'A'), (1, 'B'), (2, 'C'), (3, 'D'), (4, 'E'), (5, 'F')]
                     .into_iter()
                     .collect(),
-                index_by_character: None
+                index_by_character: None,
+                charset_subsets: vec![
+                    CharsetSubset::Single('A'),
+                    CharsetSubset::Single('B'),
+                    CharsetSubset::Single('C'),
+                    CharsetSubset::Single('D'),
+                    CharsetSubset::Single('E'),
+                    CharsetSubset::Single('F')
+                ]
             }
         );
         assert_eq!(
-            PerVisibleAlphabetConstraints::try_new::<AsBytesDummy>(
+            PerVisibleAlphabetConstraints::try_new(
                 &Constraint::SubtypeConstraint(ElementSet {
                     extensible: false,
                     set: ElementOrSetOperation::Element(SubtypeElement::SingleValue {
-                        value: asnr_grammar::ASN1Value::String("132".to_owned()),
+                        value: ASN1Value::String("132".to_owned()),
                         extensible: false
                     })
                 }),
@@ -924,6 +996,11 @@ mod tests {
                 string_type: CharacterStringType::NumericString,
                 character_by_index: [(0, '1'), (2, '3'), (1, '2')].into_iter().collect(),
                 index_by_character: None,
+                charset_subsets: vec![
+                    CharsetSubset::Single('1'),
+                    CharsetSubset::Single('3'),
+                    CharsetSubset::Single('2')
+                ]
             }
         )
     }
@@ -931,7 +1008,7 @@ mod tests {
     #[test]
     fn initializes_per_visible_alphabet_from_range_value() {
         assert_eq!(
-            PerVisibleAlphabetConstraints::try_new::<AsBytesDummy>(
+            PerVisibleAlphabetConstraints::try_new(
                 &Constraint::SubtypeConstraint(ElementSet {
                     extensible: false,
                     set: ElementOrSetOperation::Element(SubtypeElement::ValueRange {
@@ -949,11 +1026,15 @@ mod tests {
                 character_by_index: [(0, 'A'), (1, 'B'), (2, 'C'), (3, 'D'), (4, 'E'), (5, 'F')]
                     .into_iter()
                     .collect(),
-                index_by_character: None
+                index_by_character: None,
+                charset_subsets: vec![CharsetSubset::Range {
+                    from: Some('A'),
+                    to: Some('F')
+                }]
             }
         );
         assert_eq!(
-            PerVisibleAlphabetConstraints::try_new::<AsBytesDummy>(
+            PerVisibleAlphabetConstraints::try_new(
                 &Constraint::SubtypeConstraint(ElementSet {
                     extensible: false,
                     set: ElementOrSetOperation::Element(SubtypeElement::ValueRange {
@@ -971,7 +1052,11 @@ mod tests {
                 character_by_index: [(0, ' '), (1, '0'), (2, '1'), (3, '2'), (4, '3')]
                     .into_iter()
                     .collect(),
-                index_by_character: None
+                index_by_character: None,
+                charset_subsets: vec![CharsetSubset::Range {
+                    from: Some(' '),
+                    to: Some('3')
+                }]
             }
         )
     }
@@ -979,7 +1064,7 @@ mod tests {
     #[test]
     fn folds_single_value_alphabet_constraints() {
         assert_eq!(
-            fold_constraint_set::<AsBytesDummy>(
+            fold_constraint_set(
                 &SetOperation {
                     base: SubtypeElement::SingleValue {
                         value: ASN1Value::String("ABC".into()),
@@ -1003,7 +1088,7 @@ mod tests {
             }
         );
         assert_eq!(
-            fold_constraint_set::<AsBytesDummy>(
+            fold_constraint_set(
                 &SetOperation {
                     base: SubtypeElement::SingleValue {
                         value: ASN1Value::String("ABC".into()),
@@ -1031,7 +1116,7 @@ mod tests {
     #[test]
     fn folds_range_value_alphabet_constraints() {
         assert_eq!(
-            fold_constraint_set::<AsBytesDummy>(
+            fold_constraint_set(
                 &SetOperation {
                     base: SubtypeElement::ValueRange {
                         min: Some(ASN1Value::String("A".into())),
@@ -1057,7 +1142,7 @@ mod tests {
             }
         );
         assert_eq!(
-            fold_constraint_set::<AsBytesDummy>(
+            fold_constraint_set(
                 &SetOperation {
                     base: SubtypeElement::ValueRange {
                         min: Some(ASN1Value::String("A".into())),
@@ -1087,7 +1172,7 @@ mod tests {
     #[test]
     fn folds_range_values_alphabet_constraints() {
         assert_eq!(
-            fold_constraint_set::<AsBytesDummy>(
+            fold_constraint_set(
                 &SetOperation {
                     base: SubtypeElement::ValueRange {
                         min: Some(ASN1Value::String("A".into())),
@@ -1112,7 +1197,7 @@ mod tests {
             }
         );
         assert_eq!(
-            fold_constraint_set::<AsBytesDummy>(
+            fold_constraint_set(
                 &SetOperation {
                     base: SubtypeElement::ValueRange {
                         min: Some(ASN1Value::String("A".into())),
@@ -1141,7 +1226,7 @@ mod tests {
     #[test]
     fn folds_single_value_numeric_constraints() {
         assert_eq!(
-            fold_constraint_set::<AsBytesDummy>(
+            fold_constraint_set(
                 &SetOperation {
                     base: SubtypeElement::SingleValue {
                         value: ASN1Value::Integer(4),
@@ -1169,7 +1254,7 @@ mod tests {
     #[test]
     fn folds_range_value_integer_constraints() {
         assert_eq!(
-            fold_constraint_set::<AsBytesDummy>(
+            fold_constraint_set(
                 &SetOperation {
                     base: SubtypeElement::ValueRange {
                         min: Some(ASN1Value::Integer(-1)),
@@ -1194,7 +1279,7 @@ mod tests {
             }
         );
         assert_eq!(
-            fold_constraint_set::<AsBytesDummy>(
+            fold_constraint_set(
                 &SetOperation {
                     base: SubtypeElement::ValueRange {
                         min: Some(ASN1Value::Integer(-1)),
@@ -1224,7 +1309,7 @@ mod tests {
     #[test]
     fn folds_range_values_numeric_constraints() {
         assert_eq!(
-            fold_constraint_set::<AsBytesDummy>(
+            fold_constraint_set(
                 &SetOperation {
                     base: SubtypeElement::ValueRange {
                         min: Some(ASN1Value::Integer(-2)),
@@ -1249,7 +1334,7 @@ mod tests {
             }
         );
         assert_eq!(
-            fold_constraint_set::<AsBytesDummy>(
+            fold_constraint_set(
                 &SetOperation {
                     base: SubtypeElement::ValueRange {
                         min: Some(ASN1Value::Integer(-2)),
@@ -1291,7 +1376,7 @@ mod tests {
             )),
         };
         assert_eq!(
-            fold_constraint_set::<AsBytesDummy>(&set_op(SetOperator::Intersection), None)
+            fold_constraint_set(&set_op(SetOperator::Intersection), None)
                 .unwrap()
                 .unwrap(),
             SubtypeElement::SingleValue {
@@ -1300,7 +1385,7 @@ mod tests {
             }
         );
         assert_eq!(
-            fold_constraint_set::<AsBytesDummy>(
+            fold_constraint_set(
                 &set_op(SetOperator::Intersection),
                 Some(&CharacterStringType::IA5String.character_set())
             )
@@ -1312,11 +1397,11 @@ mod tests {
             }
         );
         assert_eq!(
-            fold_constraint_set::<AsBytesDummy>(&set_op(SetOperator::Union), None).unwrap(),
+            fold_constraint_set(&set_op(SetOperator::Union), None).unwrap(),
             None
         );
         assert_eq!(
-            fold_constraint_set::<AsBytesDummy>(
+            fold_constraint_set(
                 &set_op(SetOperator::Union),
                 Some(&CharacterStringType::IA5String.character_set())
             )
@@ -1342,7 +1427,7 @@ mod tests {
             )),
         };
         assert_eq!(
-            fold_constraint_set::<AsBytesDummy>(
+            fold_constraint_set(
                 &set_op(SetOperator::Intersection),
                 Some(&CharacterStringType::PrintableString.character_set())
             )
@@ -1354,7 +1439,7 @@ mod tests {
             }
         );
         assert_eq!(
-            fold_constraint_set::<AsBytesDummy>(
+            fold_constraint_set(
                 &set_op(SetOperator::Union),
                 Some(&CharacterStringType::PrintableString.character_set())
             )
@@ -1362,7 +1447,7 @@ mod tests {
             None
         );
         assert_eq!(
-            fold_constraint_set::<AsBytesDummy>(&set_op(SetOperator::Intersection), None)
+            fold_constraint_set(&set_op(SetOperator::Intersection), None)
                 .unwrap()
                 .unwrap(),
             SubtypeElement::ValueRange {
@@ -1372,7 +1457,7 @@ mod tests {
             }
         );
         assert_eq!(
-            fold_constraint_set::<AsBytesDummy>(&set_op(SetOperator::Union), None).unwrap(),
+            fold_constraint_set(&set_op(SetOperator::Union), None).unwrap(),
             None
         );
     }
@@ -1393,7 +1478,7 @@ mod tests {
             })),
         };
         assert_eq!(
-            fold_constraint_set::<AsBytesDummy>(
+            fold_constraint_set(
                 &set_op(SetOperator::Intersection),
                 Some(&CharacterStringType::PrintableString.character_set())
             )
@@ -1406,7 +1491,7 @@ mod tests {
             }
         );
         assert_eq!(
-            fold_constraint_set::<AsBytesDummy>(&set_op(SetOperator::Intersection), None)
+            fold_constraint_set(&set_op(SetOperator::Intersection), None)
                 .unwrap()
                 .unwrap(),
             SubtypeElement::ValueRange {
@@ -1416,7 +1501,7 @@ mod tests {
             }
         );
         assert_eq!(
-            fold_constraint_set::<AsBytesDummy>(
+            fold_constraint_set(
                 &set_op(SetOperator::Union),
                 Some(&CharacterStringType::PrintableString.character_set())
             )
@@ -1424,7 +1509,7 @@ mod tests {
             None
         );
         assert_eq!(
-            fold_constraint_set::<AsBytesDummy>(&set_op(SetOperator::Union), None).unwrap(),
+            fold_constraint_set(&set_op(SetOperator::Union), None).unwrap(),
             None
         );
     }

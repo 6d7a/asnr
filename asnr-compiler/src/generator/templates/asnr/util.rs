@@ -5,15 +5,18 @@ use asnr_grammar::{
     },
     types::*,
     *,
+    utils::*
 };
 
-use super::{
-    builder::StringifiedNameType,
-    error::{GeneratorError, GeneratorErrorType},
-    generate,
+use crate::{
+    generator::{
+        error::{GeneratorError, GeneratorErrorType},
+        generate, 
+    },
+    Framework,
 };
 
-use crate::utils::*;
+use super::builder::StringifiedNameType;
 
 /// Resolves the custom syntax declared in an information object class' WITH SYNTAX clause
 #[allow(dead_code)]
@@ -269,13 +272,13 @@ impl {name} {{
 }
 
 pub fn format_distinguished_bit_value(value: &DistinguishedValue) -> String {
-    let name = &to_rust_camel_case(&value.name);
+    let name = &to_rust_snake_case(&value.name);
     let i = value.value;
     format!("pub fn is_{name}(&self) -> bool {{ *self.0.get({i}).unwrap_or(&false) }}")
 }
 
 pub fn format_distinguished_int_value(value: &DistinguishedValue) -> String {
-    let name = to_rust_camel_case(&value.name);
+    let name = to_rust_snake_case(&value.name);
     let i = value.value;
     format!("pub fn is_{name}(&self) -> bool {{ self.0 as i128 == {i} }}")
 }
@@ -345,7 +348,7 @@ pub fn extract_sequence_members(
         .iter()
         .enumerate()
         .map(|(index, m)| {
-            let name = to_rust_camel_case(&m.name);
+            let name = to_rust_snake_case(&m.name);
             let mut rtype = match &m.r#type {
                 ASN1Type::ElsewhereDeclaredType(d) => to_rust_title_case(&d.identifier),
                 ASN1Type::InformationObjectFieldReference(_) => "Asn1Open".to_string(),
@@ -365,7 +368,7 @@ pub fn extract_sequence_members(
 pub fn format_member_declaration(members: &Vec<StringifiedNameType>) -> String {
     members
         .iter()
-        .map(|m| format!("pub {}: {},", to_rust_camel_case(&m.name), m.r#type))
+        .map(|m| format!("pub {}: {},", to_rust_snake_case(&m.name), m.r#type))
         .collect::<Vec<String>>()
         .join("\n  ")
 }
@@ -395,13 +398,13 @@ pub fn format_decode_member_body(members: &Vec<StringifiedNameType>) -> String {
                 format!(
                     "{i} => {{ (input, self.{name}) = {t}::decode::<D>(input).map(|(i, v)| (i, Some(v)))? }},",
                     t = &m.r#type[7..m.r#type.len() - 1],
-                    name = to_rust_camel_case(&m.name)
+                    name = to_rust_snake_case(&m.name)
                 )
             } else {
                 format!(
                     "{i} => {{ (input, self.{name}) = {t}::decode::<D>(input)? }},",
                     t = m.r#type,
-                    name = to_rust_camel_case(&m.name)
+                    name = to_rust_snake_case(&m.name)
                 )
             }
         })
@@ -423,13 +426,13 @@ pub fn format_encoder_member_body(members: &Vec<StringifiedNameType>) -> String 
                         return Ok(output);
                     }}
                 }}),"#,
-                    name = to_rust_camel_case(&m.name),
+                    name = to_rust_snake_case(&m.name),
                     t = &m.r#type[7..m.r#type.len() - 1],
                 )
             } else {
                 format!(
                     "{i} => Ok(|parent, output| {t}::encode::<E>(parent.{name}.clone(), output)),",
-                    name = to_rust_camel_case(&m.name),
+                    name = to_rust_snake_case(&m.name),
                     t = m.r#type,
                 )
             }
@@ -446,7 +449,7 @@ pub fn format_has_optional_body(members: &Vec<StringifiedNameType>) -> String {
             if m.r#type.starts_with("Option<") {
                 format!(
                     r#"{i} => self.{name} != None,"#,
-                    name = to_rust_camel_case(&m.name),
+                    name = to_rust_snake_case(&m.name),
                 )
             } else {
                 format!("{i} => true,")
@@ -461,11 +464,13 @@ fn declare_inner_sequence_member(
     parent_name: &String,
 ) -> Result<String, GeneratorError> {
     generate(
+        &Framework::Asnr,
         ToplevelDeclaration::Type(ToplevelTypeDeclaration {
             parameterization: None,
             comments: " Inner type ".into(),
             name: inner_name(&member.name, parent_name),
             r#type: member.r#type.clone(),
+            tag: None
         }),
         None,
     )
@@ -476,11 +481,13 @@ fn declare_inner_choice_option(
     parent_name: &String,
 ) -> Result<String, GeneratorError> {
     generate(
+        &Framework::Asnr,
         ToplevelDeclaration::Type(ToplevelTypeDeclaration {
             parameterization: None,
             comments: " Inner type ".into(),
             name: inner_name(&option.name, parent_name),
             r#type: option.r#type.clone(),
+            tag: None
         }),
         None,
     )
@@ -499,7 +506,7 @@ fn inner_name(name: &String, parent_name: &String) -> String {
 mod tests {
     use asnr_grammar::types::*;
 
-    use crate::generator::util::format_enumeral;
+    use crate::generator::templates::asnr::util::format_enumeral;
 
     #[test]
     fn formats_enumeral() {

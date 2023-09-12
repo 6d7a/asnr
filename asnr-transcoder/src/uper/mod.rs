@@ -10,7 +10,6 @@ use crate::{
 
 mod decoder;
 mod encoder;
-mod per_visible;
 
 pub struct Uper;
 
@@ -31,7 +30,6 @@ impl Uper {
 
 pub type BitIn<'a> = BSlice<'a, u8, Msb0>;
 pub type BitOut = BitVec<u8, Msb0>;
-pub(crate) type AsBytesDummy = [u8; 0];
 
 const RUST_KEYWORDS: [&'static str; 38] = [
     "as", "async", "await", "break", "const", "continue", "crate", "dyn", "else", "enum", "extern",
@@ -54,7 +52,8 @@ pub fn to_rust_camel_case(input: &String) -> String {
     let input = input.drain(..).fold(String::new(), |mut acc, c| {
         if acc.is_empty() && c.is_uppercase() {
             acc.push(c.to_ascii_lowercase());
-        } else if acc.ends_with(|last: char| last.is_lowercase() || last == '_') && c.is_uppercase() {
+        } else if acc.ends_with(|last: char| last.is_lowercase() || last == '_') && c.is_uppercase()
+        {
             acc.push('_');
             acc.push(c.to_ascii_lowercase());
         } else {
@@ -89,32 +88,21 @@ pub fn to_rust_title_case(input: &String) -> String {
 
 #[cfg(test)]
 mod tests {
-    use asnr_compiler_derive::asn1_internal_tests;
+    use asnr_compiler_derive::asn1;
 
-    use crate::uper::{bit_length, Uper};
-
-    #[test]
-    fn computes_bit_size() {
-        assert_eq!(bit_length(1, 1), 0);
-        assert_eq!(bit_length(-1, 0), 1);
-        assert_eq!(bit_length(3, 6), 2);
-        assert_eq!(bit_length(4000, 4255), 8);
-        assert_eq!(bit_length(4000, 4256), 9);
-        assert_eq!(bit_length(0, 32000), 15);
-        assert_eq!(bit_length(0, 65538), 17);
-        assert_eq!(bit_length(-1, 127), 8);
-        assert_eq!(bit_length(-900000000, 900000001), 31);
-    }
+    use crate::uper::Uper;
 
     #[test]
     fn encodes_as_decodes_integer() {
-        asn1_internal_tests!(
+        asn1!(
             r#"Int-1 ::= INTEGER
             Int-2 ::= INTEGER(42)
             Int-3 ::= INTEGER(-1..65355)
             Int-4 ::= INTEGER(23..MAX)
             Int-5 ::= INTEGER(20,...)
-            Int-6 ::= INTEGER(1..24,...)"#
+            Int-6 ::= INTEGER(1..24,...)"#,
+            Framework::Asnr,
+            crate
         );
 
         assert_eq!(
@@ -157,12 +145,14 @@ mod tests {
 
     #[test]
     fn encodes_as_decodes_bit_string() {
-        asn1_internal_tests!(
+        asn1!(
             r#"Bit-string-1 ::= BIT STRING 
             Bit-string-2 ::= BIT STRING (SIZE(4))
             Bit-string-3 ::= BIT STRING (SIZE(1..63))
             Bit-string-4 ::= BIT STRING (SIZE(2,...))
-            Bit-string-5 ::= BIT STRING (SIZE(2..24,...))"#
+            Bit-string-5 ::= BIT STRING (SIZE(2..24,...))"#,
+            Framework::Asnr,
+            crate
         );
 
         assert_eq!(
@@ -207,12 +197,14 @@ mod tests {
 
     #[test]
     fn encodes_as_decodes_octet_string() {
-        asn1_internal_tests!(
+        asn1!(
             r#"Octet-string-1 ::= OCTET STRING 
             Octet-string-2 ::= OCTET STRING (SIZE(4))
             Octet-string-3 ::= OCTET STRING (SIZE(1..63))
             Octet-string-4 ::= OCTET STRING (SIZE(2,...))
-            Octet-string-5 ::= OCTET STRING (SIZE(2..24,...))"#
+            Octet-string-5 ::= OCTET STRING (SIZE(2..24,...))"#,
+            Framework::Asnr,
+            crate
         );
 
         assert_eq!(
@@ -257,12 +249,14 @@ mod tests {
 
     #[test]
     fn encodes_as_decodes_ia5string() {
-        asn1_internal_tests!(
+        asn1!(
             r#"String-1 ::= IA5String
         String-2 ::= IA5String(SIZE(4))
         String-3 ::= IA5String(SIZE(1..63))
         String-4 ::= IA5String(SIZE(20,...))
-        String-5 ::= IA5String(SIZE(1..24,...))"#
+        String-5 ::= IA5String(SIZE(1..24,...))"#,
+            Framework::Asnr,
+            crate
         );
 
         assert_eq!(
@@ -301,23 +295,23 @@ mod tests {
 
     #[test]
     fn encodes_as_decodes_sequence_of() {
-        asn1_internal_tests!(
+        asn1!(
             r#"
         Sequence-of-1 ::= SEQUENCE OF Member
         Sequence-of-2 ::= SEQUENCE (SIZE(4)) OF Member
         Sequence-of-3 ::= SEQUENCE (SIZE(1..63)) OF Member
         Sequence-of-4 ::= SEQUENCE (SIZE(2,...)) OF Member
         Sequence-of-5 ::= SEQUENCE (SIZE(1..24,...)) OF Member
-        Member ::= BOOLEAN"#
+        Member ::= BOOLEAN"#,
+            Framework::Asnr,
+            crate
         );
 
         assert_eq!(
             vec![Member(true)],
-            Uper::decode::<SequenceOf1>(
-                &Uper::encode(SequenceOf1(vec![Member(true)])).unwrap()
-            )
-            .unwrap()
-            .0
+            Uper::decode::<SequenceOf1>(&Uper::encode(SequenceOf1(vec![Member(true)])).unwrap())
+                .unwrap()
+                .0
         );
         assert_eq!(
             vec![Member(true), Member(true), Member(false), Member(true)],
@@ -335,19 +329,15 @@ mod tests {
         );
         assert_eq!(
             vec![Member(true)],
-            Uper::decode::<SequenceOf3>(
-                &Uper::encode(SequenceOf3(vec![Member(true)])).unwrap()
-            )
-            .unwrap()
-            .0
+            Uper::decode::<SequenceOf3>(&Uper::encode(SequenceOf3(vec![Member(true)])).unwrap())
+                .unwrap()
+                .0
         );
         assert_eq!(
             vec![Member(true)],
-            Uper::decode::<SequenceOf4>(
-                &Uper::encode(SequenceOf4(vec![Member(true)])).unwrap()
-            )
-            .unwrap()
-            .0
+            Uper::decode::<SequenceOf4>(&Uper::encode(SequenceOf4(vec![Member(true)])).unwrap())
+                .unwrap()
+                .0
         );
         assert_eq!(
             Vec::<Member>::new(),
@@ -359,7 +349,7 @@ mod tests {
 
     #[test]
     fn encodes_as_decodes_sequence() {
-        asn1_internal_tests!(
+        asn1!(
             r#"
         Seq-1 ::= SEQUENCE {
             member1 Member-1
@@ -386,10 +376,12 @@ mod tests {
             ext1 Member-4 OPTIONAL
         }
         
-        Member-1 ::= BOOLEAN
-        Member-2 ::= INTEGER(0..2)
-        Member-3 ::= SEQUENCE OF Member-1
-        Member-4 ::= BIT STRING (SIZE(1))"#
+            Member-1 ::= BOOLEAN
+            Member-2 ::= INTEGER(0..2)
+            Member-3 ::= SEQUENCE OF Member-1
+            Member-4 ::= BIT STRING (SIZE(1))"#,
+            Framework::Asnr,
+            crate
         );
 
         assert_eq!(
@@ -571,13 +563,15 @@ mod tests {
 
     #[test]
     fn en_decodes_readme_example() {
-        asn1_internal_tests!(
+        asn1!(
             r#"ExampleSequence ::= SEQUENCE {
             member-1 IA5String (SIZE (1..24)),
             member-2 INTEGER (0..15),
             ...,
             extension BOOLEAN OPTIONAL
-          }"#
+          }"#,
+            Framework::Asnr,
+            crate
         );
 
         assert_eq!(
@@ -591,6 +585,34 @@ mod tests {
                     member_1: InnerExampleSequenceMember1("Hello, World!".into()),
                     member_2: InnerExampleSequenceMember2(8),
                     extension: None
+                })
+                .unwrap()
+            )
+            .unwrap()
+        );
+    }
+
+    #[test]
+    fn encodes_as_decodes_extended_sequence() {
+        asn1!(
+            r#"TestSequenceAsnr ::= SEQUENCE { 
+            hello OCTET STRING (SIZE(0..8)),
+            ...,
+            world INTEGER(0..8) DEFAULT 8
+          }"#,
+            Framework::Asnr,
+            crate
+        );
+
+        assert_eq!(
+            TestSequenceAsnr {
+                hello: InnerTestSequenceAsnrHello(vec![1, 2, 3, 4]),
+                world: Some(InnerTestSequenceAsnrWorld(4))
+            },
+            Uper::decode::<TestSequenceAsnr>(
+                &Uper::encode(TestSequenceAsnr {
+                    hello: InnerTestSequenceAsnrHello(vec![1, 2, 3, 4]),
+                    world: Some(InnerTestSequenceAsnrWorld(4))
                 })
                 .unwrap()
             )

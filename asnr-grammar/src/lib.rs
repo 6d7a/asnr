@@ -15,6 +15,7 @@ extern crate asnr_grammar_derive;
 use asnr_traits::Declare;
 
 pub mod constraints;
+pub mod encoding_rules;
 pub mod error;
 pub mod information_object;
 pub mod parameterization;
@@ -38,7 +39,7 @@ use information_object::{
 };
 use parameterization::Parameterization;
 use types::*;
-use utils::{find_tld_or_enum_value_by_name, int_type_token};
+use utils::*;
 
 // Comment tokens
 pub const BLOCK_COMMENT_START: &'static str = "/*";
@@ -240,15 +241,15 @@ impl From<&str> for EncodingReferenceDefault {
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum TaggingEnvironment {
-    AUTOMATIC,
-    IMPLICIT,
-    EXPLICIT,
+    Automatic,
+    Implicit,
+    Explicit,
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum ExtensibilityEnvironment {
-    IMPLIED,
-    EXPLICIT,
+    Implied,
+    Explicit,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -273,7 +274,7 @@ impl From<(Vec<&str>, (&str, ObjectIdentifier, Option<&str>))> for Import {
 #[derive(Debug, Clone, PartialEq)]
 pub struct ModuleReference {
     pub name: String,
-    pub module_identifier: ObjectIdentifier,
+    pub module_identifier: Option<ObjectIdentifier>,
     pub encoding_reference_default: Option<EncodingReferenceDefault>,
     pub tagging_environment: TaggingEnvironment,
     pub extensibility_environment: ExtensibilityEnvironment,
@@ -283,7 +284,7 @@ pub struct ModuleReference {
 impl
     From<(
         &str,
-        ObjectIdentifier,
+        Option<ObjectIdentifier>,
         (
             Option<EncodingReferenceDefault>,
             TaggingEnvironment,
@@ -295,7 +296,7 @@ impl
     fn from(
         value: (
             &str,
-            ObjectIdentifier,
+            Option<ObjectIdentifier>,
             (
                 Option<EncodingReferenceDefault>,
                 TaggingEnvironment,
@@ -324,7 +325,20 @@ impl From<Vec<ObjectIdentifierArc>> for ObjectIdentifier {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Declare)]
+impl Declare for ObjectIdentifier {
+    fn declare(&self) -> String {
+        format!(
+            "ObjectIdentifier(vec![{}])",
+            self.0
+                .iter()
+                .map(Declare::declare)
+                .collect::<Vec<String>>()
+                .join(",")
+        )
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
 pub struct ObjectIdentifierArc {
     pub name: Option<String>,
     pub number: Option<u128>,
@@ -336,6 +350,15 @@ impl From<u128> for ObjectIdentifierArc {
             name: None,
             number: Some(value),
         }
+    }
+}
+
+impl Declare for ObjectIdentifierArc {
+    fn declare(&self) -> String {
+        format!(
+            "ObjectIdentifierArc {{ name: {:?}.into(), number: {:?} }}",
+            self.name, self.number
+        )
     }
 }
 
@@ -365,6 +388,40 @@ pub enum ToplevelDeclaration {
 }
 
 impl ToplevelDeclaration {
+    pub fn apply_tagging_environment(&mut self, environment: &TaggingEnvironment) {
+        match (environment, self) {
+            (env, ToplevelDeclaration::Type(ty)) => {
+                ty.tag = ty.tag.as_ref().map(|t| AsnTag {
+                    environment: env.clone(),
+                    tag_class: t.tag_class,
+                    id: t.id,
+                });
+                match &mut ty.r#type {
+                    ASN1Type::Sequence(s) | ASN1Type::Set(s) => {
+                        s.members.iter_mut().for_each(|m| {
+                            m.tag = m.tag.as_ref().map(|t| AsnTag {
+                                environment: env.clone(),
+                                tag_class: t.tag_class,
+                                id: t.id,
+                            });
+                        })
+                    }
+                    ASN1Type::Choice(c) => {
+                        c.options.iter_mut().for_each(|o| {
+                            o.tag = o.tag.as_ref().map(|t| AsnTag {
+                                environment: env.clone(),
+                                tag_class: t.tag_class,
+                                id: t.id,
+                            });
+                        })
+                    }
+                    _ => (),
+                }
+            }
+            _ => (),
+        }
+    }
+
     pub fn name(&self) -> &String {
         match self {
             ToplevelDeclaration::Information(i) => &i.name,
@@ -487,18 +544,34 @@ impl From<(Vec<&str>, &str, &str, ASN1Value)> for ToplevelValueDeclaration {
 #[derive(Debug, Clone, PartialEq)]
 pub struct ToplevelTypeDeclaration {
     pub comments: String,
+    pub tag: Option<AsnTag>,
     pub name: String,
     pub r#type: ASN1Type,
     pub parameterization: Option<Parameterization>,
 }
 
-impl From<(Vec<&str>, &str, Option<Parameterization>, ASN1Type)> for ToplevelTypeDeclaration {
-    fn from(value: (Vec<&str>, &str, Option<Parameterization>, ASN1Type)) -> Self {
+impl
+    From<(
+        Vec<&str>,
+        &str,
+        Option<Parameterization>,
+        (Option<AsnTag>, ASN1Type),
+    )> for ToplevelTypeDeclaration
+{
+    fn from(
+        value: (
+            Vec<&str>,
+            &str,
+            Option<Parameterization>,
+            (Option<AsnTag>, ASN1Type),
+        ),
+    ) -> Self {
         Self {
             comments: value.0.join("\n"),
             name: value.1.into(),
             parameterization: value.2,
-            r#type: value.3,
+            r#type: value.3 .1,
+            tag: value.3 .0,
         }
     }
 }
@@ -526,6 +599,21 @@ pub enum ASN1Type {
 }
 
 impl ASN1Type {
+    pub fn constraints(&self) -> Vec<Constraint> {
+        match self {
+            ASN1Type::Integer(i) => i.constraints.clone(),
+            ASN1Type::BitString(b) => b.constraints.clone(),
+            ASN1Type::OctetString(o) => o.constraints.clone(),
+            ASN1Type::CharacterString(c) => c.constraints.clone(),
+            ASN1Type::Enumerated(e) => e.constraints.clone(),
+            ASN1Type::Choice(c) => c.constraints.clone(),
+            ASN1Type::Sequence(s) => s.constraints.clone(),
+            ASN1Type::SequenceOf(s) => s.constraints.clone(),
+            ASN1Type::ElsewhereDeclaredType(e) => e.constraints.clone(),
+            _ => vec![],
+        }
+    }
+
     pub fn link_constraint_reference(
         &mut self,
         name: &String,
@@ -880,6 +968,7 @@ pub enum ASN1Value {
     BitString(Vec<bool>),
     EnumeratedValue(String),
     ElsewhereDeclaredValue(String),
+    ObjectIdentifier(ObjectIdentifier),
 }
 
 impl ASN1Value {
@@ -1045,9 +1134,29 @@ impl ASN1Value {
             ASN1Value::Integer(i) => Ok(format!("{}", i)),
             ASN1Value::String(s) => Ok(s.clone()),
             ASN1Value::Real(r) => Ok(format!("{}", r)),
-            ASN1Value::BitString(_) => todo!(),
-            ASN1Value::EnumeratedValue(e) => Ok(e.clone()),
-            ASN1Value::ElsewhereDeclaredValue(e) => Ok(e.clone()),
+            ASN1Value::BitString(b) => {
+                let mut bits = b.iter().fold(String::new(), |mut acc, bit| {
+                    if *bit {
+                        acc.push_str("true,");
+                    } else {
+                        acc.push_str("false,");
+                    }
+                    acc
+                });
+                // remove the last comma
+                bits.pop();
+                Ok(format!("vec![{bits}]"))
+            }
+            ASN1Value::EnumeratedValue(e) => Ok(to_rust_snake_case(e)),
+            ASN1Value::ElsewhereDeclaredValue(e) => Ok(to_rust_const_case(e)),
+            ASN1Value::ObjectIdentifier(oid) => Ok(format!(
+                "[{}]",
+                oid.0
+                    .iter()
+                    .filter_map(|arc| arc.number.map(|id| id.to_string()))
+                    .collect::<Vec<String>>()
+                    .join(",")
+            )),
         }
     }
 }
@@ -1089,6 +1198,9 @@ impl asnr_traits::Declare for ASN1Value {
             ASN1Value::ElsewhereDeclaredValue(s) => {
                 format!("ASN1Value::ElsewhereDeclaredValue(\"{}\".into())", s)
             }
+            ASN1Value::ObjectIdentifier(oid) => {
+                format!("ASN1Value::ObjectIdentifier({})", oid.declare())
+            }
         }
     }
 }
@@ -1126,7 +1238,7 @@ impl asnr_traits::Declare for DeclarationElsewhere {
 }
 
 /// Tag classes
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub enum TagClass {
     Universal,
     Application,
@@ -1137,6 +1249,7 @@ pub enum TagClass {
 /// Representation of a tag
 #[derive(Debug, Clone, PartialEq)]
 pub struct AsnTag {
+    pub environment: TaggingEnvironment,
     pub tag_class: TagClass,
     pub id: u64,
 }
@@ -1144,8 +1257,8 @@ pub struct AsnTag {
 impl asnr_traits::Declare for AsnTag {
     fn declare(&self) -> String {
         format!(
-            "AsnTag {{ tag_class: TagClass::{:?}, id: {} }}",
-            self.tag_class, self.id
+            "AsnTag {{ tag_class: TagClass::{:?}, id: {}, environment: Explicitness::{:?} }}",
+            self.tag_class, self.id, self.environment
         )
     }
 }
@@ -1161,6 +1274,7 @@ impl From<(Option<&str>, u64)> for AsnTag {
         AsnTag {
             tag_class,
             id: value.1,
+            environment: TaggingEnvironment::Automatic,
         }
     }
 }

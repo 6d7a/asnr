@@ -9,6 +9,7 @@ proc-macro = true
 [dependencies]
 asnr-compiler = { path = "../asnr-compiler" }
 proc-macro2 = "1"
+syn= "2"
 
 [dev-dependencies]
 asnr-grammar = { path = "../asnr-grammar" }

@@ -32,10 +32,11 @@ use self::{
     integer::*,
     module_reference::module_reference,
     null::*,
+    object_identifier::*,
     octet_string::*,
     parameterization::parameterization,
-    sequence::{sequence, sequence_value},
     real::*,
+    sequence::{sequence, sequence_value},
     sequence_of::*,
     set::*,
 };
@@ -88,7 +89,7 @@ pub fn top_level_type_declaration<'a>(input: &'a str) -> IResult<&'a str, Toplev
         skip_ws(many0(comment)),
         skip_ws(type_identifier),
         opt(parameterization),
-        preceded(assignment, asn1_type),
+        preceded(assignment, pair(opt(asn_tag), asn1_type)),
     )))(input)
 }
 
@@ -155,11 +156,29 @@ pub fn elsewhere_declared_type<'a>(input: &'a str) -> IResult<&'a str, ASN1Type>
 }
 
 fn top_level_value_declaration<'a>(input: &'a str) -> IResult<&'a str, ToplevelValueDeclaration> {
-    into(tuple((
-        skip_ws(many0(comment)),
-        skip_ws(value_identifier),
-        skip_ws(identifier),
-        preceded(assignment, asn1_value),
+    into(alt((
+        tuple((
+            skip_ws(many0(comment)),
+            skip_ws(value_identifier),
+            skip_ws(alt((
+                // Cover built-in types with spaces
+                tag(OBJECT_IDENTIFIER),
+                tag(OCTET_STRING),
+                tag(BIT_STRING),
+                identifier,
+            ))),
+            preceded(assignment, asn1_value),
+        )),
+        // Cover object identifiers
+        tuple((
+            skip_ws(many0(comment)),
+            skip_ws(value_identifier),
+            skip_ws(tag(OBJECT_IDENTIFIER)),
+            preceded(
+                assignment,
+                map(object_identifier, |oid| ASN1Value::ObjectIdentifier(oid)),
+            ),
+        )),
     )))(input)
 }
 
@@ -388,7 +407,8 @@ mod tests {
                         }),
                         extensible: false
                     })]
-                })
+                }),
+                tag: None
             }
         );
     }
@@ -422,7 +442,8 @@ mod tests {
                         identifier: "InterferenceManagementZone".into(),
                         constraints: vec![]
                     }))
-                })
+                }),
+                tag: None
             }
         );
     }
@@ -631,7 +652,8 @@ mod tests {
                         r#type: "REG-EXT-ID-AND-TYPE".into(),
                         name: Some("Set".into())
                     }]
-                })
+                }),
+                tag: None
             }
         )
     }
@@ -675,7 +697,8 @@ mod tests {
                     ],
                     constraints: vec![]
                 }),
-                parameterization: None
+                parameterization: None,
+                tag: None
             }
         )
     }
