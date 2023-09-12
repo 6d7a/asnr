@@ -625,20 +625,9 @@ mod tests {
             Asnr::new()
                 .no_std(false)
                 .framework(crate::Framework::Rasn)
-                .add_asn_literal(r#"Test-Schema DEFINITIONS AUTOMATIC TAGS ::=
-
-                BEGIN
-                
-                OriginatingVehicleContainer ::= SEQUENCE {
-                 driveDirection DriveDirection DEFAULT forward,
-                }
-                
-                DriveDirection ::= ENUMERATED { forward (0), backward (1), unavailable (2) }
-                
-                END"#)
                 // .add_asn_by_path(PathBuf::from("test_asn1/AddGrpC.asn"))
                 // .add_asn_by_path(PathBuf::from("test_asn1/ETSI-ITS-CDD.asn"))
-                //.add_asn_by_path(PathBuf::from("test_asn1/v2x.asn"))
+                .add_asn_by_path(PathBuf::from("test_asn1/v2x.asn"))
                 //.add_asn_by_path(PathBuf::from("test_asn1/REGION.asn"))
                 //.add_asn_by_path(PathBuf::from("test_asn1/kerberos.asn"))
                 //.add_asn_by_path(PathBuf::from("test_asn1/denm_2_0.asn"))

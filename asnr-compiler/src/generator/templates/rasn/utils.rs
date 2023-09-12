@@ -3,12 +3,18 @@ use asnr_grammar::{
     encoding_rules::per_visible::{
         per_visible_range_constraints, CharsetSubset, PerVisibleAlphabetConstraints,
     },
-    types::{ ChoiceOption, Enumerated, SequenceOrSet, SequenceOrSetMember, Choice},
+    types::{Choice, ChoiceOption, Enumerated, SequenceOrSet, SequenceOrSetMember},
     utils::*,
-    ASN1Type, AsnTag, CharacterStringType, TagClass, ToplevelDeclaration, ToplevelTypeDeclaration, TaggingEnvironment,
+    ASN1Type, ASN1Value, AsnTag, CharacterStringType, TagClass, TaggingEnvironment,
+    ToplevelDeclaration, ToplevelTypeDeclaration,
 };
 
-use crate::generator::{error::GeneratorError, generate, templates::inner_name, Framework};
+use crate::generator::{
+    error::{GeneratorError, GeneratorErrorType},
+    generate,
+    templates::inner_name,
+    Framework,
+};
 
 pub fn format_range_annotations(
     signed: bool,
@@ -121,9 +127,9 @@ pub fn format_tag(tag: Option<&AsnTag>) -> String {
             TagClass::ContextSpecific => "context, ",
         };
         let (exp_pre, exp_post) = if tag.environment == TaggingEnvironment::Explicit {
-            ("explicit(",")")
+            ("explicit(", ")")
         } else {
-            ("","")
+            ("", "")
         };
         let id = tag.id;
         format!("tag({exp_pre}{class}{id}{exp_post})")
@@ -356,14 +362,30 @@ pub fn format_default_methods(
     let mut output = String::new();
     for member in members {
         if let Some(value) = member.default_value.as_ref() {
-            let (type_as_string, value_as_string) = match &member.r#type {
-                ASN1Type::BitString(_) => ("BitString".into(), format!("{}.iter().collect()", value.value_as_string(None)?)),
-                ASN1Type::ElsewhereDeclaredType(_) => {
-                    let ty = member.r#type.clone();
+            let (value_as_string, type_as_string) = match &member.r#type {
+                ASN1Type::BitString(_) => (
+                    format!("{}.iter().collect()", value.value_as_string(None)?),
+                    "BitString".into(),
+                ),
+                ASN1Type::ElsewhereDeclaredType(_)
+                    if !matches!(
+                        value,
+                        ASN1Value::EnumeratedValue {
+                            enumerated: _,
+                            enumerable: _
+                        }
+                    ) =>
+                {
                     let stringified_type = member.r#type.to_string();
-                    (stringified_type.clone(), format!("{stringified_type}({})", value.value_as_string(None)?))
+                    (
+                        format!("{stringified_type}({})", value.value_as_string(None)?),
+                        stringified_type,
+                    )
                 }
-                ty => (ty.to_string(), value.value_as_string(Some(&to_rust_title_case(&ty.to_string())))?),
+                ty => (
+                    value.value_as_string(Some(&to_rust_title_case(&ty.to_string())))?,
+                    ty.to_string(),
+                ),
             };
             let method_name = default_method_name(parent_name, &member.name);
             output.push_str(&format!(

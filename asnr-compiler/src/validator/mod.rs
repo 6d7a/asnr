@@ -35,8 +35,23 @@ impl Validator {
                     tld.r#type = tld.r#type.resolve_class_field_reference(&self.tlds);
                     self.tlds.insert(tld.name.clone(), ToplevelDeclaration::Type(tld));
                 }
-            } else if self.has_constraint_reference(&key)
-            {
+            } else if self.has_default_value_reference(&key) {
+                let mut tld = self.tlds.remove(&key).ok_or(ValidatorError { data_element: Some(key), details: "Could not find toplevel declaration to remove!".into(), kind: ValidatorErrorType::MissingDependency } )?;
+                if !tld.link_default_reference(&self.tlds) {
+                    warnings.push(
+                        Box::new(
+                            ValidatorError { 
+                                data_element: Some(tld.name().to_string()), 
+                                details: format!(
+                                    "Failed to link cross-reference to elsewhere defined value in default of {}", 
+                                    tld.name()), 
+                                kind: ValidatorErrorType::MissingDependency
+                            }
+                        )
+                    )
+                }
+                self.tlds.insert(tld.name().clone(), tld);
+            } else if self.has_constraint_reference(&key) {
                 let mut tld = self.tlds.remove(&key).ok_or(ValidatorError { data_element: Some(key), details: "Could not find toplevel declaration to remove!".into(), kind: ValidatorErrorType::MissingDependency } )?;
                 if !tld.link_constraint_reference(&self.tlds) {
                     warnings.push(
@@ -65,7 +80,7 @@ impl Validator {
                           }
                         },
                         ASN1Type::Enumerated(_) => {
-                            tld.value = ASN1Value::EnumeratedValue(id.to_owned());
+                            tld.value = ASN1Value::EnumeratedValue { enumerated: ty.name.clone(), enumerable: id.to_owned() };
                             self.tlds.remove(&key);
                             self.tlds.insert(tld.name.clone(), ToplevelDeclaration::Value(tld));
                         }
@@ -85,7 +100,7 @@ impl Validator {
         self
             .tlds
             .get(key)
-            .map(|t| t.has_value_reference())
+            .map(|t| t.has_constraint_reference())
             .unwrap_or(false)
     }
 
@@ -93,7 +108,7 @@ impl Validator {
         self
             .tlds
             .get(key)
-            .map(|t| t.has_value_reference())
+            .map(|t| t.has_default_reference())
             .unwrap_or(false)
     }
 

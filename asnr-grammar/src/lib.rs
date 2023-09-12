@@ -379,15 +379,13 @@ impl ToplevelDeclaration {
                             });
                         })
                     }
-                    ASN1Type::Choice(c) => {
-                        c.options.iter_mut().for_each(|o| {
-                            o.tag = o.tag.as_ref().map(|t| AsnTag {
-                                environment: env.clone(),
-                                tag_class: t.tag_class,
-                                id: t.id,
-                            });
-                        })
-                    }
+                    ASN1Type::Choice(c) => c.options.iter_mut().for_each(|o| {
+                        o.tag = o.tag.as_ref().map(|t| AsnTag {
+                            environment: env.clone(),
+                            tag_class: t.tag_class,
+                            id: t.id,
+                        });
+                    }),
                     _ => (),
                 }
             }
@@ -448,6 +446,71 @@ impl ToplevelDeclaration {
     }
 
     /// Traverses a top-level declaration to check for references to other top-level declarations
+    /// in a SEQUENCE's or SET's DEFAULT values.
+    pub fn has_default_reference(&self) -> bool {
+        match self {
+            ToplevelDeclaration::Type(t) => match &t.r#type {
+                ASN1Type::Sequence(s) | ASN1Type::Set(s) => {
+                    s.members.iter().fold(false, |acc, m| {
+                        acc || m
+                            .default_value
+                            .as_ref()
+                            .map_or(false, |d| d.is_elsewhere_declared())
+                    })
+                }
+                _ => false,
+            },
+            _ => false,
+        }
+    }
+
+    /// Traverses a top-level declaration to replace references to other top-level declarations
+    /// in a SEQUENCE's or SET's DEFAULT values.
+    pub fn link_default_reference(&mut self, tlds: &BTreeMap<String, ToplevelDeclaration>) -> bool {
+        match self {
+            ToplevelDeclaration::Type(t) => match &mut t.r#type {
+                ASN1Type::Sequence(s) | ASN1Type::Set(s) => {
+                    s.members.iter_mut().fold(false, |acc, m| {
+                        if let Some(default) = m.default_value.as_mut() {
+                            let maybe_id = if let ASN1Value::ElsewhereDeclaredValue(id) = default {
+                                Some(id.clone())
+                            } else {
+                                None
+                            };
+                            let enumerated_id = match &m.r#type {
+                                ASN1Type::Enumerated(_) => format!(
+                                    "{}{}",
+                                    to_rust_title_case(&t.name),
+                                    to_rust_title_case(&m.name)
+                                ),
+                                ASN1Type::ElsewhereDeclaredType(e) => {
+                                    if let Some(tld) = e.find_root_id(tlds) {
+                                        tld.name().clone()
+                                    } else {
+                                        return acc;
+                                    }
+                                }
+                                _ => return acc,
+                            };
+                            maybe_id.map_or(acc, |id| {
+                                *default = ASN1Value::EnumeratedValue {
+                                    enumerated: enumerated_id,
+                                    enumerable: id,
+                                };
+                                acc || true
+                            })
+                        } else {
+                            acc
+                        }
+                    })
+                }
+                _ => false,
+            },
+            _ => false,
+        }
+    }
+
+    /// Traverses a top-level declaration to check for references to other top-level declarations
     /// in a constraint. An example would be the constraint of the `intercontinental` field in the
     /// following example.
     /// ```ignore
@@ -459,7 +522,7 @@ impl ToplevelDeclaration {
     ///   intercontinental SEQUENCE (SIZE(0..fifteen)) OF Intercontinental
     /// }
     /// ```
-    pub fn has_value_reference(&self) -> bool {
+    pub fn has_constraint_reference(&self) -> bool {
         match self {
             ToplevelDeclaration::Type(t) => t.r#type.contains_constraint_reference(),
             // TODO: Cover constraint references in other types of top-level declarations
@@ -913,7 +976,10 @@ pub enum ASN1Value {
     Real(f64),
     String(String),
     BitString(Vec<bool>),
-    EnumeratedValue(String),
+    EnumeratedValue {
+        enumerated: String,
+        enumerable: String,
+    },
     ElsewhereDeclaredValue(String),
     ObjectIdentifier(ObjectIdentifier),
 }
@@ -1020,7 +1086,11 @@ impl ASN1Value {
 
     pub fn is_elsewhere_declared(&self) -> bool {
         match self {
-            Self::ElsewhereDeclaredValue(_) | Self::EnumeratedValue(_) => true,
+            Self::ElsewhereDeclaredValue(_)
+            | Self::EnumeratedValue {
+                enumerated: _,
+                enumerable: _,
+            } => true,
             _ => false,
         }
     }
@@ -1031,7 +1101,11 @@ impl ASN1Value {
         tlds: &BTreeMap<String, ToplevelDeclaration>,
     ) -> bool {
         match self {
-            Self::EnumeratedValue(e) | Self::ElsewhereDeclaredValue(e) => {
+            Self::EnumeratedValue {
+                enumerated: _,
+                enumerable: e,
+            }
+            | Self::ElsewhereDeclaredValue(e) => {
                 if let Some(v) = find_tld_or_enum_value_by_name(identifier, &e, tlds) {
                     *self = v;
                     return true;
@@ -1094,7 +1168,14 @@ impl ASN1Value {
                 bits.pop();
                 Ok(format!("vec![{bits}]"))
             }
-            ASN1Value::EnumeratedValue(e) => Ok(to_rust_snake_case(e)),
+            ASN1Value::EnumeratedValue {
+                enumerated,
+                enumerable,
+            } => Ok(format!(
+                "{}::{}",
+                to_rust_title_case(enumerated),
+                to_rust_title_case(enumerable)
+            )),
             ASN1Value::ElsewhereDeclaredValue(e) => Ok(to_rust_const_case(e)),
             ASN1Value::ObjectIdentifier(oid) => Ok(format!(
                 "[{}]",
@@ -1107,7 +1188,6 @@ impl ASN1Value {
         }
     }
 }
-
 
 /// Intermediate placeholder for a type declared in
 /// some other part of the ASN1 specification that is
@@ -1123,6 +1203,26 @@ impl From<(&str, Option<Vec<Constraint>>)> for DeclarationElsewhere {
         DeclarationElsewhere {
             identifier: value.0.into(),
             constraints: value.1.unwrap_or(vec![]),
+        }
+    }
+}
+
+impl DeclarationElsewhere {
+    pub fn find_root_id<'a>(
+        &self,
+        tlds: &'a BTreeMap<String, ToplevelDeclaration>,
+    ) -> Option<&'a ToplevelDeclaration> {
+        if let Some(ToplevelDeclaration::Type(ToplevelTypeDeclaration {
+            comments: _,
+            tag: _,
+            name: _,
+            r#type: ASN1Type::ElsewhereDeclaredType(e),
+            parameterization: _,
+        })) = tlds.get(&self.identifier)
+        {
+            e.find_root_id(tlds)
+        } else {
+            tlds.get(&self.identifier)
         }
     }
 }
@@ -1143,7 +1243,6 @@ pub struct AsnTag {
     pub tag_class: TagClass,
     pub id: u64,
 }
-
 
 impl From<(Option<&str>, u64)> for AsnTag {
     fn from(value: (Option<&str>, u64)) -> Self {

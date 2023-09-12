@@ -65,8 +65,8 @@ impl Declare for ASN1Value {
                     .collect::<Vec<String>>()
                     .join(", ")
             ),
-            ASN1Value::EnumeratedValue(s) => {
-                format!("ASN1Value::EnumeratedValue(\"{}\".into())", s)
+            ASN1Value::EnumeratedValue { enumerated, enumerable } => {
+                format!("ASN1Value::EnumeratedValue {{ enumerated: \"{enumerated}\".into(), enumerable: \"{enumerable}\".into() }}")
             }
             ASN1Value::ElsewhereDeclaredValue(s) => {
                 format!("ASN1Value::ElsewhereDeclaredValue(\"{}\".into())", s)
