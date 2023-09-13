@@ -293,7 +293,8 @@ impl<'a> Decoder<'a, BitIn<'a>> for Uper {
                 let (input, is_extended) = read_bit(input)?;
                 let (mut input, mut instance) = decode_unextended_sequence::<T>(&sequence, input)?;
                 input = if is_extended {
-                    let (mut input, length) = decode_normally_small_number(input)?;
+                    let (mut input, length) =
+                        decode_normally_small_number(input).map(|(rem, i)| (rem, i + 1))?; // extension bitmaps have a min length of 1
                     let mut extension_presence = vec![];
                     for _ in 0..length {
                         let parsed = read_bit(input)?;
@@ -559,7 +560,7 @@ fn decode_normally_small_number(input: BitIn) -> IResult<BitIn, usize> {
             })
         }
     } else {
-        read_int::<usize>(6)(input).map(|(rem, i)| (rem, i + 1))
+        read_int::<usize>(6)(input).map(|(rem, i)| (rem, i))
     }
 }
 
@@ -958,7 +959,7 @@ mod tests {
     }
 
     #[test]
-    fn decodes_extened_sequence() {
+    fn decodes_extended_sequence() {
         asn1!(
             "TestSequence ::= SEQUENCE
       {item-code INTEGER (0..254),
@@ -981,7 +982,7 @@ mod tests {
             1,0,1,0,0,1,0,
             1,0,1,0,0,1,0,
             1,0,1,1,0,0,1,
-            0,0,0,0,0,0,1,
+            0,0,0,0,0,0,0,
             1,
             0,0,0,0,0,0,0,1,
             1,0,0,0,0,0,0,0]))
@@ -1009,9 +1010,10 @@ mod tests {
             ChoiceExample::Normal(InnerChoiceExampleNormal)
         );
         assert_eq!(
-            ChoiceExample::decode::<Uper>(BSlice::from(
-                bits![static u8, Msb0; 1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0]
-            ))
+            ChoiceExample::decode::<Uper>(BSlice::from(bits![
+                    static u8, Msb0; 
+                    1,
+                    0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0]))
             .unwrap()
             .1,
             ChoiceExample::Medium(InnerChoiceExampleMedium)

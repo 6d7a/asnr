@@ -275,7 +275,7 @@ impl Encoder<u8, BitOut> for Uper {
                 output.push(!extension_bits.is_empty());
                 output.append(&mut root_bits);
                 if !extension_bits.is_empty() {
-                    output = encode_normally_small_number(extension_presence.len(), output)?;
+                    output = encode_normally_small_number(extension_presence.len() - 1, output)?;
                     for bit in extension_presence {
                         output.push(bit);
                     }
@@ -678,7 +678,7 @@ fn encode_normally_small_number<I>(number: I, mut output: BitOut) -> Result<BitO
 where
     I: num::Integer + num::ToPrimitive + Copy + Debug,
 {
-    if number.to_u32().unwrap_or(65) > 64 {
+    if number.to_u32().unwrap_or(64) > 63 {
         Err(EncodingError {
             details: "Encoding normally-small numbers larger than 63 is not supported yet!".into(),
         })
@@ -687,7 +687,7 @@ where
         encode_constrained_integer(
             number.to_u32().ok_or(EncodingError {
                 details: format!("Could not perform encoding of normally small number {number:?}"),
-            })? - 1,
+            })?,
             6,
             output,
         )
@@ -1218,7 +1218,7 @@ mod tests {
             bitvec![u8, Msb0;
             1, // is extended
             0,0,0,0,0,1,0,1, // value of item-code
-            0,0,0,0,0,1,0, // normally-small number denoting size of extension bitmap
+            0,0,0,0,0,0,1, // normally-small number denoting size of extension bitmap (min is 1)
             1,1, // extension presence bitmap
             0,0,0,0,0,0,0,1, // length of test-ext
             0, // value of test-ext
@@ -1256,7 +1256,7 @@ mod tests {
             bitvec![u8, Msb0;
             1, // is extended
             0,0,0,0,0,1,0,1, // value of item-code
-            0,0,0,0,0,1,0, // normally-small number denoting size of extension bitmap
+            0,0,0,0,0,0,1, // normally-small number denoting size of extension bitmap
             1,0, // extension presence bitmap
             0,0,0,0,0,0,0,1, // length of test-ext
             0, // value of test-ext
