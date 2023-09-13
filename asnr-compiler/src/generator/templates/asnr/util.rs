@@ -4,14 +4,14 @@ use asnr_grammar::{
         SyntaxToken,
     },
     types::*,
+    utils::*,
     *,
-    utils::*
 };
 
 use crate::{
     generator::{
         error::{GeneratorError, GeneratorErrorType},
-        generate, 
+        generate,
     },
     Framework,
 };
@@ -152,12 +152,19 @@ pub fn format_comments(comments: &String) -> String {
     }
 }
 
-pub fn format_enumeral(enumeral: &Enumeral) -> String {
-    (if enumeral.description.is_some() {
-        "/// ".to_owned() + enumeral.description.as_ref().unwrap() + "\n\t"
+pub fn format_enumeral(acc: String, enumeral: &Enumeral) -> String {
+    let rust_name = to_rust_title_case(&enumeral.name);
+    let name = if acc.contains(&format!("\t{} = ", &rust_name)) {
+        enumeral.name.replace("-", "_")
     } else {
-        "".to_owned()
-    }) + &to_rust_title_case(&enumeral.name)
+        rust_name
+    };
+    acc + "\n\t" + &enumeral
+        .description
+        .as_ref()
+        .map(|desc| "/// ".to_owned() + desc + "\n\t")
+        .unwrap_or_default()
+        + &name
         + " = "
         + &enumeral.index.to_string()
         + ","
@@ -225,9 +232,14 @@ pub fn format_option_encoder_from_int(args: (usize, &StringifiedNameType)) -> St
     )
 }
 
-pub fn format_enumeral_from_int(enumeral: &Enumeral) -> String {
-    let name = &to_rust_title_case(&enumeral.name);
-    format!("x if x == Self::{name} as i128 => Ok(Self::{name}),")
+pub fn format_enumeral_from_int(acc: String, enumeral: &Enumeral) -> String {
+    let rust_name = to_rust_title_case(&enumeral.name);
+    let name = if acc.contains(&format!("x if x == Self::{rust_name} as i128 => Ok(Self::{rust_name}),")) {
+        enumeral.name.replace("-","_")
+    } else {
+        rust_name
+    };
+    acc + "\n\t\t  " + &format!("x if x == Self::{name} as i128 => Ok(Self::{name}),")
 }
 
 pub fn format_distinguished_values(tld: &ToplevelTypeDeclaration) -> String {
@@ -317,18 +329,23 @@ pub fn extract_choice_options(
 ) -> Vec<StringifiedNameType> {
     options
         .iter()
-        .map(|m| {
-            let name = to_rust_title_case(&m.name);
+        .fold(Vec::new(), |mut acc, m| {
+            let rust_name = to_rust_title_case(&m.name);
+            let name = if acc.iter().any(|snt| &snt.name == &rust_name) {
+                m.name.replace("-", "_")
+            } else {
+                rust_name
+            };
             let rtype = match &m.r#type {
                 ASN1Type::ElsewhereDeclaredType(d) => to_rust_title_case(&d.identifier),
                 _ => inner_name(&m.name, parent_name),
             };
-            StringifiedNameType {
+            acc.push(StringifiedNameType {
                 name,
                 r#type: rtype,
-            }
+            });
+            acc
         })
-        .collect()
 }
 
 pub fn format_option_declaration(members: &Vec<StringifiedNameType>) -> String {
@@ -470,7 +487,7 @@ fn declare_inner_sequence_member(
             comments: " Inner type ".into(),
             name: inner_name(&member.name, parent_name),
             r#type: member.r#type.clone(),
-            tag: None
+            tag: None,
         }),
         None,
     )
@@ -487,7 +504,7 @@ fn declare_inner_choice_option(
             comments: " Inner type ".into(),
             name: inner_name(&option.name, parent_name),
             r#type: option.r#type.clone(),
-            tag: None
+            tag: None,
         }),
         None,
     )
@@ -500,23 +517,4 @@ fn inner_name(name: &String, parent_name: &String) -> String {
         type_name = initial.to_uppercase().collect::<String>() + name_chars.as_str();
     }
     format!("Inner{}{}", parent_name, type_name)
-}
-
-#[cfg(test)]
-mod tests {
-    use asnr_grammar::types::*;
-
-    use crate::generator::templates::asnr::util::format_enumeral;
-
-    #[test]
-    fn formats_enumeral() {
-        assert_eq!(
-            "///  This is a descriptive text\n\tTestEnumeral = 2,",
-            format_enumeral(&Enumeral {
-                name: "TestEnumeral".into(),
-                description: Some(" This is a descriptive text".into()),
-                index: 2
-            })
-        )
-    }
 }

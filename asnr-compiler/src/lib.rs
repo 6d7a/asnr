@@ -624,11 +624,11 @@ mod tests {
             "{:#?}",
             Asnr::new()
                 .no_std(false)
-                .framework(crate::Framework::Rasn)
+                .framework(crate::Framework::Asnr)
                 // .add_asn_by_path(PathBuf::from("test_asn1/AddGrpC.asn"))
                 // .add_asn_by_path(PathBuf::from("test_asn1/ETSI-ITS-CDD.asn"))
-                .add_asn_by_path(PathBuf::from("test_asn1/v2x.asn"))
-                //.add_asn_by_path(PathBuf::from("test_asn1/REGION.asn"))
+               // .add_asn_by_path(PathBuf::from("test_asn1/v2x.asn"))
+                .add_asn_by_path(PathBuf::from("test_asn1/REGION.asn"))
                 //.add_asn_by_path(PathBuf::from("test_asn1/kerberos.asn"))
                 //.add_asn_by_path(PathBuf::from("test_asn1/denm_2_0.asn"))
                 // .add_asn_by_path(PathBuf::from(
@@ -642,6 +642,7 @@ mod tests {
                 // .add_asn_by_path(PathBuf::from("test_asn1/CPM-PDU-Descriptions.asn"))
                 .set_output_path(PathBuf::from("../asnr-tests/tests/generated.rs"))
                 .compile()
+                // .compile_to_string()
                 .unwrap()
         )
     }

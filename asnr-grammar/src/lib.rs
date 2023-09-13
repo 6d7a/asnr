@@ -477,6 +477,10 @@ impl ToplevelDeclaration {
                             } else {
                                 None
                             };
+                            if let Some(ToplevelDeclaration::Value(id)) = tlds.get(&maybe_id.clone().unwrap_or_default()) {
+                                *default = id.value.clone();
+                                return true
+                            }
                             let enumerated_id = match &m.r#type {
                                 ASN1Type::Enumerated(_) => format!(
                                     "{}{}",
@@ -497,7 +501,7 @@ impl ToplevelDeclaration {
                                     enumerated: enumerated_id,
                                     enumerable: id,
                                 };
-                                acc || true
+                                true
                             })
                         } else {
                             acc

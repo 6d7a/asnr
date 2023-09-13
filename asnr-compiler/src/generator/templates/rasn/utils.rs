@@ -9,12 +9,7 @@ use asnr_grammar::{
     ToplevelDeclaration, ToplevelTypeDeclaration,
 };
 
-use crate::generator::{
-    error::{GeneratorError, GeneratorErrorType},
-    generate,
-    templates::inner_name,
-    Framework,
-};
+use crate::generator::{error::GeneratorError, generate, templates::inner_name, Framework};
 
 pub fn format_range_annotations(
     signed: bool,
@@ -100,8 +95,13 @@ pub fn format_enum_members(enumerated: &Enumerated) -> String {
     enumerated
         .members
         .iter()
-        .map(|e| {
-            let name = to_rust_title_case(&e.name);
+        .fold(String::new(), |acc, e| {
+            let rust_name = to_rust_title_case(&e.name);
+            let name = if acc.contains(&format!(r#" {rust_name} = "#)) {
+                e.name.replace("-", "_")
+            } else {
+                rust_name
+            };
             let index = e.index;
             let extension = if index >= first_extension_index.map_or(i128::MAX, |x| x as i128) {
                 r#"#[rasn(extension_addition)]
@@ -109,13 +109,9 @@ pub fn format_enum_members(enumerated: &Enumerated) -> String {
             } else {
                 ""
             };
-            format!(r#"{extension}{name} = {index}"#)
+                acc + &format!(r#"{extension} {name} = {index},
+                "#)
         })
-        .collect::<Vec<String>>()
-        .join(
-            r#",
-    "#,
-        )
 }
 
 pub fn format_tag(tag: Option<&AsnTag>) -> String {
@@ -180,8 +176,8 @@ fn format_sequence_member(
             (
                 i.constraints.clone(),
                 int_type_token(
-                    per_constraints.min().unwrap_or(i128::MIN),
-                    per_constraints.max().unwrap_or(i128::MAX),
+                    per_constraints.min().unwrap_or(i64::MIN as i128),
+                    per_constraints.max().unwrap_or(i64::MAX as i128),
                 )
                 .into(),
             )
@@ -237,11 +233,11 @@ pub fn format_choice_options(
     parent_name: &String,
 ) -> Result<String, GeneratorError> {
     let first_extension_index = choice.extensible;
-    Ok(choice
+    choice
         .options
         .iter()
         .enumerate()
-        .map(|(i, o)| {
+        .try_fold(String::new(), |acc, (i, o)| {
             let extension_annotation = if i >= first_extension_index.unwrap_or(usize::MAX)
                 && o.name.starts_with("ext_group_")
             {
@@ -251,21 +247,22 @@ pub fn format_choice_options(
             } else {
                 ""
             };
-            format_choice_option(o, parent_name, extension_annotation)
+            let rust_name = to_rust_title_case(&o.name);
+            let name = if acc.contains(&format!(" {rust_name}(")) {
+                o.name.replace("-", "_")
+            } else {
+                rust_name
+            };
+                format_choice_option(name, o, parent_name, extension_annotation).map(|opt| acc + &opt)
         })
-        .collect::<Result<Vec<String>, _>>()?
-        .join(
-            r#",
-    "#,
-        ))
 }
 
 fn format_choice_option(
+    name: String,
     member: &ChoiceOption,
     parent_name: &String,
     extension_annotation: &str,
 ) -> Result<String, GeneratorError> {
-    let name = to_rust_title_case(&member.name);
     let (mut all_constraints, formatted_type_name) = match &member.r#type {
         ASN1Type::Null => (vec![], "()".into()),
         ASN1Type::Boolean => (vec![], "bool".into()),
@@ -311,7 +308,8 @@ fn format_choice_option(
         alphabet_annotations,
         tag,
     ]);
-    Ok(format!(r#"{annotations}{name}({formatted_type_name})"#))
+    Ok(format!(r#"{annotations} {name}({formatted_type_name}),
+    "#))
 }
 
 pub fn string_type(c_type: &CharacterStringType) -> String {

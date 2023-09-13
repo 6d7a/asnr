@@ -1,6 +1,6 @@
 use nom::{
     bytes::complete::tag,
-    character::complete::char,
+    character::complete::{char, i128},
     combinator::{into, opt},
     multi::{many0, separated_list0},
     sequence::{terminated, tuple},
@@ -52,10 +52,16 @@ pub fn sequence<'a>(input: &'a str) -> IResult<&'a str, ASN1Type> {
                     opt(many0(terminated(
                         skip_ws_and_comments(alt((
                             map(
-                                in_version_brackets(many1(terminated(
-                                    skip_ws_and_comments(sequence_or_set_member),
-                                    optional_comma,
-                                ))),
+                                in_version_brackets(preceded(
+                                    opt(pair(
+                                        skip_ws_and_comments(i128),
+                                        skip_ws_and_comments(char(':')),
+                                    )),
+                                    skip_ws_and_comments(many1(terminated(
+                                        skip_ws_and_comments(sequence_or_set_member),
+                                        optional_comma,
+                                    ))),
+                                )),
                                 |ext_group| SequenceOrSetMember {
                                     name: String::from("ext_group_")
                                         + &ext_group.first().unwrap().name,
@@ -579,34 +585,38 @@ mod tests {
                         r#type: ASN1Type::Sequence(SequenceOrSet {
                             extensible: None,
                             constraints: vec![],
-                            members: vec![SequenceOrSetMember {
-                                name: "alternate-item-code".into(),
-                                tag: None,
-                                r#type: ASN1Type::Integer(Integer {
-                                    constraints: vec![Constraint::SubtypeConstraint(ElementSet {
-                                        set: ElementOrSetOperation::Element(
-                                            SubtypeElement::ValueRange {
-                                                min: Some(ASN1Value::Integer(0)),
-                                                max: Some(ASN1Value::Integer(254)),
+                            members: vec![
+                                SequenceOrSetMember {
+                                    name: "alternate-item-code".into(),
+                                    tag: None,
+                                    r#type: ASN1Type::Integer(Integer {
+                                        constraints: vec![Constraint::SubtypeConstraint(
+                                            ElementSet {
+                                                set: ElementOrSetOperation::Element(
+                                                    SubtypeElement::ValueRange {
+                                                        min: Some(ASN1Value::Integer(0)),
+                                                        max: Some(ASN1Value::Integer(254)),
+                                                        extensible: false
+                                                    }
+                                                ),
                                                 extensible: false
                                             }
-                                        ),
-                                        extensible: false
-                                    })],
-                                    distinguished_values: None
-                                }),
-                                default_value: None,
-                                is_optional: false,
-                                constraints: vec![]
-                            },
-                            SequenceOrSetMember {
-                                name: "and-another".into(),
-                                tag: None,
-                                r#type: ASN1Type::Boolean,
-                                default_value: Some(ASN1Value::Boolean(true)),
-                                is_optional: true,
-                                constraints: vec![]
-                            }]
+                                        )],
+                                        distinguished_values: None
+                                    }),
+                                    default_value: None,
+                                    is_optional: false,
+                                    constraints: vec![]
+                                },
+                                SequenceOrSetMember {
+                                    name: "and-another".into(),
+                                    tag: None,
+                                    r#type: ASN1Type::Boolean,
+                                    default_value: Some(ASN1Value::Boolean(true)),
+                                    is_optional: true,
+                                    constraints: vec![]
+                                }
+                            ]
                         }),
                         default_value: None,
                         is_optional: false,

@@ -207,14 +207,11 @@ impl Generator for AsnrGenerator {
     ) -> Result<String, GeneratorError> {
         if let ASN1Type::Enumerated(ref mut enumerated) = tld.r#type {
             enumerated.members.sort_by(|a, b| a.index.cmp(&b.index));
-            handle_duplicate_enumerals(&mut enumerated.members);
             let name = to_rust_title_case(&tld.name);
             let mut enumerals = enumerated
                 .members
                 .iter()
-                .map(format_enumeral)
-                .collect::<Vec<String>>()
-                .join("\n\t");
+                .fold(String::from("\t"), format_enumeral);
             if enumerated.extensible.is_some() {
                 enumerals.push_str("\n\tUnknownExtension")
             }
@@ -234,9 +231,7 @@ impl Generator for AsnrGenerator {
             let enumerals_from_int = enumerated
                 .members
                 .iter()
-                .map(format_enumeral_from_int)
-                .collect::<Vec<String>>()
-                .join("\n\t\t  ");
+                .fold(String::new(), format_enumeral_from_int);
             Ok(enumerated_template(
                 format_comments(&tld.comments),
                 custom_derive.unwrap_or(DERIVE_DEFAULT),
