@@ -4,12 +4,25 @@ use asnr_grammar::{
         per_visible_range_constraints, CharsetSubset, PerVisibleAlphabetConstraints,
     },
     types::{Choice, ChoiceOption, Enumerated, SequenceOrSet, SequenceOrSetMember},
-    utils::*,
+    utils::{to_rust_snake_case, to_rust_title_case},
     ASN1Type, ASN1Value, AsnTag, CharacterStringType, TagClass, TaggingEnvironment,
     ToplevelDeclaration, ToplevelTypeDeclaration,
 };
 
 use crate::generator::{error::GeneratorError, generate, templates::inner_name, Framework};
+
+pub fn int_type_token(opt_min: Option<i128>, opt_max: Option<i128>) -> &'static str {
+    if let (Some(min), Some(max)) = (opt_min, opt_max) {
+        let token = asnr_grammar::utils::int_type_token(min, max);
+        if token.contains("128") {
+            "Integer"
+        } else {
+            token
+        }
+    } else {
+        "Integer"
+    }
+}
 
 pub fn format_range_annotations(
     signed: bool,
@@ -92,26 +105,25 @@ pub fn format_alphabet_annotations(
 
 pub fn format_enum_members(enumerated: &Enumerated) -> String {
     let first_extension_index = enumerated.extensible;
-    enumerated
-        .members
-        .iter()
-        .fold(String::new(), |acc, e| {
-            let rust_name = to_rust_title_case(&e.name);
-            let name = if acc.contains(&format!(r#" {rust_name} = "#)) {
-                e.name.replace("-", "_")
-            } else {
-                rust_name
-            };
-            let index = e.index;
-            let extension = if index >= first_extension_index.map_or(i128::MAX, |x| x as i128) {
-                r#"#[rasn(extension_addition)]
+    enumerated.members.iter().fold(String::new(), |acc, e| {
+        let rust_name = to_rust_title_case(&e.name);
+        let name = if acc.contains(&format!(r#" {rust_name} = "#)) {
+            e.name.replace("-", "_")
+        } else {
+            rust_name
+        };
+        let index = e.index;
+        let extension = if index >= first_extension_index.map_or(i128::MAX, |x| x as i128) {
+            r#"#[rasn(extension_addition)]
             "#
-            } else {
-                ""
-            };
-                acc + &format!(r#"{extension} {name} = {index},
-                "#)
-        })
+        } else {
+            ""
+        };
+        acc + &format!(
+            r#"{extension} {name} = {index},
+                "#
+        )
+    })
 }
 
 pub fn format_tag(tag: Option<&AsnTag>) -> String {
@@ -175,15 +187,12 @@ fn format_sequence_member(
             let per_constraints = per_visible_range_constraints(true, &i.constraints)?;
             (
                 i.constraints.clone(),
-                int_type_token(
-                    per_constraints.min().unwrap_or(i64::MIN as i128),
-                    per_constraints.max().unwrap_or(i64::MAX as i128),
-                )
-                .into(),
+                int_type_token(per_constraints.min(), per_constraints.max()).into(),
             )
         }
         ASN1Type::Real(_) => (vec![], "f64".into()),
         ASN1Type::BitString(b) => (b.constraints.clone(), "BitString".into()),
+        ASN1Type::ObjectIdentifier(b) => (b.constraints.clone(), "Oid".into()),
         ASN1Type::OctetString(o) => (o.constraints.clone(), "OctetString".into()),
         ASN1Type::CharacterString(c) => (c.constraints.clone(), string_type(&c.r#type)),
         ASN1Type::Enumerated(_)
@@ -253,7 +262,7 @@ pub fn format_choice_options(
             } else {
                 rust_name
             };
-                format_choice_option(name, o, parent_name, extension_annotation).map(|opt| acc + &opt)
+            format_choice_option(name, o, parent_name, extension_annotation).map(|opt| acc + &opt)
         })
 }
 
@@ -270,13 +279,10 @@ fn format_choice_option(
             let per_constraints = per_visible_range_constraints(true, &i.constraints)?;
             (
                 i.constraints.clone(),
-                int_type_token(
-                    per_constraints.min().unwrap_or(i128::MIN),
-                    per_constraints.max().unwrap_or(i128::MAX),
-                )
-                .into(),
+                int_type_token(per_constraints.min(), per_constraints.max()).into(),
             )
         }
+        ASN1Type::ObjectIdentifier(b) => (b.constraints.clone(), "Oid".into()),
         ASN1Type::Real(_) => (vec![], "f64".into()),
         ASN1Type::BitString(b) => (b.constraints.clone(), "BitString".into()),
         ASN1Type::OctetString(o) => (o.constraints.clone(), "OctetString".into()),
@@ -308,8 +314,10 @@ fn format_choice_option(
         alphabet_annotations,
         tag,
     ]);
-    Ok(format!(r#"{annotations} {name}({formatted_type_name}),
-    "#))
+    Ok(format!(
+        r#"{annotations} {name}({formatted_type_name}),
+    "#
+    ))
 }
 
 pub fn string_type(c_type: &CharacterStringType) -> String {

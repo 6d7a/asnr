@@ -266,6 +266,23 @@ impl
     }
 }
 
+
+/// Representation of an ASN1 OBJECT IDENTIFIER data element
+/// with corresponding constraints
+#[derive(Debug, Clone, PartialEq)]
+pub struct ObjectIdentifier {
+    pub constraints: Vec<Constraint>,
+}
+
+impl From<Option<Vec<Constraint>>> for ObjectIdentifier {
+    fn from(value: Option<Vec<Constraint>>) -> Self {
+        ObjectIdentifier {
+            constraints: value.unwrap_or(vec![]),
+        }
+    }
+}
+
+
 /// Representation of an ASN1 CHOICE data element
 /// with corresponding members and extension information
 #[derive(Debug, Clone, PartialEq)]

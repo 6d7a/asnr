@@ -58,6 +58,40 @@ where
     }
 }
 
+/// Variant of `nom`'s `take_until` that only breaks off ingest at the `end_tag`
+/// if it does not also match the `however_tag`.
+///
+/// __Example__: In an ASN1 PATTERN constraint, the following input could be found:
+///
+/// ```"[a-zA-Z]#""(1,8)""(-[a-zA-Z0-9]#(1,8))*"```
+///
+/// `take_until("\"")` would match only `[a-zA-Z]#`, until the next `"`.
+/// `take_unitl_and_not("\"","\"\"")` will match the entire pattern
+/// `[a-zA-Z]#""(1,8)""(-[a-zA-Z0-9]#(1,8))*`
+pub fn take_until_and_not<'a, Error: ParseError<&'a str>>(
+    end_tag: &'a str,
+    however_tag: &'a str,
+) -> impl Fn(&'a str) -> IResult<&'a str, &'a str, Error> {
+    move |i: &str| {
+        let t1 = end_tag.clone();
+        let t2 = however_tag.clone();
+        fn recursive_until<'a, Error: ParseError<&'a str>>(
+            i: &'a str,
+            index: usize,
+            t1: &'a str,
+            t2: &'a str,
+        ) -> IResult<&'a str, &'a str, Error> {
+            match ((&i[index..]).find_substring(t1), (&i[index..]).find_substring(t2)) {
+                (None, _) => Err(Err::Error(Error::from_error_kind(i, ErrorKind::TakeUntil))),
+                (Some(offset), None) => Ok(i.take_split(index + offset)),
+                (Some(_), Some(offset)) => recursive_until(i, index + offset + 2, t1, t2),
+            }
+        }
+        let res: IResult<_, _, Error> = recursive_until(i, 0, t1, t2);
+        res
+    }
+}
+
 /// A recursive variant of `nom::bytes::complete::take_until()` for nested delimiters.
 /// Takes an opening and a closing tag and returns the input up to the point where the
 /// parser hits an unbalanced closing tag. It is designed to work inside the
@@ -65,7 +99,7 @@ where
 ///
 /// ### Params
 /// * `opening_tag` - Opening tag of the delimited sequence. When the parser meets an opening tag, it increases the number of closing tags that need to be matched before returning.
-/// * `closing_tag` - Closing tag of the delimited sequence. The parser will consume all balanced closing tags and returns once the first unbalanced closing tag is met.
+/// * `closing_tag` - Closing tag of the delimited sequence. The parser will consume all balanced closing tags and returns once the first unbalanced closing tag is met. It does not consume the unbalanced tag.
 pub fn take_until_unbalanced<'a>(
     opening_tag: &'a str,
     closing_tag: &'a str,
@@ -135,17 +169,15 @@ where
 mod tests {
 
     use crate::parser::asn1_value;
-    use crate::parser::common::{
-        in_parentheses, skip_ws_and_comments,
-    };
-    
-    use crate::parser::util::opt_delimited;
-    
+    use crate::parser::common::{in_parentheses, skip_ws_and_comments};
+
+    use crate::parser::util::{opt_delimited, take_until_and_not};
+
     use asnr_grammar::{ASN1Value, LEFT_PARENTHESIS, RIGHT_PARENTHESIS};
     use nom::character::streaming::char;
-    
+
     use nom::multi::many1;
-    
+
     use nom::{bytes::complete::tag, error::Error};
 
     #[test]
@@ -209,5 +241,33 @@ mod tests {
             )))("((5))"),
             Ok(("", vec![ASN1Value::Integer(5)]))
         );
+    }
+
+    #[test]
+    fn takes_until_and_not() {
+        assert_eq!(
+            take_until_and_not::<nom::error::Error<&str>>("\"", "\"\"")(
+                r#"[a-zA-Z]#""(1,8)""(-[a-zA-Z0-9]#(1,8))*""#
+            )
+            .unwrap()
+            .1,
+            r#"[a-zA-Z]#""(1,8)""(-[a-zA-Z0-9]#(1,8))*"#
+        );
+        assert_eq!(
+            take_until_and_not::<nom::error::Error<&str>>("\"", "\"\"")(
+                r#"[a-zA-Z]#(1,8)""(-[a-zA-Z0-9]#(1,8))*""#
+            )
+            .unwrap()
+            .1,
+            r#"[a-zA-Z]#(1,8)""(-[a-zA-Z0-9]#(1,8))*"#
+        );
+        assert_eq!(
+            take_until_and_not::<nom::error::Error<&str>>("\"", "\"\"")(
+                r#"[a-zA-Z]#(1,8)(-[a-zA-Z0-9]#(1,8))*""#
+            )
+            .unwrap()
+            .1,
+            r#"[a-zA-Z]#(1,8)(-[a-zA-Z0-9]#(1,8))*"#
+        )
     }
 }

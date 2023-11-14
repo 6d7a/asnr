@@ -106,6 +106,7 @@ pub fn top_level_information_declaration<'a>(
 pub fn asn1_type<'a>(input: &'a str) -> IResult<&'a str, ASN1Type> {
     alt((
         null,
+        object_identifier,
         sequence_of,
         sequence,
         set,
@@ -176,7 +177,7 @@ fn top_level_value_declaration<'a>(input: &'a str) -> IResult<&'a str, ToplevelV
             skip_ws(tag(OBJECT_IDENTIFIER)),
             preceded(
                 assignment,
-                map(object_identifier, |oid| ASN1Value::ObjectIdentifier(oid)),
+                map(object_identifier_value, |oid| ASN1Value::ObjectIdentifier(oid)),
             ),
         )),
     )))(input)

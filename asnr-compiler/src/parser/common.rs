@@ -70,7 +70,7 @@ pub fn identifier<'a>(input: &'a str) -> IResult<&'a str, &'a str> {
 pub fn type_identifier<'a>(input: &'a str) -> IResult<&'a str, &'a str> {
     map_res(
         recognize(pair(
-            one_of("ABCDEFGHIJKLMNOPQRSTUVWXYZ"),
+            one_of("ABCDEFGHIJKLMNOPQRSTUVWXYZ01234567890"),
             many0(alt((preceded(char('-'), alphanumeric1), alphanumeric1))),
         )),
         |identifier| {
@@ -222,14 +222,14 @@ pub fn default<'a>(input: &'a str) -> IResult<&'a str, Option<ASN1Value>> {
 pub fn uppercase_identifier<'a>(input: &'a str) -> IResult<&'a str, &'a str> {
     alt((
         recognize(pair(
-            one_of("ABCDEFGHIJKLMNOPQRSTUVWXYZ"),
+            one_of("ABCDEFGHIJKLMNOPQRSTUVWXYZ01234567890"),
             many1(alt((
-                preceded(char('-'), one_of("ABCDEFGHIJKLMNOPQRSTUVWXYZ")),
-                one_of("ABCDEFGHIJKLMNOPQRSTUVWXYZ"),
+                preceded(char('-'), one_of("ABCDEFGHIJKLMNOPQRSTUVWXYZ01234567890")),
+                one_of("ABCDEFGHIJKLMNOPQRSTUVWXYZ01234567890"),
             ))),
         )),
         terminated(
-            recognize(one_of("ABCDEFGHIJKLMNOPQRSTUVWXYZ")),
+            recognize(one_of("ABCDEFGHIJKLMNOPQRSTUVWXYZ01234567890")),
             peek(is_not("abcdefghijklmnopqrstuvwxyz-")),
         ),
     ))(input)

@@ -2,7 +2,7 @@
 //! parsing ASN1 OBJECT IDENTIFIERs in a specification.
 //! OBJECT IDENTIFIERs serve to uniquely and globally (really globally!)
 //! identify a so-called _information object_. 
-use asnr_grammar::{ObjectIdentifier, ObjectIdentifierArc, OBJECT_IDENTIFIER};
+use asnr_grammar::{ObjectIdentifierValue, ObjectIdentifierArc, OBJECT_IDENTIFIER, ASN1Type};
 
 use nom::{
     branch::alt,
@@ -13,7 +13,7 @@ use nom::{
     IResult, multi::many1,
 };
 
-use super::common::{identifier, in_braces, in_parentheses, skip_ws, skip_ws_and_comments};
+use super::{common::{identifier, in_braces, in_parentheses, skip_ws, skip_ws_and_comments}, constraint::constraint};
 
 /// Tries to parse an ASN1 OBJECT IDENTIFIER
 /// As opposed to other ASN1 "types", an OBJECT IDENTIFIER is always a value.
@@ -26,13 +26,20 @@ use super::common::{identifier, in_braces, in_parentheses, skip_ws, skip_ws_and_
 /// If the match succeeds, the parser will consume the match and return the remaining string
 /// and an `ObjectIdentifier` value representing the ASN1 declaration.
 /// If the match fails, the parser will not consume the input and will return an error.
-pub fn object_identifier<'a>(input: &'a str) -> IResult<&'a str, ObjectIdentifier> {
+pub fn object_identifier_value<'a>(input: &'a str) -> IResult<&'a str, ObjectIdentifierValue> {
     into(skip_ws_and_comments(preceded(
         opt(tag(OBJECT_IDENTIFIER)),
         in_braces(
           many1(skip_ws(object_identifier_arc))
         )),
     ))(input)
+}
+
+pub fn object_identifier<'a>(input: &'a str) -> IResult<&'a str, ASN1Type> {
+    map(into(preceded(
+        skip_ws_and_comments(tag(OBJECT_IDENTIFIER)),
+        opt(skip_ws_and_comments(constraint)),
+    )), |oid| ASN1Type::ObjectIdentifier(oid))(input)
 }
 
 fn object_identifier_arc<'a>(input: &'a str) -> IResult<&'a str, ObjectIdentifierArc> {

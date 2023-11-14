@@ -112,6 +112,8 @@ pub const DOT: char = '.';
 
 // Subtyping tokens
 pub const SIZE: &'static str = "SIZE";
+pub const CONSTRAINED_BY: &'static str = "CONSTRAINED BY";
+pub const PATTERN: &'static str = "PATTERN";
 pub const DEFAULT: &'static str = "DEFAULT";
 pub const OPTIONAL: &'static str = "OPTIONAL";
 pub const WITH_COMPONENTS: &'static str = "WITH COMPONENTS";
@@ -251,12 +253,12 @@ pub enum ExtensibilityEnvironment {
 pub struct Import {
     pub types: Vec<String>,
     pub origin_name: String,
-    pub origin_identifier: ObjectIdentifier,
+    pub origin_identifier: ObjectIdentifierValue,
     pub with_successors: bool,
 }
 
-impl From<(Vec<&str>, (&str, ObjectIdentifier, Option<&str>))> for Import {
-    fn from(value: (Vec<&str>, (&str, ObjectIdentifier, Option<&str>))) -> Self {
+impl From<(Vec<&str>, (&str, ObjectIdentifierValue, Option<&str>))> for Import {
+    fn from(value: (Vec<&str>, (&str, ObjectIdentifierValue, Option<&str>))) -> Self {
         Self {
             types: value.0.into_iter().map(|s| String::from(s)).collect(),
             origin_name: value.1 .0.into(),
@@ -269,7 +271,7 @@ impl From<(Vec<&str>, (&str, ObjectIdentifier, Option<&str>))> for Import {
 #[derive(Debug, Clone, PartialEq)]
 pub struct ModuleReference {
     pub name: String,
-    pub module_identifier: Option<ObjectIdentifier>,
+    pub module_identifier: Option<ObjectIdentifierValue>,
     pub encoding_reference_default: Option<EncodingReferenceDefault>,
     pub tagging_environment: TaggingEnvironment,
     pub extensibility_environment: ExtensibilityEnvironment,
@@ -279,7 +281,7 @@ pub struct ModuleReference {
 impl
     From<(
         &str,
-        Option<ObjectIdentifier>,
+        Option<ObjectIdentifierValue>,
         (
             Option<EncodingReferenceDefault>,
             TaggingEnvironment,
@@ -291,7 +293,7 @@ impl
     fn from(
         value: (
             &str,
-            Option<ObjectIdentifier>,
+            Option<ObjectIdentifierValue>,
             (
                 Option<EncodingReferenceDefault>,
                 TaggingEnvironment,
@@ -312,9 +314,9 @@ impl
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct ObjectIdentifier(pub Vec<ObjectIdentifierArc>);
+pub struct ObjectIdentifierValue(pub Vec<ObjectIdentifierArc>);
 
-impl From<Vec<ObjectIdentifierArc>> for ObjectIdentifier {
+impl From<Vec<ObjectIdentifierArc>> for ObjectIdentifierValue {
     fn from(value: Vec<ObjectIdentifierArc>) -> Self {
         Self(value)
     }
@@ -634,6 +636,7 @@ pub enum ASN1Type {
     SequenceOf(SequenceOf),
     Set(SequenceOrSet),
     // SetOf,
+    ObjectIdentifier(ObjectIdentifier),
     ElsewhereDeclaredType(DeclarationElsewhere),
     InformationObjectFieldReference(InformationObjectFieldReference),
 }
@@ -642,6 +645,7 @@ impl ASN1Type {
     pub fn constraints(&self) -> Vec<Constraint> {
         match self {
             ASN1Type::Integer(i) => i.constraints.clone(),
+            ASN1Type::ObjectIdentifier(i) => i.constraints.clone(),
             ASN1Type::BitString(b) => b.constraints.clone(),
             ASN1Type::OctetString(o) => o.constraints.clone(),
             ASN1Type::CharacterString(c) => c.constraints.clone(),
@@ -662,7 +666,12 @@ impl ASN1Type {
         match self {
             ASN1Type::Null => false,
             ASN1Type::Boolean => false,
-            ASN1Type::Integer(i) => i
+            ASN1Type::ObjectIdentifier(i) => i
+                .constraints
+                .iter_mut()
+                .map(|c| c.link_cross_reference(name, tlds))
+                .fold(false, |acc, b| acc || b),
+                ASN1Type::Integer(i) => i
                 .constraints
                 .iter_mut()
                 .map(|c| c.link_cross_reference(name, tlds))
@@ -746,6 +755,7 @@ impl ASN1Type {
             ASN1Type::Null => false,
             ASN1Type::Boolean => false,
             ASN1Type::Integer(i) => i.constraints.iter().any(|c| c.has_cross_reference()),
+            ASN1Type::ObjectIdentifier(i) => i.constraints.iter().any(|c| c.has_cross_reference()),
             ASN1Type::BitString(b) => b.constraints.iter().any(|c| c.has_cross_reference()),
             ASN1Type::OctetString(o) => o.constraints.iter().any(|c| c.has_cross_reference()),
             ASN1Type::CharacterString(c) => c.constraints.iter().any(|c| c.has_cross_reference()),
@@ -881,6 +891,7 @@ impl ToString for ASN1Type {
             ASN1Type::CharacterString(_) => "String".to_owned(),
             ASN1Type::Enumerated(_) => todo!(),
             ASN1Type::Choice(_) => todo!(),
+            ASN1Type::ObjectIdentifier(_) => todo!(),
             ASN1Type::Sequence(_) => todo!(),
             ASN1Type::SequenceOf(_) => todo!(),
             ASN1Type::Set(_) => todo!(),
@@ -985,7 +996,7 @@ pub enum ASN1Value {
         enumerable: String,
     },
     ElsewhereDeclaredValue(String),
-    ObjectIdentifier(ObjectIdentifier),
+    ObjectIdentifier(ObjectIdentifierValue),
 }
 
 impl ASN1Value {

@@ -1,5 +1,5 @@
 use asnr_grammar::{
-    utils::*, ASN1Type, ASN1Value, ToplevelDeclaration, ToplevelTypeDeclaration,
+    utils::{to_rust_const_case, to_rust_title_case}, ASN1Type, ASN1Value, ToplevelDeclaration, ToplevelTypeDeclaration,
     ToplevelValueDeclaration, INTEGER,
 };
 
@@ -22,7 +22,7 @@ use super::{
     utils::{
         format_alphabet_annotations, format_choice_options, format_default_methods,
         format_enum_members, format_nested_choice_options, format_nested_sequence_members,
-        format_range_annotations, format_sequence_or_set_members, format_tag, string_type,
+        format_range_annotations, format_sequence_or_set_members, format_tag, string_type, int_type_token,
     },
 };
 
@@ -56,7 +56,7 @@ impl RasnGenerator {
                 Ok(integer_value_template(
                     format_comments(&tld.comments),
                     to_rust_const_case(&tld.name),
-                    int_type_token(i, i),
+                    int_type_token(Some(i), Some(i)),
                     i.to_string(),
                 ))
             } else {

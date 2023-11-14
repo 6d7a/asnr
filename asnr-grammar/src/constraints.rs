@@ -1,4 +1,4 @@
-use alloc::{boxed::Box, format, string::String, vec, vec::Vec, collections::BTreeMap};
+use alloc::{boxed::Box, collections::BTreeMap, format, string::String, vec, vec::Vec};
 
 use crate::{
     error::{GrammarError, GrammarErrorType},
@@ -229,6 +229,251 @@ impl From<(usize, &str)> for RelationalConstraint {
     }
 }
 
+/// Representation of a pattern constraint
+/// _See: ITU-T X.680 (02/2021) 51.9_
+#[derive(Debug, Clone, PartialEq)]
+pub struct PatternConstraint {
+    pub pattern: String,
+}
+
+impl From<&str> for PatternConstraint {
+    fn from(value: &str) -> Self {
+        Self {
+            pattern: value.into(),
+        }
+    }
+}
+
+/// Representation of a user-defined constraint
+/// _See: ITU-T X.682 (02/2021) 9_
+#[derive(Debug, Clone, PartialEq)]
+pub struct UserDefinedConstraint {
+    pub definition: String,
+}
+
+impl From<&str> for UserDefinedConstraint {
+    fn from(value: &str) -> Self {
+        Self {
+            definition: value.into(),
+        }
+    }
+}
+
+/// Representation of a property settings constraint
+/// _See: ITU-T X.680 (02/2021) 51.10_
+#[derive(Debug, Clone, PartialEq)]
+pub struct PropertySettings {
+    pub property_settings_list: Vec<PropertyAndSettingsPair>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum PropertyAndSettingsPair {
+    Basic(BasicSettings),
+    Date(DateSettings),
+    Year(YearSettings),
+    Time(TimeSettings),
+    LocalOrUtc(LocalOrUtcSettings),
+    IntervalType(IntervalTypeSettings),
+    StartEndPoint(StartEndPointSettings),
+    Recurrence(RecurrenceSettings),
+    Midnight(MidnightSettings),
+}
+
+pub trait PropertySetting {
+    const NAME: &'static str;
+
+    fn setting_name<'a>(&'a self) -> String;
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum BasicSettings {
+    Date,
+    Time,
+    DateTime,
+    Interval,
+    RecInterval,
+}
+
+impl PropertySetting for BasicSettings {
+    const NAME: &'static str = "Basic";
+
+    fn setting_name<'a>(&'a self) -> String {
+        match self {
+            BasicSettings::Date => "Date".into(),
+            BasicSettings::Time => "Time".into(),
+            BasicSettings::DateTime => "Date-Time".into(),
+            BasicSettings::Interval => "Interval".into(),
+            BasicSettings::RecInterval => "Rec-Interval".into(),
+        }
+    }
+}
+
+impl PropertySetting for DateSettings {
+    const NAME: &'static str = "Date";
+
+    fn setting_name<'a>(&'a self) -> String {
+        match self {
+            DateSettings::Century => "C".into(),
+            DateSettings::Year => "Y".into(),
+            DateSettings::YearMonth => "YM".into(),
+            DateSettings::YearMonthDay => "YMD".into(),
+            DateSettings::YearDay => "YD".into(),
+            DateSettings::YearWeek => "YW".into(),
+            DateSettings::YearWeekDay => "YWD".into(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum DateSettings {
+    Century,
+    Year,
+    YearMonth,
+    YearMonthDay,
+    YearDay,
+    YearWeek,
+    YearWeekDay,
+}
+
+impl PropertySetting for YearSettings {
+    const NAME: &'static str = "Year";
+
+    fn setting_name<'a>(&'a self) -> String {
+        match self {
+            YearSettings::Basic => "Basic".into(),
+            YearSettings::Proleptic => "Proleptic".into(),
+            YearSettings::Negative => "Negative".into(),
+            YearSettings::Large(i) => format!("L{i}"),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum YearSettings {
+    Basic,
+    Proleptic,
+    Negative,
+    Large(usize),
+}
+
+impl PropertySetting for TimeSettings {
+    const NAME: &'static str = "Time";
+
+    fn setting_name<'a>(&'a self) -> String {
+        match self {
+            TimeSettings::Hour => "H".into(),
+            TimeSettings::HourMinute => "HM".into(),
+            TimeSettings::HourMinuteSecond => "HMS".into(),
+            TimeSettings::HourDecimalFraction(i) => format!("HF{i}"),
+            TimeSettings::HourMinuteFraction(i) => format!("HMF{i}"),
+            TimeSettings::HourMinuteSecondFraction(i) => format!("HMSF{i}"),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum TimeSettings {
+    Hour,
+    HourMinute,
+    HourMinuteSecond,
+    HourDecimalFraction(usize),
+    HourMinuteFraction(usize),
+    HourMinuteSecondFraction(usize),
+}
+
+impl PropertySetting for LocalOrUtcSettings {
+    const NAME: &'static str = "Local-or-UTC";
+
+    fn setting_name<'a>(&'a self) -> String {
+        match self {
+            LocalOrUtcSettings::Local => "L".into(),
+            LocalOrUtcSettings::Utc => "Z".into(),
+            LocalOrUtcSettings::LocalAndDifference => "LD".into(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum LocalOrUtcSettings {
+    Local,
+    Utc,
+    LocalAndDifference,
+}
+
+impl PropertySetting for IntervalTypeSettings {
+    const NAME: &'static str = "Interval-type";
+
+    fn setting_name<'a>(&'a self) -> String {
+        match self {
+            IntervalTypeSettings::StartAndEnd => "SE".into(),
+            IntervalTypeSettings::Duration => "D".into(),
+            IntervalTypeSettings::StartAndDuration => "SD".into(),
+            IntervalTypeSettings::DurationAndEnd => "DE".into(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum IntervalTypeSettings {
+    StartAndEnd,
+    Duration,
+    StartAndDuration,
+    DurationAndEnd
+}
+
+impl PropertySetting for StartEndPointSettings {
+    const NAME: &'static str = "SE-point";
+
+    fn setting_name<'a>(&'a self) -> String {
+        match self {
+            StartEndPointSettings::Date => "Date".into(),
+            StartEndPointSettings::Time => "Time".into(),
+            StartEndPointSettings::DateTime => "Date-Time".into(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum StartEndPointSettings {
+    Date,
+    Time,
+    DateTime,
+}
+
+impl PropertySetting for RecurrenceSettings {
+    const NAME: &'static str = "Recurrence";
+
+    fn setting_name<'a>(&'a self) -> String {
+        match self {
+            RecurrenceSettings::Unlimited => "Unlimited".into(),
+            RecurrenceSettings::Recurrences(i) => format!("R{i}"),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum RecurrenceSettings {
+    Unlimited,
+    Recurrences(usize)
+}
+
+impl PropertySetting for MidnightSettings {
+    const NAME: &'static str = "Midnight";
+
+    fn setting_name<'a>(&'a self) -> String {
+        match self {
+            MidnightSettings::StartOfDay => "Start".into(),
+            MidnightSettings::EndOfDay => "End".into(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum MidnightSettings {
+    StartOfDay,
+    EndOfDay
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub enum SubtypeElement {
     SingleValue {
@@ -249,11 +494,12 @@ pub enum SubtypeElement {
     TypeConstraint(ASN1Type),
     SingleTypeConstraint(InnerTypeConstraint),
     MultipleTypeConstraints(InnerTypeConstraint),
-    // PatternConstraint
-    // PropertySettings
-    // DurationRange
-    // TimePointRange
-    // RecurrenceRange
+    PatternConstraint(PatternConstraint),
+    UserDefinedConstraint(UserDefinedConstraint), 
+    PropertySettings(PropertySettings)
+                                                  // DurationRange
+                                                  // TimePointRange
+                                                  // RecurrenceRange
 }
 
 impl SubtypeElement {
@@ -268,6 +514,9 @@ impl SubtypeElement {
                 extensible: _,
             } => value.link_elsewhere_declared(identifier, tlds),
             SubtypeElement::PermittedAlphabet(e) => e.link_cross_reference(identifier, tlds),
+            SubtypeElement::PatternConstraint(_) => false,
+            SubtypeElement::UserDefinedConstraint(_) => false,
+            SubtypeElement::PropertySettings(_) => false,
             SubtypeElement::ContainedSubtype {
                 subtype,
                 extensible: _,
@@ -303,6 +552,9 @@ impl SubtypeElement {
                 value,
                 extensible: _,
             } => value.is_elsewhere_declared(),
+            SubtypeElement::PatternConstraint(_) => false,
+            SubtypeElement::UserDefinedConstraint(_) => false,
+            SubtypeElement::PropertySettings(_) => false,
             SubtypeElement::PermittedAlphabet(e) => e.has_cross_reference(),
             SubtypeElement::ContainedSubtype {
                 subtype,

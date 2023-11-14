@@ -1,7 +1,7 @@
 use asnr_grammar::{constraints::*, *};
 use nom::{
     branch::alt,
-    bytes::complete::tag,
+    bytes::complete::{tag, take_until},
     character::complete::char,
     combinator::{into, map, opt, value},
     error::Error,
@@ -18,7 +18,7 @@ use super::{
     },
     information_object_class::object_set,
     parameterization::parameters,
-    util::opt_delimited,
+    util::{opt_delimited, take_until_and_not, take_until_unbalanced},
 };
 
 pub fn constraint<'a>(input: &'a str) -> IResult<&'a str, Vec<Constraint>> {
@@ -81,6 +81,8 @@ fn subtype_element<'a>(input: &'a str) -> IResult<&'a str, SubtypeElement> {
         single_type_constraint,
         multiple_type_constraints,
         size_constraint,
+        pattern_constraint,
+        user_defined_constraint,
         permitted_alphabet_constraint,
         value_range,
         single_value,
@@ -179,7 +181,7 @@ fn value_range<'a>(input: &'a str) -> IResult<&'a str, SubtypeElement> {
                 opt(skip_ws_and_comments(delimited(
                     char(COMMA),
                     extension_marker,
-                    extension_additions
+                    extension_additions,
                 ))),
             )),
             |(min, max, ext)| SubtypeElement::ValueRange {
@@ -197,6 +199,42 @@ fn size_constraint<'a>(input: &'a str) -> IResult<&'a str, SubtypeElement> {
         skip_ws_and_comments(char(LEFT_PARENTHESIS)),
         skip_ws_and_comments(into(preceded(tag(SIZE), single_constraint))),
         skip_ws_and_comments(char(RIGHT_PARENTHESIS)),
+    )(input)
+}
+
+fn pattern_constraint<'a>(input: &'a str) -> IResult<&'a str, SubtypeElement> {
+    map(
+        opt_delimited::<char, PatternConstraint, char, Error<&str>, _, _, _>(
+            skip_ws_and_comments(char(LEFT_PARENTHESIS)),
+            skip_ws_and_comments(into(preceded(
+                tag(PATTERN),
+                skip_ws_and_comments(delimited(
+                    char('"'),
+                    take_until_and_not("\"", "\"\""),
+                    char('"'),
+                )),
+            ))),
+            skip_ws_and_comments(char(RIGHT_PARENTHESIS)),
+        ),
+        |p| SubtypeElement::PatternConstraint(p),
+    )(input)
+}
+
+fn user_defined_constraint<'a>(input: &'a str) -> IResult<&'a str, SubtypeElement> {
+    map(
+        opt_delimited::<char, UserDefinedConstraint, char, Error<&str>, _, _, _>(
+            skip_ws_and_comments(char(LEFT_PARENTHESIS)),
+            skip_ws_and_comments(into(preceded(
+                tag(CONSTRAINED_BY),
+                skip_ws_and_comments(delimited(
+                    char(LEFT_BRACE),
+                    take_until_unbalanced("{", "}"),
+                    char(RIGHT_BRACE),
+                )),
+            ))),
+            skip_ws_and_comments(char(RIGHT_PARENTHESIS)),
+        ),
+        |c| SubtypeElement::UserDefinedConstraint(c),
     )(input)
 }
 
@@ -1005,5 +1043,50 @@ mod tests {
                 extensible: false
             })]
         )
+    }
+
+    #[test]
+    fn parses_pattern_constraint() {
+        assert_eq!(constraint(
+            r#"(PATTERN "[a-zA-Z]#(1,8)(-[a-zA-Z0-9]#(1,8))*")"#
+        ).unwrap().1, 
+        vec![
+            Constraint::SubtypeConstraint(
+                ElementSet { 
+                    set: ElementOrSetOperation::Element(
+                        SubtypeElement::PatternConstraint(
+                            PatternConstraint {
+                                pattern: "[a-zA-Z]#(1,8)(-[a-zA-Z0-9]#(1,8))*".into()
+                            }
+                            )
+                        ), 
+                        extensible: false 
+                    }
+                )
+            ]
+        )
+    }
+
+    #[test]
+    fn parses_user_defined_constraint() {
+        assert_eq!(
+            constraint(
+                r#"(CONSTRAINED BY {/* XML representation of the XSD pattern "\d\d\d\d-\d\d-\d\dT\d\d:\d\d:\d\d[-,+]\d\d:\d\d" */})"#
+            ).unwrap().1, 
+            vec![
+                Constraint::SubtypeConstraint(
+                    ElementSet { 
+                        set: ElementOrSetOperation::Element(
+                            SubtypeElement::UserDefinedConstraint(
+                                UserDefinedConstraint { 
+                                    definition: "/* XML representation of the XSD pattern \"\\d\\d\\d\\d-\\d\\d-\\d\\dT\\d\\d:\\d\\d:\\d\\d[-,+]\\d\\d:\\d\\d\" */".into()
+                                }
+                                )
+                            ), 
+                            extensible: false 
+                        }
+                    )
+                ]
+            )
     }
 }

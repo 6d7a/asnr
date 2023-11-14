@@ -1,3 +1,5 @@
+use std::cell::UnsafeCell;
+
 use crate::helpers::decode_hex;
 use asnr_tests::asn1::v2x::*;
 use asnr_transcoder::uper::Uper;
@@ -19,6 +21,7 @@ fn decodes_cam_1() {
     let binary_cam: Vec<u8> = decode_hex("0202de140ce5c7c0405ab23d82ce2781e9a278274bc633fa54587ca0a27e8302968a9733ff82001a103fe0143980106e0075801158ce0002f03adc08c4c800015781d620469633800abc0edb0239319c0055e075081185900002af03a0c0912c800016781c9e0565640000c3c0e0902dbb19c006de058d810218ce0035f0155c0006c67000df808d5fde662700073c0476fd67319c0058604137d31589c006dc").unwrap();
 
     let result: CAM = Uper::decode(&binary_cam).unwrap();
+    println!("{result:#?}");
     if let LowFrequencyContainer::BasicVehicleContainerLowFrequency(lfct) =
         result.cam.cam_parameters.low_frequency_container.unwrap()
     {
@@ -75,7 +78,11 @@ fn decodes_other_test_cams() {
         let result: CAM = Uper::decode(&cams[i]).unwrap();
         assert_eq!(
             svc_present[i],
-            result.cam.cam_parameters.special_vehicle_container.is_some()
+            result
+                .cam
+                .cam_parameters
+                .special_vehicle_container
+                .is_some()
         );
     }
 }
@@ -275,7 +282,10 @@ fn decodes_ivim() {
             .code
             .clone()
         {
-            assert_eq!(78, code.pictogram_code.pictogram_category_code.serial_number.0);
+            assert_eq!(
+                78,
+                code.pictogram_code.pictogram_category_code.serial_number.0
+            );
         } else {
             panic!("Unexpected pictogram code!")
         }
@@ -368,6 +378,7 @@ fn encodes_denms_as_decodes() {
     ];
     for i in 0..test_denms.len() {
         let decoded: DENM = Uper::decode(&test_denms[i]).unwrap();
+        panic!("{decoded:#?}");
         let encoded = Uper::encode(decoded).unwrap();
         assert_eq!(test_denms[i], encoded);
     }
@@ -447,4 +458,9 @@ fn encodes_spatems_as_decodes() {
         let redecoded: SPATEM = Uper::decode(&encoded).unwrap();
         assert_eq!(decoded, redecoded);
     }
+}
+
+#[test]
+fn encode_sanfs() {
+    println!("{:?}", Uper::decode::<PathPoint>(&[191, 117, 175, 236, 3, 20, 40, 24, 8, 180, 160]))
 }

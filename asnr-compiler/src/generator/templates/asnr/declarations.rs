@@ -1,4 +1,4 @@
-use asnr_grammar::{*, constraints::*, types::*, information_object::*};
+use asnr_grammar::{constraints::*, information_object::*, types::*, *};
 
 /// The `Declare` trait serves to convert a structure
 /// into a stringified rust representation of its initialization.
@@ -13,6 +13,7 @@ impl Declare for ASN1Type {
             ASN1Type::Null => "ASN1Type::Null".into(),
             ASN1Type::Boolean => "ASN1Type::Boolean".into(),
             ASN1Type::Integer(i) => format!("ASN1Type::Integer({})", i.declare()),
+            ASN1Type::ObjectIdentifier(i) => format!("ASN1Type::ObjectIdentifier({})", i.declare()),
             ASN1Type::Real(r) => format!("ASN1Type::Real({})", r.declare()),
             ASN1Type::BitString(b) => format!("ASN1Type::BitString({})", b.declare()),
             ASN1Type::OctetString(o) => format!("ASN1Type::OctetString({})", o.declare()),
@@ -32,7 +33,6 @@ impl Declare for ASN1Type {
         }
     }
 }
-
 
 impl Declare for ASN1Value {
     fn declare(&self) -> String {
@@ -65,7 +65,10 @@ impl Declare for ASN1Value {
                     .collect::<Vec<String>>()
                     .join(", ")
             ),
-            ASN1Value::EnumeratedValue { enumerated, enumerable } => {
+            ASN1Value::EnumeratedValue {
+                enumerated,
+                enumerable,
+            } => {
                 format!("ASN1Value::EnumeratedValue {{ enumerated: \"{enumerated}\".into(), enumerable: \"{enumerable}\".into() }}")
             }
             ASN1Value::ElsewhereDeclaredValue(s) => {
@@ -77,7 +80,6 @@ impl Declare for ASN1Value {
         }
     }
 }
-
 
 impl Declare for DeclarationElsewhere {
     fn declare(&self) -> String {
@@ -93,11 +95,10 @@ impl Declare for DeclarationElsewhere {
     }
 }
 
-
 impl Declare for AsnTag {
     fn declare(&self) -> String {
         format!(
-            "AsnTag {{ tag_class: TagClass::{:?}, id: {}, environment: Explicitness::{:?} }}",
+            "AsnTag {{ tag_class: TagClass::{:?}, id: {}, environment: TaggingEnvironment::{:?} }}",
             self.tag_class, self.id, self.environment
         )
     }
@@ -112,11 +113,24 @@ impl Declare for ObjectIdentifierArc {
     }
 }
 
-impl Declare for ObjectIdentifier {
+impl Declare for ObjectIdentifierValue {
     fn declare(&self) -> String {
         format!(
             "ObjectIdentifier(vec![{}])",
             self.0
+                .iter()
+                .map(Declare::declare)
+                .collect::<Vec<String>>()
+                .join(",")
+        )
+    }
+}
+
+impl Declare for ObjectIdentifier {
+    fn declare(&self) -> String {
+        format!(
+            "ObjectIdentifier {{ constraints: vec![{}] }}",
+            self.constraints
                 .iter()
                 .map(Declare::declare)
                 .collect::<Vec<String>>()
@@ -467,9 +481,73 @@ impl Declare for RelationalConstraint {
     fn declare(&self) -> String {
         format!(
             r#"RelationalConstraint {{ field_name: "{}".into(), level: {} }}"#,
-            self.field_name,
-            self.level,
+            self.field_name, self.level,
         )
+    }
+}
+
+impl Declare for PatternConstraint {
+    fn declare(&self) -> String {
+        format!(
+            r#"PatternConstraint {{ pattern: "{}".into() }}"#,
+            self.pattern
+        )
+    }
+}
+
+impl Declare for UserDefinedConstraint {
+    fn declare(&self) -> String {
+        format!(
+            r#"UserDefinedConstraint {{ definition: "{}".into() }}"#,
+            self.definition
+        )
+    }
+}
+
+impl Declare for PropertySettings {
+    fn declare(&self) -> String {
+        format!(
+            r#"PropertySettings {{ property_settings_list: vec![{}] }}"#,
+            self.property_settings_list
+                .iter()
+                .map(|ps| ps.declare())
+                .collect::<Vec<String>>()
+                .join(",")
+        )
+    }
+}
+
+impl Declare for PropertyAndSettingsPair {
+    fn declare(&self) -> String {
+        match self {
+            PropertyAndSettingsPair::Basic(s) => {
+                format!("PropertyAndSettingsPair::Basic(BasicSettings::{s:?})")
+            }
+            PropertyAndSettingsPair::Date(s) => {
+                format!("PropertyAndSettingsPair::Date(DateSettings::{s:?})")
+            }
+            PropertyAndSettingsPair::Year(s) => {
+                format!("PropertyAndSettingsPair::Year(YearSettings::{s:?})")
+            }
+            PropertyAndSettingsPair::Time(s) => {
+                format!("PropertyAndSettingsPair::Time(TimeSettings::{s:?})")
+            }
+            PropertyAndSettingsPair::LocalOrUtc(s) => {
+                format!("PropertyAndSettingsPair::LocalOrUtc(LocalOrUtcSettings::{s:?})")
+            }
+            PropertyAndSettingsPair::IntervalType(s) => {
+                format!("PropertyAndSettingsPair::IntervalType(IntervalTypeSettings::{s:?})")
+            }
+            PropertyAndSettingsPair::StartEndPoint(s) => {
+                format!("PropertyAndSettingsPair::StartEndPoint(StartEndPointSettings::{s:?})")
+            }
+            PropertyAndSettingsPair::Recurrence(s) => {
+                format!("PropertyAndSettingsPair::Recurrence(RecurrenceSettings::{s:?})")
+            }
+            PropertyAndSettingsPair::Midnight(s) => {
+                format!("PropertyAndSettingsPair::Midnight(MidnightSettings::{s:?})")
+            }
+        }
     }
 }
 
@@ -487,6 +565,15 @@ impl Declare for SubtypeElement {
                     "SubtypeElement::PermittedAlphabet(Box::new({}))",
                     permitted.declare()
                 )
+            }
+            SubtypeElement::PatternConstraint(p) => {
+                format!("SubtypeElement::PatternConstraint({})", p.declare())
+            }
+            SubtypeElement::UserDefinedConstraint(c) => {
+                format!("SubtypeElement::UserDefinedConstraint({})", c.declare())
+            }
+            SubtypeElement::PropertySettings(c) => {
+                format!("SubtypeElement::PropertySettings({})", c.declare())
             }
             SubtypeElement::ContainedSubtype {
                 subtype,
@@ -559,7 +646,6 @@ impl Declare for SetOperation {
         )
     }
 }
-
 
 impl Declare for ASN1Information {
     fn declare(&self) -> String {

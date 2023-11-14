@@ -8,7 +8,7 @@ use nom::{
 
 use super::{
     asn1_type,
-    common::{opt_parentheses, skip_ws_and_comments},
+    common::{opt_parentheses, skip_ws_and_comments, value_identifier},
     constraint::constraint,
 };
 
@@ -27,7 +27,13 @@ pub fn sequence_of<'a>(input: &'a str) -> IResult<&'a str, ASN1Type> {
                 skip_ws_and_comments(tag(SEQUENCE)),
                 opt(opt_parentheses(constraint)),
             ),
-            preceded(skip_ws_and_comments(tag(OF)), asn1_type),
+            preceded(
+                skip_ws_and_comments(pair(
+                    tag(OF), 
+                    opt(skip_ws_and_comments(value_identifier))
+                )),
+                asn1_type,
+            ),
         ),
         |m| ASN1Type::SequenceOf(m.into()),
     )(input)
